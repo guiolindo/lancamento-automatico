@@ -7,3 +7,11 @@ rapidfuzz==3.9.6
 pydantic==2.8.2
 keyring==25.2.1
 python-dateutil==2.9.0
+
+# Empacotamento (opcional em runtime; necessário só para build/build.py)
+# Nuitka é MUITO melhor que PyInstaller para máquinas corporativas: gera
+# binário nativo (menos falsos-positivos de AV), roda sem admin e sem
+# instalação a partir de uma pasta portátil copiada por USB.
+nuitka==2.4.8
+zstandard==0.23.0
+ordered-set==4.1.0
