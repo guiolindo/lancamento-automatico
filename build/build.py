@@ -1,13 +1,35 @@
 """
-Script de empacotamento com PyInstaller.
+Empacotamento portátil com Nuitka (RECOMENDADO).
 
-Uso (no Windows, com venv ativado):
-    pip install pyinstaller
+Por que Nuitka em vez de PyInstaller:
+- Compila Python para C e depois para binário nativo (não faz "unpack em runtime"),
+  o que reduz drasticamente falsos-positivos de antivírus corporativos.
+- Modo --standalone gera uma pasta autocontida com o .exe + DLLs — copia para
+  pen-drive, roda direto em qualquer Windows sem admin, sem instalação, sem
+  precisar de Python na máquina alvo.
+- Sem UPX (compressão), sem descompactação em %TEMP% — perfis típicos de
+  malware que fazem AV disparar.
+
+Pré-requisitos (na SUA máquina de desenvolvimento, NÃO na do TOTVS):
+    Python 3.11 ou 3.12 (Windows x64)
+    pip install -r requirements.txt
+    pip install nuitka zstandard ordered-set
+
+    Compilador C (Nuitka baixa MSVC/MinGW automaticamente na 1a compilação,
+    aceite quando ele perguntar).
+
+Uso:
     python build/build.py
 
-Gera dist/LancamentoAutomatico.exe (one-file, sem console).
-O mapeamento.json é copiado para a pasta dist ao lado do .exe para permitir
-edição pelo usuário final sem recompilar.
+Saída:
+    dist/LancamentoAutomatico.dist/         <- pasta portátil (copie inteira)
+        LancamentoAutomatico.exe
+        mapeamento.json                     <- editável pelo usuário final
+        ... (DLLs e recursos)
+
+Distribuição:
+    Zipe a pasta 'LancamentoAutomatico.dist' e envie para a máquina alvo.
+    Basta descompactar e clicar em LancamentoAutomatico.exe.
 """
 
 from __future__ import annotations
@@ -21,35 +43,74 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 DIST = ROOT / "dist"
-BUILD = ROOT / "build" / "_pyi"
+NOME = "LancamentoAutomatico"
+
+
+def _icone() -> str | None:
+    icon = ROOT / "build" / "app.ico"
+    return str(icon) if icon.exists() else None
 
 
 def run() -> int:
+    if DIST.exists():
+        shutil.rmtree(DIST, ignore_errors=True)
+    DIST.mkdir(parents=True, exist_ok=True)
+
     args = [
-        sys.executable, "-m", "PyInstaller",
-        "--noconfirm",
-        "--clean",
-        "--windowed",
-        "--onefile",
-        "--name", "LancamentoAutomatico",
-        "--paths", str(SRC),
-        "--distpath", str(DIST),
-        "--workpath", str(BUILD),
-        "--specpath", str(BUILD),
-        "--add-data", f"{SRC / 'config' / 'mapeamento.json'}{';' if sys.platform == 'win32' else ':'}config",
-        str(SRC / "main.py"),
+        sys.executable, "-m", "nuitka",
+        "--standalone",
+        "--assume-yes-for-downloads",
+        "--enable-plugin=pyside6",
+        "--windows-console-mode=disable",
+        "--company-name=Multicom",
+        "--product-name=Lancamento Automatico TOTVS",
+        "--file-version=0.1.0.0",
+        "--product-version=0.1.0.0",
+        "--file-description=Automacao de lancamento de impostos TOTVS + Gemini",
+        "--copyright=Multicom",
+        f"--output-dir={DIST}",
+        f"--output-filename={NOME}.exe",
+        # Empacota o mapeamento.json dentro da pasta standalone.
+        f"--include-data-files={SRC / 'config' / 'mapeamento.json'}=config/mapeamento.json",
+        # Módulos que podem ser resolvidos por importação dinâmica.
+        "--include-package=google.generativeai",
+        "--include-package=pywinauto",
+        "--include-package=rapidfuzz",
+        "--include-package=PIL",
     ]
+
+    icone = _icone()
+    if icone:
+        args.append(f"--windows-icon-from-ico={icone}")
+
+    args.append(str(SRC / "main.py"))
+
     print(">>", " ".join(args))
-    r = subprocess.run(args)
+    r = subprocess.run(args, cwd=str(ROOT))
     if r.returncode != 0:
         return r.returncode
 
-    # Copia o mapeamento.json ao lado do .exe para permitir edição pelo usuário.
-    origem = SRC / "config" / "mapeamento.json"
-    destino = DIST / "mapeamento.json"
-    if origem.exists():
-        shutil.copy2(origem, destino)
-        print(f"Copiado: {destino}")
+    # Nuitka gera dist/main.dist/ por padrão porque o entrypoint é main.py.
+    origem_pasta = DIST / "main.dist"
+    destino_pasta = DIST / f"{NOME}.dist"
+    if origem_pasta.exists() and origem_pasta != destino_pasta:
+        if destino_pasta.exists():
+            shutil.rmtree(destino_pasta)
+        origem_pasta.rename(destino_pasta)
+
+    # Copia o mapeamento.json ao lado do .exe para permitir edição pelo usuário
+    # sem mexer em subpastas.
+    mapeamento_ext = destino_pasta / "mapeamento.json"
+    mapeamento_int = destino_pasta / "config" / "mapeamento.json"
+    if mapeamento_int.exists() and not mapeamento_ext.exists():
+        shutil.copy2(mapeamento_int, mapeamento_ext)
+        print(f"Copiado: {mapeamento_ext}")
+
+    print()
+    print("=" * 60)
+    print(f"Pronto: {destino_pasta}")
+    print("Zipe essa pasta inteira e leve para a maquina do TOTVS.")
+    print("=" * 60)
     return 0
 
 
