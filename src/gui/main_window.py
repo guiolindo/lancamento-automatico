@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import QDate, QSize, Qt, QThread
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
-    QComboBox, QDateEdit, QFileDialog, QFrame, QHBoxLayout, QLabel,
+    QCheckBox, QComboBox, QDateEdit, QFileDialog, QFrame, QHBoxLayout, QLabel,
     QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
     QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
 )
@@ -198,7 +198,17 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._progress)
 
         acoes = QHBoxLayout()
+
+        self._chk_confirmar_auto = QCheckBox(
+            "Confirmar automaticamente (o robô aperta o + ao final de cada lançamento)"
+        )
+        confirmar_padrao = bool(self.settings.get("rpa.confirmar_automaticamente", True))
+        self._chk_confirmar_auto.setChecked(confirmar_padrao)
+        self._chk_confirmar_auto.stateChanged.connect(self._on_toggle_confirmar_auto)
+        acoes.addWidget(self._chk_confirmar_auto)
+
         acoes.addStretch(1)
+
         self._btn_cancelar = QPushButton("Cancelar execução")
         self._btn_cancelar.setProperty("danger", True)
         self._btn_cancelar.setVisible(False)
@@ -372,6 +382,7 @@ class MainWindow(QMainWindow):
         worker.log_line.connect(self._log_line)
         worker.progresso.connect(self._on_progresso)
         worker.lancamento_atualizado.connect(self._tabela.atualizar_linha)
+        worker.pedir_confirmacao_manual.connect(self._on_pedir_confirmacao_manual)
         worker.finished.connect(self._on_lote_finalizado)
         worker.error.connect(self._on_erro_lote)
 
@@ -412,6 +423,34 @@ class MainWindow(QMainWindow):
         if self._worker_lote:
             self._worker_lote.cancelar()
             self._log_line("⏹ Cancelamento solicitado…")
+
+    def _on_toggle_confirmar_auto(self, state: int) -> None:
+        ativo = bool(state)
+        self.settings.set("rpa.confirmar_automaticamente", ativo)
+        self._log_line(
+            "✓ Confirmação automática ativada — robô aperta + sozinho"
+            if ativo else
+            "✎ Modo revisão manual — robô vai parar antes do + e esperar você"
+        )
+
+    def _on_pedir_confirmacao_manual(self, index: int, resumo: str) -> None:
+        """Chamado quando o worker termina de preencher e espera o operador."""
+        if not self._worker_lote:
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("Revisão manual — confirme no TOTVS")
+        box.setIcon(QMessageBox.Question)
+        box.setText(
+            f"Lançamento preenchido:\n\n{resumo}\n\n"
+            "Confira os campos no TOTVS e aperte o + para gravar.\n"
+            "Depois escolha:"
+        )
+        btn_continuar = box.addButton("Próximo lançamento", QMessageBox.AcceptRole)
+        btn_parar = box.addButton("Parar lote", QMessageBox.RejectRole)
+        box.setDefaultButton(btn_continuar)
+        box.exec()
+        prosseguir = box.clickedButton() is btn_continuar
+        self._worker_lote.responder_confirmacao(prosseguir)
 
     def _log_line(self, msg: str) -> None:
         from datetime import datetime
