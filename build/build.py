@@ -56,12 +56,23 @@ def run() -> int:
         shutil.rmtree(DIST, ignore_errors=True)
     DIST.mkdir(parents=True, exist_ok=True)
 
+    import os
+    jobs = str(max(2, (os.cpu_count() or 2)))
     args = [
         sys.executable, "-m", "nuitka",
         "--standalone",
         "--assume-yes-for-downloads",
         "--enable-plugin=pyside6",
         "--windows-console-mode=disable",
+        # Performance de build (não de runtime): desabilita LTO — LTO custa
+        # 20+ min extras em máquinas com PySide6 e não muda anti-AV.
+        "--lto=no",
+        f"--jobs={jobs}",
+        # Corta subpacotes pesados que não usamos, para reduzir tempo/tamanho.
+        "--nofollow-import-to=tkinter",
+        "--nofollow-import-to=unittest",
+        "--nofollow-import-to=pydoc",
+        "--nofollow-import-to=doctest",
         "--company-name=Multicom",
         "--product-name=Lancamento Automatico TOTVS",
         "--file-version=0.1.0.0",

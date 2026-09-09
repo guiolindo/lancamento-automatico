@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import threading
 import time
 from typing import Callable, Optional
 
@@ -11,6 +12,10 @@ from .models import Lancamento, StatusLancamento
 def _gerar_nro_documento() -> str:
     """7 dígitos aleatórios (mesma cardinalidade dos exemplos do TOTVS)."""
     return str(random.randint(1_000_000, 9_999_999))
+
+
+class ManualAbortException(RuntimeError):
+    """O operador pediu para parar o lote no modo revisão manual."""
 
 
 class RpaTotvs:
@@ -24,9 +29,14 @@ class RpaTotvs:
         self,
         settings: dict,
         on_progress: Optional[Callable[[Lancamento, str], None]] = None,
+        aguardar_confirmacao: Optional[Callable[[Lancamento], bool]] = None,
     ):
         self.settings = settings
         self.on_progress = on_progress
+        # Callback bloqueante retornando True para prosseguir ou False para
+        # abortar o lote. Usado em modo manual (confirmar_automaticamente=False)
+        # depois que o robô preenche e clica Gerar Parcelas.
+        self.aguardar_confirmacao = aguardar_confirmacao
         self._app = None
         self._janela = None
         self._delays = settings.get("delays", {})
@@ -130,9 +140,25 @@ class RpaTotvs:
                     self._fechar_popup()
                     continue
 
-                self._confirmar_inclusao()
+                if bool(self._rpa_cfg.get("confirmar_automaticamente", True)):
+                    self._confirmar_inclusao()
+                    lanc.status = StatusLancamento.SUCESSO
+                    self._notificar(lanc, "Sucesso")
+                    return
+
+                # Modo revisão manual: robô preencheu e apertou Gerar Parcelas.
+                # Bloqueia até o operador conferir na tela, apertar "+" e
+                # dizer "continuar" (ou "parar") no aviso da GUI.
+                self._notificar(
+                    lanc,
+                    "Preenchido — confira e aperte + no TOTVS, depois clique Continuar",
+                )
+                prosseguir = True
+                if self.aguardar_confirmacao is not None:
+                    prosseguir = self.aguardar_confirmacao(lanc)
+                if not prosseguir:
+                    raise ManualAbortException("Lote interrompido pelo operador")
                 lanc.status = StatusLancamento.SUCESSO
-                self._notificar(lanc, "Sucesso")
                 return
 
             raise RuntimeError(f"Falhou após {max_tent} tentativas de Nro.Documento")
@@ -212,12 +238,13 @@ def executar_lote(
     lancamentos: list[Lancamento],
     settings: dict,
     on_progress: Optional[Callable[[Lancamento, str], None]] = None,
+    aguardar_confirmacao: Optional[Callable[[Lancamento], bool]] = None,
     parar_em_falha: bool = False,
 ) -> tuple[int, int]:
     """
     Executa uma lista de lançamentos em sequência. Retorna (sucessos, falhas).
     """
-    rpa = RpaTotvs(settings, on_progress=on_progress)
+    rpa = RpaTotvs(settings, on_progress=on_progress, aguardar_confirmacao=aguardar_confirmacao)
     rpa.conectar()
 
     sucessos = 0
@@ -226,6 +253,8 @@ def executar_lote(
         try:
             rpa.lancar(lanc)
             sucessos += 1
+        except ManualAbortException:
+            break
         except Exception:  # noqa: BLE001
             falhas += 1
             if parar_em_falha:

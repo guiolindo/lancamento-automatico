@@ -28,6 +28,7 @@ DEFAULTS: dict[str, Any] = {
         "titulo_janela": "Inclusão de Títulos",
         "titulo_janela_erro": "",
         "max_tentativas_duplicidade": 10,
+        "confirmar_automaticamente": True,
     },
     "ultima_pasta_upload": "",
     "tema": "escuro",
