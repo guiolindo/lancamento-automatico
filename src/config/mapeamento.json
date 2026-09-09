@@ -1,0 +1,60 @@
+{
+  "_comentario": "De-Para de filiais Multicom para código TOTVS. Edite este arquivo para adicionar/alterar lojas sem recompilar. Aliases são normalizados (uppercase, sem acento) e comparados por fuzzy matching.",
+  "empresas": {
+    "MG": {
+      "descricao": "Multicom Atacado e Varejo - Economart (Minas Gerais)",
+      "filiais": [
+        {"codigo": 6,  "nome": "Contagem",         "tipo": "LOJA", "aliases": ["CONTAGEM"]},
+        {"codigo": 7,  "nome": "Passos",           "tipo": "LOJA", "aliases": ["PASSOS"]},
+        {"codigo": 10, "nome": "Nova Serrana",     "tipo": "LOJA", "aliases": ["NOVA SERRANA"]},
+        {"codigo": 11, "nome": "Pocos de Caldas",  "tipo": "LOJA", "aliases": ["POCOS DE CALDAS", "POÇOS DE CALDAS"]},
+        {"codigo": 14, "nome": "Ribeirao das Neves","tipo": "LOJA", "aliases": ["RIB NEVES", "RIB.NEVES", "RIBEIRAO DAS NEVES", "RIBEIRÃO DAS NEVES"]},
+        {"codigo": 15, "nome": "Manhuacu",         "tipo": "LOJA", "aliases": ["MANHUACU", "MANHUAÇU"]},
+        {"codigo": 16, "nome": "Serra Verde",      "tipo": "LOJA", "aliases": ["SERRA VERDE", "LINHA VERDE"]},
+        {"codigo": 18, "nome": "Muriae",           "tipo": "LOJA", "aliases": ["MURIAE", "MURIAÉ"]},
+        {"codigo": 24, "nome": "Contagem II",      "tipo": "LOJA", "aliases": ["CONTAGEM II", "CONTAGEM 2"]},
+        {"codigo": 27, "nome": "Pouso Alegre",     "tipo": "LOJA", "aliases": ["POUSO ALEGRE"]},
+        {"codigo": 30, "nome": "Araxa",            "tipo": "LOJA", "aliases": ["ARAXA", "ARAXÁ"]},
+        {"codigo": 32, "nome": "Ituiutaba",        "tipo": "LOJA", "aliases": ["ITUIUTABA"]}
+      ]
+    },
+    "BA": {
+      "descricao": "Multicom Atacado e Varejo - Economart (Bahia)",
+      "filiais": [
+        {"codigo": 17, "nome": "Paulo Afonso",         "tipo": "LOJA", "aliases": ["PAULO AFONSO"]},
+        {"codigo": 19, "nome": "Jequie",               "tipo": "LOJA", "aliases": ["JEQUIE", "JEQUIÉ"]},
+        {"codigo": 20, "nome": "Luis Eduardo Magalhaes","tipo": "LOJA", "aliases": ["LUIS EDUARDO", "LUIS EDUARDO MAGALHAES", "LEM"]},
+        {"codigo": 21, "nome": "Vitoria da Conquista", "tipo": "LOJA", "aliases": ["VITORIA DA CONQUISTA", "VITÓRIA DA CONQUISTA"]},
+        {"codigo": 22, "nome": "Feira de Santana",     "tipo": "LOJA", "aliases": ["FEIRA DE SANTANA"]},
+        {"codigo": 23, "nome": "Barreiras",            "tipo": "LOJA", "aliases": ["BARREIRAS"]},
+        {"codigo": 25, "nome": "Santo Antonio de Jesus","tipo": "LOJA", "aliases": ["SANTO ANTONIO DE JESUS", "SANTO ANTÔNIO DE JESUS", "SAJ"]},
+        {"codigo": 26, "nome": "Itabuna",              "tipo": "LOJA", "aliases": ["ITABUNA"]},
+        {"codigo": 28, "nome": "Juazeiro",             "tipo": "LOJA", "aliases": ["JUAZEIRO"]},
+        {"codigo": 29, "nome": "Porto Seguro",         "tipo": "LOJA", "aliases": ["PORTO SEGURO"]},
+        {"codigo": 31, "nome": "Feira de Santana II",  "tipo": "LOJA", "aliases": ["FEIRA DE SANTANA II", "FEIRA DE SANTANA 2"]}
+      ]
+    },
+    "CD_ADM": {
+      "descricao": "Multicom Atacado e Varejo - CDs, Comercial e Administrativo",
+      "filiais": [
+        {"codigo": 201, "nome": "CD Feira de Santana", "tipo": "CD",  "aliases": ["CD FEIRA DE SANTANA", "CD FEIRA"]},
+        {"codigo": 300, "nome": "CD Ribeirao das Neves","tipo": "CD", "aliases": ["CD RIB NEVES", "CD RIB.NEVES", "CD 040", "CD300", "CD 300", "CD RIBEIRAO DAS NEVES"]},
+        {"codigo": 301, "nome": "CD Campina Verde",   "tipo": "CD",  "aliases": ["CD CAMPINA VERDE", "CAMPINA VERDE"]},
+        {"codigo": 302, "nome": "CD Horti",           "tipo": "CD",  "aliases": ["CD HORTI", "HORTI"]},
+        {"codigo": 501, "nome": "ADM Salvador",       "tipo": "ADM", "aliases": ["ADM SALVADOR", "SALVADOR"]},
+        {"codigo": 502, "nome": "ADM Barao",          "tipo": "ADM", "aliases": ["ADM BARAO", "BARAO", "BARÃO", "ADM BARÃO"]}
+      ]
+    }
+  },
+  "impostos": {
+    "IRRF": {
+      "descricao": "Imposto de Renda Retido na Fonte sobre Folha de Pagamento",
+      "especie_totvs": "IR",
+      "especie_descricao": "IRRF S/FOPAG A PAGAR",
+      "pessoa_codigo": 27267,
+      "pessoa_nome": "SECRETARIA DA RECEITA FEDERAL",
+      "observacao_template": "IRRF {mes_ref}/{ano_ref} - {tipo_folha}",
+      "colunas_tipo_folha": ["ADIANTAMENTO", "FERIAS", "MENSAL", "RESCISAO"]
+    }
+  }
+}
