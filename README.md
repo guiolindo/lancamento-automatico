@@ -18,6 +18,19 @@ python -m src.main
 Na primeira execução o app pede a chave da API do Gemini e salva em
 `~/.lancamento-automatico/settings.json`.
 
+## Baixando o executável pronto (mais rápido)
+
+Todo commit em `main` dispara o workflow `.github/workflows/build-exe.yml`
+no GitHub Actions, que compila com Nuitka num runner Windows e publica o zip
+portátil como artefato.
+
+- **Aba Actions** → escolha a última execução verde de "Build .exe portátil"
+  → baixe `LancamentoAutomatico-portatil.zip`.
+- Ou crie uma tag `v0.1.0` e o mesmo zip vira uma **Release** oficial.
+
+Descompacte em qualquer pasta do PC alvo (Desktop, Documentos — sem admin) e
+clique em `LancamentoAutomatico.exe`.
+
 ## Empacotando um executável portátil (sem admin, sem antivírus dando ruim)
 
 O alvo é um PC corporativo trancado: sem admin, sem instalador, e antivírus

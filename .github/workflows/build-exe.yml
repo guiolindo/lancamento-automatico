@@ -1,0 +1,70 @@
+name: Build .exe portátil (Nuitka)
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch: {}
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Instalar dependências
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Cache Nuitka
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/Nuitka/Nuitka/Cache
+            ~/.nuitka
+          key: nuitka-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: nuitka-${{ runner.os }}-
+
+      - name: Compilar com Nuitka
+        shell: pwsh
+        run: |
+          python build/build.py
+
+      - name: Zipar pasta portátil
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".Replace("/", "-")
+          if ("${{ github.ref_type }}" -ne "tag") {
+            $version = "dev-$(git rev-parse --short HEAD)"
+          }
+          $zipName = "LancamentoAutomatico-$version.zip"
+          Compress-Archive -Path "dist/LancamentoAutomatico.dist/*" -DestinationPath $zipName -Force
+          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+          Get-Item $zipName | Format-List Name, Length
+
+      - name: Publicar como artefato do workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: LancamentoAutomatico-portatil
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30
+
+      - name: Publicar como Release (só em tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP_NAME }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
