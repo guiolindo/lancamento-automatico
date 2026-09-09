@@ -64,6 +64,9 @@ class LoteWorker(QObject):
     finished = Signal(int, int)         # sucessos, falhas
     error = Signal(str)
     log_line = Signal(str)
+    # Modo revisão manual: pede confirmação do operador para seguir. A GUI
+    # deve responder via responder_confirmacao(True/False).
+    pedir_confirmacao_manual = Signal(int, str)   # index, resumo
 
     def __init__(self, lancamentos: list[Lancamento], settings: dict, parar_em_falha: bool = False):
         super().__init__()
@@ -71,14 +74,35 @@ class LoteWorker(QObject):
         self.settings = settings
         self.parar_em_falha = parar_em_falha
         self._cancelar = False
+        import threading
+        self._evento_confirmacao = threading.Event()
+        self._resposta_confirmacao = False
 
     def cancelar(self) -> None:
         self._cancelar = True
+        # Se estamos parados esperando confirmação, libera com "não prosseguir".
+        self._resposta_confirmacao = False
+        self._evento_confirmacao.set()
+
+    def responder_confirmacao(self, prosseguir: bool) -> None:
+        self._resposta_confirmacao = prosseguir
+        self._evento_confirmacao.set()
+
+    def _aguardar_confirmacao(self, lanc: Lancamento) -> bool:
+        self._evento_confirmacao.clear()
+        resumo = f"{lanc.filial_nome} — {lanc.tipo_folha} — R$ {lanc.valor:,.2f}"
+        self.pedir_confirmacao_manual.emit(getattr(self, "_i_atual", -1), resumo)
+        self._evento_confirmacao.wait()
+        return self._resposta_confirmacao and not self._cancelar
 
     def run(self) -> None:
         try:
-            from ..core.rpa_totvs import RpaTotvs
-            rpa = RpaTotvs(self.settings, on_progress=self._on_progress)
+            from ..core.rpa_totvs import ManualAbortException, RpaTotvs
+            rpa = RpaTotvs(
+                self.settings,
+                on_progress=self._on_progress,
+                aguardar_confirmacao=self._aguardar_confirmacao,
+            )
             self.log_line.emit("→ Conectando à janela do TOTVS…")
             rpa.conectar()
             self.log_line.emit("✓ Janela conectada")
@@ -95,6 +119,9 @@ class LoteWorker(QObject):
                 try:
                     rpa.lancar(lanc)
                     sucessos += 1
+                except ManualAbortException:
+                    self.log_line.emit("⏹ Lote interrompido pelo operador")
+                    break
                 except Exception as e:  # noqa: BLE001
                     falhas += 1
                     self.log_line.emit(f"✗ Falha em {lanc.filial_nome}/{lanc.tipo_folha}: {e}")
