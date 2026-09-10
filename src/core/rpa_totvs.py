@@ -46,32 +46,14 @@ class EmergencyAbortException(RuntimeError):
 
 
 def _trazer_para_frente(win) -> None:
-    """Força a janela pro topo, mesmo se estiver minimizada.
+    """DESABILITADO por causa de travamentos suspeitos.
 
-    pygetwindow.activate() falha silenciosamente às vezes no Windows.
-    Combinamos com ctypes SetForegroundWindow + ShowWindow(SW_RESTORE).
+    Antes tentava SetForegroundWindow + keybd_event(Alt) — parece que essa
+    combinação estava causando o Executar 'travar' no PC do usuário
+    (provavelmente uma race no user32 ou proteção de roubo de foco).
+    Operador deixa o TOTVS visível manualmente antes de rodar.
     """
-    try:
-        import ctypes
-        hwnd = getattr(win, "_hWnd", None)
-        if hwnd is None:
-            return
-        user32 = ctypes.windll.user32
-        SW_RESTORE = 9
-        if user32.IsIconic(hwnd):
-            user32.ShowWindow(hwnd, SW_RESTORE)
-        # SetForegroundWindow tem restrições no Windows moderno — envia um
-        # ALT antes ajuda a driblar a proteção contra roubo de foco.
-        user32.keybd_event(0x12, 0, 0, 0)   # Alt down
-        user32.keybd_event(0x12, 0, 2, 0)   # Alt up
-        user32.SetForegroundWindow(hwnd)
-        try:
-            win.activate()
-        except Exception:  # noqa: BLE001
-            pass
-        time.sleep(0.3)
-    except Exception:  # noqa: BLE001
-        log.exception("Falha ao trazer janela pra frente (segue mesmo assim)")
+    log.info("_trazer_para_frente: NO-OP (deixe o TOTVS visível manualmente)")
 
 
 class RpaTotvs:
