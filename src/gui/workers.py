@@ -71,10 +71,11 @@ class LoteWorker(QObject):
     # deve responder via responder_confirmacao(True/False).
     pedir_confirmacao_manual = Signal(int, str)   # index, resumo
 
-    def __init__(self, lancamentos: list[Lancamento], settings: dict, parar_em_falha: bool = False):
+    def __init__(self, lancamentos: list[Lancamento], settings: dict, calibracao, parar_em_falha: bool = False):
         super().__init__()
         self.lancamentos = lancamentos
         self.settings = settings
+        self.calibracao = calibracao
         self.parar_em_falha = parar_em_falha
         self._cancelar = False
         import threading
@@ -103,6 +104,7 @@ class LoteWorker(QObject):
             from ..core.rpa_totvs import ManualAbortException, RpaTotvs
             rpa = RpaTotvs(
                 self.settings,
+                self.calibracao,
                 on_progress=self._on_progress,
                 aguardar_confirmacao=self._aguardar_confirmacao,
             )

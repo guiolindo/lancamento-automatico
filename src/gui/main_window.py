@@ -11,10 +11,12 @@ from PySide6.QtWidgets import (
     QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
 )
 
+from ..core import calibracao as calib_store
 from ..core.logger import log
 from ..core.mapping import MappingRepository
 from ..core.models import Imposto, Lancamento
 from ..core.settings_store import SettingsStore
+from .calibracao_dialog import CalibracaoDialog
 from .preview_table import PreviewTable
 from .setup_dialog import SetupDialog
 from .theme import QSS
@@ -44,6 +46,7 @@ class MainWindow(QMainWindow):
         self._worker_lote: LoteWorker | None = None
         self._arquivo_selecionado: Path | None = None
         self._lancamentos: list[Lancamento] = []
+        self._calibracao = calib_store.carregar()
 
         self._montar_ui()
         self._verificar_setup()
@@ -209,6 +212,10 @@ class MainWindow(QMainWindow):
 
         acoes.addStretch(1)
 
+        self._btn_calibrar = QPushButton("Calibrar TOTVS")
+        self._btn_calibrar.clicked.connect(self._abrir_calibracao)
+        acoes.addWidget(self._btn_calibrar)
+
         self._btn_cancelar = QPushButton("Cancelar execução")
         self._btn_cancelar.setProperty("danger", True)
         self._btn_cancelar.setVisible(False)
@@ -359,8 +366,27 @@ class MainWindow(QMainWindow):
         self._label_resumo.setText("Falha na extração")
         QMessageBox.critical(self, "Erro na extração", msg)
 
+    def _abrir_calibracao(self) -> None:
+        dlg = CalibracaoDialog(self._calibracao, self)
+        dlg.setStyleSheet(QSS)
+        if dlg.exec():
+            self._calibracao = dlg.calibracao()
+            calib_store.salvar(self._calibracao)
+            self._log_line(
+                f"OK Calibração salva ({len(self._calibracao.campos)} campos)"
+            )
+
     def _executar(self) -> None:
         if not self._lancamentos:
+            return
+        if not self._calibracao.esta_completa():
+            faltam = self._calibracao.falta_calibrar()
+            QMessageBox.warning(
+                self, "Calibração faltando",
+                "Antes de executar no TOTVS é preciso calibrar as posições dos "
+                "campos. Clique em 'Calibrar TOTVS'.\n\n"
+                f"Faltam: {', '.join(faltam)}",
+            )
             return
         resp = QMessageBox.question(
             self, "Confirmar execução",
@@ -378,7 +404,7 @@ class MainWindow(QMainWindow):
         self._progress.setMaximum(len(self._lancamentos))
         self._progress.setValue(0)
 
-        worker = LoteWorker(self._lancamentos, self.settings.data)
+        worker = LoteWorker(self._lancamentos, self.settings.data, self._calibracao)
         worker.log_line.connect(self._log_line)
         worker.progresso.connect(self._on_progresso)
         worker.lancamento_atualizado.connect(self._tabela.atualizar_linha)
