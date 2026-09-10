@@ -71,8 +71,10 @@ def run() -> int:
         # imprimir warnings durante o boot, mas o stdout/stderr não existe
         # (porque estamos em modo GUI). Redirecionamos pra arquivos ao
         # lado do exe.
-        "--force-stdout-spec=%PROGRAM_BASE%.stdout.log",
-        "--force-stderr-spec=%PROGRAM_BASE%.stderr.log",
+        # Precisa de separador '/' — Nuitka não aceita concatenar direto em
+        # PROGRAM_BASE. Cria dois arquivos ao lado do exe.
+        "--force-stdout-spec=%PROGRAM_BASE%/LancamentoAutomatico.stdout.log",
+        "--force-stderr-spec=%PROGRAM_BASE%/LancamentoAutomatico.stderr.log",
         # Performance de build (não de runtime): desabilita LTO — LTO custa
         # 20+ min extras em máquinas com PySide6 e não muda anti-AV.
         "--lto=no",
