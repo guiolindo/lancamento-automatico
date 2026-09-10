@@ -37,6 +37,13 @@ CAMPOS = [
     ("btn_confirmar",     "Botão + (gravar lançamento)",    True),
 ]
 
+# Campos OPCIONAIS relacionados a detecção visual do popup de duplicidade.
+# Provoque o erro (lance 2x mesmo número), abra o app e calibre:
+CAMPOS_OPCIONAIS = [
+    ("popup_indicador",  "Pixel característico do popup (ex: ícone vermelho)", False),
+    ("popup_ok",         "Botão OK do popup",                                   True),
+]
+
 
 @dataclass
 class Calibracao:
@@ -44,11 +51,11 @@ class Calibracao:
     # Financeiro' bate com ambas as variantes que aparecem no PC do usuário:
     # - 'Operador Financeiro (Remoto)' (barra de tarefas RemoteApp)
     # - 'Operador Financeiro  v: 26.01.020  [06 MULT-CTG1]  - Usr: [...]'
-    #   (título completo). 'Inclusão de Títulos' NÃO aparece como janela
-    #   top-level: é uma MDI child dentro do Operador Financeiro.
     titulo_janela: str = "Operador Financeiro"
     # offset (dx, dy) do campo em relação ao canto SUPERIOR-ESQUERDO da janela
     campos: dict[str, tuple[int, int]] = field(default_factory=dict)
+    # Cor RGB de referência do pixel indicador (por enquanto só popup_indicador).
+    cores: dict[str, tuple[int, int, int]] = field(default_factory=dict)
 
     def esta_completa(self) -> bool:
         return all(chave in self.campos for chave, _, _ in CAMPOS)
@@ -60,13 +67,15 @@ class Calibracao:
         return {
             "titulo_janela": self.titulo_janela,
             "campos": {k: list(v) for k, v in self.campos.items()},
+            "cores": {k: list(v) for k, v in self.cores.items()},
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> "Calibracao":
         return cls(
-            titulo_janela=d.get("titulo_janela", "Inclusão de Títulos"),
+            titulo_janela=d.get("titulo_janela", "Operador Financeiro"),
             campos={k: tuple(v) for k, v in (d.get("campos") or {}).items() if len(v) == 2},
+            cores={k: tuple(v) for k, v in (d.get("cores") or {}).items() if len(v) == 3},
         )
 
 

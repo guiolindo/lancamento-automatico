@@ -212,7 +212,12 @@ class RpaTotvs:
     # ---------- popup de duplicidade ----------
 
     def _achar_popup(self):
-        """Retorna a janela do popup 'Atenção' se existir."""
+        """Retorna a janela top-level do popup 'Atenção' se existir.
+
+        Em RemoteApp o popup NÃO aparece como janela top-level (fica dentro
+        do Operador Financeiro). Esse método só funciona se o TOTVS rodar
+        localmente. Preferir _popup_por_pixel() quando calibrado.
+        """
         import pygetwindow as gw
         try:
             titulo_pai = ((self._win.title if self._win else "") or "").lower()
@@ -226,21 +231,56 @@ class RpaTotvs:
             pass
         return None
 
+    def _popup_por_pixel(self) -> bool:
+        """Verifica se o pixel calibrado 'popup_indicador' está com a cor
+        de referência. Funciona em RemoteApp porque só lê o pixel na tela
+        local (que reflete o que a VM está renderizando).
+        """
+        if "popup_indicador" not in self.calibracao.campos:
+            return False
+        if "popup_indicador" not in self.calibracao.cores:
+            return False
+        try:
+            import pyautogui
+            x, y = self._pos_abs("popup_indicador")
+            atual = pyautogui.pixel(x, y)
+            ref = self.calibracao.cores["popup_indicador"]
+            dist = sum(abs(int(a) - int(b)) for a, b in zip(atual, ref))
+            # Tolerância folgada — RemoteApp pode variar cor ligeiramente
+            # por compressão do RDP.
+            match = dist < 60
+            if match:
+                log.info("Popup detectado por pixel: atual=%s ref=%s dist=%d",
+                         atual, ref, dist)
+            return match
+        except Exception:  # noqa: BLE001
+            log.exception("Falha lendo pixel de popup")
+            return False
+
     def _popup_duplicidade(self) -> bool:
+        # Preferência: pixel calibrado (funciona em RemoteApp).
+        if self._popup_por_pixel():
+            return True
+        # Fallback: janela top-level (só funciona com TOTVS local).
         p = self._achar_popup()
         if p is not None:
-            log.info("Popup detectado: '%s' em (%d, %d) %dx%d",
-                     p.title, p.left, p.top, p.width, p.height)
+            log.info("Popup (janela top-level) detectado: '%s'", p.title)
             return True
         return False
 
     def _fechar_popup(self) -> None:
-        """Ativa o popup e clica no botão OK (aprox. centro-inferior).
-
-        Também tenta espaço/enter/alt+F4 como redundância — algumas janelas
-        respondem a um, outras a outro.
-        """
         import pyautogui
+        # 1o: se botão OK calibrado, clica exatamente lá.
+        if "popup_ok" in self.calibracao.campos:
+            x, y = self._pos_abs("popup_ok")
+            log.info("Fechando popup: click em popup_ok (%d, %d)", x, y)
+            pyautogui.moveTo(x, y, duration=0.05)
+            pyautogui.click(x, y)
+            time.sleep(0.5)
+            if not self._popup_por_pixel():
+                return
+
+        # 2o: se detectou janela top-level, click no centro-inferior dela.
         p = self._achar_popup()
         if p is not None:
             try:
@@ -248,22 +288,21 @@ class RpaTotvs:
                 time.sleep(0.2)
             except Exception:  # noqa: BLE001
                 pass
-            # Clique no centro-inferior — OK costuma ficar ali (ver screenshot
-            # do popup do usuário: botão OK centralizado embaixo)
             cx = int(p.left + p.width / 2)
             cy = int(p.top + p.height - 30)
             pyautogui.moveTo(cx, cy, duration=0.05)
             pyautogui.click(cx, cy)
             time.sleep(0.5)
-        # Redundância — se o popup ainda existir, tenta teclas
-        if self._achar_popup() is not None:
+
+        # 3o: redundância com teclado.
+        if self._popup_por_pixel() or self._achar_popup() is not None:
             pyautogui.press("enter")
             time.sleep(0.3)
-        if self._achar_popup() is not None:
+        if self._popup_por_pixel() or self._achar_popup() is not None:
             pyautogui.press("space")
             time.sleep(0.3)
-        if self._achar_popup() is not None:
-            log.warning("Popup NÃO fechou após click/enter/space")
+        if self._popup_por_pixel() or self._achar_popup() is not None:
+            log.warning("Popup NÃO fechou apesar de click OK + enter + space")
 
     # ---------- fluxo principal ----------
 
