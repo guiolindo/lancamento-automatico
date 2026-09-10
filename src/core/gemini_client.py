@@ -51,14 +51,20 @@ Retorne APENAS um JSON válido nesta estrutura, sem markdown, sem comentários:
 
 
 class GeminiClient:
-    def __init__(self, api_key: str, model: str = "gemini-2.0-flash-exp"):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-lite"):
         if not api_key:
             raise ValueError("Chave da API Gemini não configurada")
+        log.info("GeminiClient: importando google.generativeai")
         import google.generativeai as genai  # lazy: só ao usar
-        genai.configure(api_key=api_key)
+        log.info("GeminiClient: configurando (transporte REST — evita crash de gRPC em bundle Nuitka)")
+        # transport='rest' força HTTP puro e evita o carregamento do
+        # cygrpc.pyd que crasha silenciosamente em bundles standalone.
+        genai.configure(api_key=api_key, transport="rest")
+        log.info("GeminiClient: instanciando GenerativeModel(%s)", model)
         self._genai = genai
         self._model = genai.GenerativeModel(model)
         self._model_name = model
+        log.info("GeminiClient: pronto")
 
     def extrair(self, arquivo: Path, imposto: Imposto) -> dict:
         arquivo = Path(arquivo)
@@ -70,13 +76,15 @@ class GeminiClient:
             imposto_chave=imposto.chave,
         )
 
+        log.info("extrair: carregando arquivo")
         conteudo = self._carregar_arquivo(arquivo)
-        log.info("Enviando %s para Gemini (%s)", arquivo.name, self._model_name)
+        log.info("extrair: enviando %s para Gemini (%s)", arquivo.name, self._model_name)
 
         resp = self._model.generate_content(
             [prompt, conteudo],
             generation_config={"response_mime_type": "application/json"},
         )
+        log.info("extrair: resposta recebida (%d chars)", len(resp.text or ""))
         texto = resp.text or ""
         return self._parse_json(texto)
 
