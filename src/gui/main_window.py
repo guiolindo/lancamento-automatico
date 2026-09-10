@@ -210,6 +210,16 @@ class MainWindow(QMainWindow):
         self._chk_confirmar_auto.stateChanged.connect(self._on_toggle_confirmar_auto)
         acoes.addWidget(self._chk_confirmar_auto)
 
+        self._chk_apenas_primeiro = QCheckBox(
+            "Testar só o primeiro lançamento"
+        )
+        self._chk_apenas_primeiro.setChecked(True)
+        self._chk_apenas_primeiro.setToolTip(
+            "Executa apenas o primeiro lançamento da tabela, pra você ver "
+            "se a calibração e os delays estão certos antes de rodar o lote inteiro."
+        )
+        acoes.addWidget(self._chk_apenas_primeiro)
+
         acoes.addStretch(1)
 
         self._btn_calibrar = QPushButton("Calibrar TOTVS")
@@ -401,10 +411,17 @@ class MainWindow(QMainWindow):
         self._btn_extrair.setEnabled(False)
         self._btn_cancelar.setVisible(True)
         self._progress.setVisible(True)
-        self._progress.setMaximum(len(self._lancamentos))
+        self._progress.setMaximum(len(lancamentos_exec))
         self._progress.setValue(0)
 
-        worker = LoteWorker(self._lancamentos, self.settings.data, self._calibracao)
+        lancamentos_exec = self._lancamentos
+        if self._chk_apenas_primeiro.isChecked() and lancamentos_exec:
+            lancamentos_exec = [lancamentos_exec[0]]
+            self._log_line(
+                f"i Modo teste: apenas o 1o lançamento ({lancamentos_exec[0].filial_nome} / "
+                f"{lancamentos_exec[0].tipo_folha})"
+            )
+        worker = LoteWorker(lancamentos_exec, self.settings.data, self._calibracao)
         worker.log_line.connect(self._log_line)
         worker.progresso.connect(self._on_progresso)
         worker.lancamento_atualizado.connect(self._tabela.atualizar_linha)

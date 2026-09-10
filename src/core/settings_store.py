@@ -36,12 +36,18 @@ DEFAULTS: dict[str, Any] = {
     "gemini_api_key": "",
     "gemini_model": "gemini-3.5-flash-lite",
     "delays": {
-        "entre_campos_ms": 150,
-        "apos_especie_ms": 800,
-        "apos_pessoa_ms": 800,
-        "apos_gerar_parcelas_ms": 1500,
-        "apos_confirmar_ms": 2000,
-        "timeout_janela_s": 20,
+        # Delays bem generosos por padrão. RemoteApp tem latência variável;
+        # é melhor rodar mais devagar e certo do que rápido e errado.
+        # Usuário pode reduzir editando ~/.lancamento-automatico/settings.json.
+        "apos_click_ms": 400,          # espera foco chegar na VM
+        "apos_limpar_ms": 200,         # espera Ctrl+A+Delete terminar
+        "apos_paste_ms": 400,          # espera Ctrl+V ser processado
+        "entre_campos_ms": 500,        # entre um campo e o próximo
+        "apos_especie_ms": 1200,       # aguarda banco/agência/depositário
+        "apos_pessoa_ms": 1200,        # aguarda P.Nota auto-preencher
+        "apos_gerar_parcelas_ms": 2500,
+        "apos_confirmar_ms": 2500,
+        "timeout_janela_s": 30,
     },
     "rpa": {
         "titulo_janela": "Operador Financeiro",
