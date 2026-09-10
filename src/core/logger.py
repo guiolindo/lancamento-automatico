@@ -45,6 +45,13 @@ def setup_logger(name: str = "lancamento", level: int = logging.INFO) -> logging
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
+    # StreamHandler pro stdout, forçando UTF-8 para não quebrar em Windows
+    # com cp1252 (que não aceita → ✎ etc.). reconfigure() existe no Python 3.7+.
+    try:
+        if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        pass
     stream = logging.StreamHandler(sys.stdout)
     stream.setFormatter(fmt)
     logger.addHandler(stream)
