@@ -36,17 +36,19 @@ DEFAULTS: dict[str, Any] = {
     "gemini_api_key": "",
     "gemini_model": "gemini-3.5-flash-lite",
     "delays": {
-        # Delays bem generosos por padrão. RemoteApp tem latência variável;
-        # é melhor rodar mais devagar e certo do que rápido e errado.
-        # Usuário pode reduzir editando ~/.lancamento-automatico/settings.json.
-        "apos_click_ms": 400,          # espera foco chegar na VM
-        "apos_limpar_ms": 200,         # espera Ctrl+A+Delete terminar
-        "apos_paste_ms": 400,          # espera Ctrl+V ser processado
-        "entre_campos_ms": 500,        # entre um campo e o próximo
-        "apos_especie_ms": 1200,       # aguarda banco/agência/depositário
-        "apos_pessoa_ms": 1200,        # aguarda P.Nota auto-preencher
-        "apos_gerar_parcelas_ms": 2500,
-        "apos_confirmar_ms": 2500,
+        # Delays ajustados 2-3x mais rápidos que a versão anterior.
+        # Estratégia agora é Ctrl+A + typewrite (mais confiável que Ctrl+V
+        # em campos com máscara de data). Se der problema em algum PC
+        # mais lento, edite ~/.lancamento-automatico/settings.json.
+        "apos_click_ms": 150,
+        "apos_selectall_ms": 60,
+        "intervalo_digitacao_s": 0.005,   # entre teclas do typewrite
+        "apos_typewrite_ms": 100,
+        "entre_campos_ms": 150,
+        "apos_especie_ms": 600,           # banco/agência auto-preencher
+        "apos_pessoa_ms": 600,            # P.Nota auto-preencher
+        "apos_gerar_parcelas_ms": 1500,
+        "apos_confirmar_ms": 1500,
         "timeout_janela_s": 30,
     },
     "rpa": {
