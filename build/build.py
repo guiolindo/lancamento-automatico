@@ -64,9 +64,15 @@ def run() -> int:
         "--assume-yes-for-downloads",
         "--enable-plugin=pyside6",
         # 'attach' = sem console em duplo clique, mas se rodar do CMD, saída
-        # aparece no terminal. Isso ajuda no debug do usuário final sem
-        # deixar janela preta piscando na abertura normal.
+        # aparece no terminal.
         "--windows-console-mode=attach",
+        # Sem esses, o bundle pode crashar com STATUS_FATAL_APP_EXIT
+        # (0x40000015) quando alguma lib do PySide6/google/etc. tenta
+        # imprimir warnings durante o boot, mas o stdout/stderr não existe
+        # (porque estamos em modo GUI). Redirecionamos pra arquivos ao
+        # lado do exe.
+        "--force-stdout-spec=%PROGRAM_BASE%.stdout.log",
+        "--force-stderr-spec=%PROGRAM_BASE%.stderr.log",
         # Performance de build (não de runtime): desabilita LTO — LTO custa
         # 20+ min extras em máquinas com PySide6 e não muda anti-AV.
         "--lto=no",
