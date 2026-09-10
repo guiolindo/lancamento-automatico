@@ -174,21 +174,20 @@ class RpaTotvs:
         self._sleep("apos_click_ms")
 
     def _preencher(self, campo: str, valor: str) -> None:
-        """Click + Ctrl+A + typewrite (UPPERCASE). Simples e rápido.
+        """Click + Backspace × 15 + Delete × 15 + typewrite (UPPERCASE).
 
-        - Um único click coloca o cursor no campo (triple-click abria
-          calendário em Delphi TDateTimePicker).
-        - Ctrl+A após pausa suficiente pro foco chegar na VM seleciona
-          tudo. Usuário confirmou que Ctrl+A funciona manualmente.
-        - typewrite substitui a seleção — não precisa de Delete.
-        - .upper() garante MAIÚSCULO (Observação exige).
+        Ctrl+A não estava confiável no RemoteApp. Solução direta:
+        pressionar Backspace 15x apaga do cursor até o início; Delete 15x
+        apaga do cursor até o fim. Independente de onde o cursor caiu, o
+        campo fica vazio.
         """
         self._check_abort()
         valor_up = valor.upper() if isinstance(valor, str) else str(valor)
         log.info("preencher %s = %r", campo, valor_up)
         import pyautogui
         self._clicar(campo)
-        pyautogui.hotkey("ctrl", "a")
+        pyautogui.press("backspace", presses=15, interval=0.005)
+        pyautogui.press("delete", presses=15, interval=0.005)
         self._sleep("apos_selectall_ms")
         intervalo = float(self._delays.get("intervalo_digitacao_s", 0.003))
         pyautogui.typewrite(valor_up, interval=intervalo)
@@ -196,25 +195,47 @@ class RpaTotvs:
 
     # ---------- popup de duplicidade ----------
 
-    def _achar_popup(self):
-        """Retorna a janela top-level do popup 'Atenção' se existir.
+    def _snapshot_titulos(self) -> set[str]:
+        """Retorna o conjunto de títulos de janelas visíveis agora."""
+        import pygetwindow as gw
+        try:
+            return {(w.title or "") for w in gw.getAllWindows()}
+        except Exception:  # noqa: BLE001
+            return set()
 
-        Em RemoteApp o popup NÃO aparece como janela top-level (fica dentro
-        do Operador Financeiro). Esse método só funciona se o TOTVS rodar
-        localmente. Preferir _popup_por_pixel() quando calibrado.
+    def _achar_popup_novo(self, titulos_antes: set[str]):
+        """Retorna a janela do popup 'Atenção/Aviso/Erro' que apareceu
+        DEPOIS do snapshot. Evita falsos positivos por janelas de outros
+        apps que já estavam abertas com títulos parecidos.
         """
         import pygetwindow as gw
         try:
-            titulo_pai = ((self._win.title if self._win else "") or "").lower()
             for w in gw.getAllWindows():
-                t = (w.title or "").lower()
+                titulo = (w.title or "").strip()
+                if not titulo or titulo in titulos_antes:
+                    continue
+                t = titulo.lower()
                 if any(k in t for k in ("atenção", "atencao", "aviso", "erro")):
-                    if titulo_pai and t == titulo_pai:
-                        continue
+                    log.info("Popup NOVO detectado: %r", titulo)
                     return w
         except Exception:  # noqa: BLE001
             pass
         return None
+
+    def _achar_popup(self):
+        """DEPRECATED — usar _achar_popup_novo(snapshot)."""
+        return None
+
+    def _popup_duplicidade_novo(self, titulos_antes: set[str]) -> bool:
+        """Chamado LOGO após clicar em Gerar Parcelas. Pega snapshot atual
+        de janelas e compara com titulos_antes. Se apareceu nova com
+        'atenção/aviso/erro', é popup."""
+        if self._achar_popup_novo(titulos_antes) is not None:
+            return True
+        # Ainda tenta o pixel se calibrado (defesa extra)
+        if self._popup_por_pixel():
+            return True
+        return False
 
     def _popup_por_pixel(self) -> bool:
         """Verifica se o pixel calibrado 'popup_indicador' está com a cor
@@ -252,6 +273,39 @@ class RpaTotvs:
             log.info("Popup (janela top-level) detectado: '%s'", p.title)
             return True
         return False
+
+    def _fechar_popup_novo(self, titulos_antes: set[str]) -> None:
+        """Fecha o popup que apareceu (identificado pela diferença de snapshot)."""
+        import pyautogui
+        # 1o: se botão OK do popup foi calibrado, clica ali.
+        if "popup_ok" in self.calibracao.campos:
+            x, y = self._pos_abs("popup_ok")
+            log.info("Fechando popup: click em popup_ok (%d, %d)", x, y)
+            pyautogui.moveTo(x, y, duration=0.05)
+            pyautogui.click(x, y)
+            time.sleep(0.4)
+            if self._achar_popup_novo(titulos_antes) is None:
+                return
+        # 2o: acha a janela nova e clica no centro-inferior.
+        p = self._achar_popup_novo(titulos_antes)
+        if p is not None:
+            try:
+                p.activate()
+                time.sleep(0.15)
+            except Exception:  # noqa: BLE001
+                pass
+            cx = int(p.left + p.width / 2)
+            cy = int(p.top + p.height - 30)
+            pyautogui.moveTo(cx, cy, duration=0.05)
+            pyautogui.click(cx, cy)
+            time.sleep(0.4)
+        # 3o: redundância com teclas.
+        if self._achar_popup_novo(titulos_antes) is not None:
+            pyautogui.press("enter")
+            time.sleep(0.3)
+        if self._achar_popup_novo(titulos_antes) is not None:
+            pyautogui.press("space")
+            time.sleep(0.3)
 
     def _fechar_popup(self) -> None:
         import pyautogui
@@ -315,12 +369,14 @@ class RpaTotvs:
                 self._preencher_datas_e_valor(lanc)
 
                 self._notificar(lanc, f"Tentativa {tentativa}: Gerar Parcelas")
+                # Snapshot ANTES: pra detectar SÓ janela nova.
+                titulos_antes = self._snapshot_titulos()
                 self._clicar("btn_gerar_parcelas")
-                self._sleep("apos_gerar_parcelas_ms", 1500)
+                self._sleep("apos_gerar_parcelas_ms", 1000)
 
-                if self._popup_duplicidade():
+                if self._popup_duplicidade_novo(titulos_antes):
                     log.warning("Nro %s duplicado — nova tentativa", lanc.nro_documento)
-                    self._fechar_popup()
+                    self._fechar_popup_novo(titulos_antes)
                     continue
 
                 if bool(self._rpa_cfg.get("confirmar_automaticamente", True)):
