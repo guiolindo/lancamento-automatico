@@ -63,7 +63,10 @@ def run() -> int:
         "--standalone",
         "--assume-yes-for-downloads",
         "--enable-plugin=pyside6",
-        "--windows-console-mode=disable",
+        # 'attach' = sem console em duplo clique, mas se rodar do CMD, saída
+        # aparece no terminal. Isso ajuda no debug do usuário final sem
+        # deixar janela preta piscando na abertura normal.
+        "--windows-console-mode=attach",
         # Performance de build (não de runtime): desabilita LTO — LTO custa
         # 20+ min extras em máquinas com PySide6 e não muda anti-AV.
         "--lto=no",
@@ -83,6 +86,9 @@ def run() -> int:
         f"--output-filename={NOME}.exe",
         # Empacota o mapeamento.json dentro da pasta standalone.
         f"--include-data-files={SRC / 'config' / 'mapeamento.json'}=config/mapeamento.json",
+        # Precisa incluir explicitamente o nosso pacote 'src' porque o
+        # entrypoint (launcher.py) só faz um import dinâmico dele.
+        "--include-package=src",
         # Módulos que podem ser resolvidos por importação dinâmica.
         "--include-package=google.generativeai",
         "--include-package=pywinauto",
@@ -94,15 +100,16 @@ def run() -> int:
     if icone:
         args.append(f"--windows-icon-from-ico={icone}")
 
-    args.append(str(SRC / "main.py"))
+    args.append(str(ROOT / "launcher.py"))
 
     print(">>", " ".join(args))
     r = subprocess.run(args, cwd=str(ROOT))
     if r.returncode != 0:
         return r.returncode
 
-    # Nuitka gera dist/main.dist/ por padrão porque o entrypoint é main.py.
-    origem_pasta = DIST / "main.dist"
+    # Nuitka nomeia a pasta pelo entrypoint (launcher.dist). Renomeia pro
+    # nome comercial.
+    origem_pasta = DIST / "launcher.dist"
     destino_pasta = DIST / f"{NOME}.dist"
     if origem_pasta.exists() and origem_pasta != destino_pasta:
         if destino_pasta.exists():
