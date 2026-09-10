@@ -8,6 +8,18 @@ pydantic==2.8.2
 keyring==25.2.1
 python-dateutil==2.9.0
 
+# Deps transitivas fixadas em versões conhecidamente compatíveis com Nuitka 2.4.
+# certifi >=2024.8 quebra no Nuitka 2.4 por causa de importlib.resources.files();
+# grpc/protobuf/urllib3 novas versões também dão problemas em standalone builds.
+certifi==2024.7.4
+requests==2.32.3
+urllib3==2.2.3
+protobuf==4.25.5
+grpcio==1.66.2
+grpcio-status==1.66.2
+google-api-core==2.19.2
+google-auth==2.35.0
+
 # Empacotamento (opcional em runtime; necessário só para build/build.py)
 # Nuitka é MUITO melhor que PyInstaller para máquinas corporativas: gera
 # binário nativo (menos falsos-positivos de AV), roda sem admin e sem
