@@ -44,7 +44,7 @@ DEFAULTS: dict[str, Any] = {
         "timeout_janela_s": 20,
     },
     "rpa": {
-        "titulo_janela": "Inclusão de Títulos",
+        "titulo_janela": "Operador Financeiro",
         "titulo_janela_erro": "",
         "max_tentativas_duplicidade": 10,
         "confirmar_automaticamente": True,

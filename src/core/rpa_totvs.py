@@ -59,8 +59,15 @@ class RpaTotvs:
     # ---------- conexão ----------
 
     def conectar(self) -> None:
+        titulo = (self.calibracao.titulo_janela or "").strip()
+        if not titulo:
+            # Modo absoluto: offsets são coordenadas de tela. Sem janela pra
+            # localizar. Isso funciona desde que o TOTVS não seja movido.
+            log.info("RpaTotvs: modo absoluto (sem título de janela)")
+            self._win = None
+            return
+
         import pygetwindow as gw
-        titulo = self.calibracao.titulo_janela
         timeout = int(self._delays.get("timeout_janela_s", 20))
         deadline = time.time() + timeout
         log.info("RpaTotvs: procurando janela '%s'", titulo)
@@ -84,7 +91,9 @@ class RpaTotvs:
 
     def _pos_abs(self, campo: str) -> tuple[int, int]:
         ox, oy = self.calibracao.campos[campo]
-        # Re-lê a posição da janela toda hora — usuário pode ter movido.
+        if self._win is None:
+            # Modo absoluto: ox/oy já são coordenadas de tela.
+            return int(ox), int(oy)
         wx, wy = self._win.left, self._win.top
         return int(wx + ox), int(wy + oy)
 
@@ -126,13 +135,17 @@ class RpaTotvs:
 
     def _popup_duplicidade(self) -> bool:
         import pygetwindow as gw
-        for w in gw.getAllWindows():
-            t = (w.title or "").lower()
-            if any(k in t for k in ("atenção", "atencao", "aviso", "erro")):
-                if w is self._win:
-                    continue
-                log.info("Popup detectado: '%s'", w.title)
-                return True
+        try:
+            titulo_pai = ((self._win.title if self._win else "") or "").lower()
+            for w in gw.getAllWindows():
+                t = (w.title or "").lower()
+                if any(k in t for k in ("atenção", "atencao", "aviso", "erro")):
+                    if titulo_pai and t == titulo_pai:
+                        continue
+                    log.info("Popup detectado: '%s'", w.title)
+                    return True
+        except Exception:  # noqa: BLE001
+            pass
         return False
 
     def _fechar_popup(self) -> None:
