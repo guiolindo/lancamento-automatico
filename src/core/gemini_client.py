@@ -1,19 +1,33 @@
 from __future__ import annotations
 
+import base64
 import json
 import re
 from datetime import date
 from pathlib import Path
 from typing import Optional
 
+import requests
+
 from .logger import log
 from .mapping import MappingRepository
 from .models import Filial, Imposto, Lancamento, LinhaExtracao, StatusLancamento
 
-# NÃO importar google.generativeai nem PIL aqui no topo. São libs pesadas
-# que podem falhar no boot do bundle e derrubar o app inteiro (o erro
-# STATUS_FATAL_APP_EXIT que vimos). Importamos dentro das funções que
-# realmente usam.
+# Cliente REST puro para a API do Gemini. Substituiu a lib google-generativeai,
+# que puxa gRPC/Cython (cygrpc.pyd) e crasha silenciosamente em bundles
+# Nuitka standalone. Usamos requests direto, o que é mais leve, mais
+# previsível e não tem dependência problemática.
+
+
+API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+
+_MIME_POR_EXTENSAO = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".pdf": "application/pdf",
+}
 
 
 PROMPT_TEMPLATE = """Você é um extrator estruturado de dados de relatórios fiscais brasileiros.
@@ -54,15 +68,8 @@ class GeminiClient:
     def __init__(self, api_key: str, model: str = "gemini-2.5-flash-lite"):
         if not api_key:
             raise ValueError("Chave da API Gemini não configurada")
-        log.info("GeminiClient: importando google.generativeai")
-        import google.generativeai as genai  # lazy: só ao usar
-        log.info("GeminiClient: configurando (transporte REST — evita crash de gRPC em bundle Nuitka)")
-        # transport='rest' força HTTP puro e evita o carregamento do
-        # cygrpc.pyd que crasha silenciosamente em bundles standalone.
-        genai.configure(api_key=api_key, transport="rest")
-        log.info("GeminiClient: instanciando GenerativeModel(%s)", model)
-        self._genai = genai
-        self._model = genai.GenerativeModel(model)
+        log.info("GeminiClient: inicializando (REST puro, sem gRPC)")
+        self._api_key = api_key
         self._model_name = model
         log.info("GeminiClient: pronto")
 
@@ -76,24 +83,44 @@ class GeminiClient:
             imposto_chave=imposto.chave,
         )
 
-        log.info("extrair: carregando arquivo")
-        conteudo = self._carregar_arquivo(arquivo)
-        log.info("extrair: enviando %s para Gemini (%s)", arquivo.name, self._model_name)
+        log.info("extrair: lendo arquivo %s", arquivo.name)
+        with open(arquivo, "rb") as f:
+            dados = f.read()
+        mime = _MIME_POR_EXTENSAO.get(arquivo.suffix.lower(), "application/octet-stream")
+        b64 = base64.standard_b64encode(dados).decode("ascii")
 
-        resp = self._model.generate_content(
-            [prompt, conteudo],
-            generation_config={"response_mime_type": "application/json"},
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {"inline_data": {"mime_type": mime, "data": b64}},
+                    ]
+                }
+            ],
+            "generationConfig": {"response_mime_type": "application/json"},
+        }
+
+        url = f"{API_BASE}/models/{self._model_name}:generateContent"
+        log.info("extrair: POST %s (arquivo %s bytes, mime %s)", url, len(dados), mime)
+        r = requests.post(
+            url,
+            params={"key": self._api_key},
+            json=payload,
+            timeout=120,
         )
-        log.info("extrair: resposta recebida (%d chars)", len(resp.text or ""))
-        texto = resp.text or ""
-        return self._parse_json(texto)
+        log.info("extrair: HTTP %s", r.status_code)
+        if r.status_code >= 400:
+            trecho = r.text[:500]
+            raise RuntimeError(f"Gemini HTTP {r.status_code}: {trecho}")
 
-    def _carregar_arquivo(self, arquivo: Path):
-        suffix = arquivo.suffix.lower()
-        if suffix == ".pdf":
-            return self._genai.upload_file(str(arquivo))
-        from PIL import Image  # lazy
-        return Image.open(arquivo)
+        data = r.json()
+        try:
+            texto = data["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError, TypeError) as e:
+            raise RuntimeError(f"Resposta Gemini sem texto: {data}") from e
+        log.info("extrair: resposta recebida (%d chars)", len(texto))
+        return self._parse_json(texto)
 
     def _parse_json(self, texto: str) -> dict:
         try:
