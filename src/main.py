@@ -38,14 +38,22 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
+BUILD_MARKER = "build-26 (setWindowFlags removido, QThread sem parent)"
+
+
 def main() -> int:
     _boot_trace("src.main.main() entrada")
+    _boot_trace(f"BUILD: {BUILD_MARKER}")
 
     _boot_trace("importando PySide6")
     from PySide6.QtWidgets import QApplication, QMessageBox
 
     _boot_trace("importando core.logger")
     from .core.logger import log
+    # loga o build também no arquivo principal (não só no boot_trace)
+    log.info("=" * 60)
+    log.info("APP INICIADO — %s", BUILD_MARKER)
+    log.info("=" * 60)
 
     _boot_trace("importando core.mapping")
     from .core.mapping import MappingRepository
