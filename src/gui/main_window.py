@@ -421,10 +421,10 @@ class MainWindow(QMainWindow):
         self._btn_cancelar.setVisible(True)
         self._progress.setVisible(True)
         self._set_topo(True)  # no-op agora
-        self._log_line(">> INICIANDO EXECUCAO NO TOTVS (build 26) — END = emergencia")
-        self._progress.setMaximum(len(lancamentos_exec))
-        self._progress.setValue(0)
+        self._log_line(">> INICIANDO EXECUCAO NO TOTVS (build 27 — FIX NameError) — END = emergencia")
 
+        # Define lancamentos_exec ANTES do setMaximum. Bug antigo: usava
+        # lancamentos_exec antes de definir (NameError silencioso).
         lancamentos_exec = self._lancamentos
         if self._chk_apenas_primeiro.isChecked() and lancamentos_exec:
             lancamentos_exec = [lancamentos_exec[0]]
@@ -432,6 +432,10 @@ class MainWindow(QMainWindow):
                 f"i Modo teste: apenas o 1o lançamento ({lancamentos_exec[0].filial_nome} / "
                 f"{lancamentos_exec[0].tipo_folha})"
             )
+
+        self._progress.setMaximum(len(lancamentos_exec))
+        self._progress.setValue(0)
+
         log.info("_executar: criando LoteWorker")
         worker = LoteWorker(lancamentos_exec, self.settings.data, self._calibracao)
         log.info("_executar: conectando sinais")
