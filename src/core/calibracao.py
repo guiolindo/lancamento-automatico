@@ -40,7 +40,13 @@ CAMPOS = [
 
 @dataclass
 class Calibracao:
-    titulo_janela: str = "Inclusão de Títulos"
+    # Título parcial que casa com a janela do TOTVS. O default 'Operador
+    # Financeiro' bate com ambas as variantes que aparecem no PC do usuário:
+    # - 'Operador Financeiro (Remoto)' (barra de tarefas RemoteApp)
+    # - 'Operador Financeiro  v: 26.01.020  [06 MULT-CTG1]  - Usr: [...]'
+    #   (título completo). 'Inclusão de Títulos' NÃO aparece como janela
+    #   top-level: é uma MDI child dentro do Operador Financeiro.
+    titulo_janela: str = "Operador Financeiro"
     # offset (dx, dy) do campo em relação ao canto SUPERIOR-ESQUERDO da janela
     campos: dict[str, tuple[int, int]] = field(default_factory=dict)
 
