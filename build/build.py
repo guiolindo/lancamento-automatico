@@ -94,20 +94,40 @@ def run() -> int:
         f"--output-filename={NOME}.exe",
         # Empacota o mapeamento.json dentro da pasta standalone.
         f"--include-data-files={SRC / 'config' / 'mapeamento.json'}=config/mapeamento.json",
-        # Precisa incluir explicitamente o nosso pacote 'src' porque o
-        # entrypoint (launcher.py) só faz um import dinâmico dele.
+        # Nosso pacote — o launcher só faz import dinâmico dele.
         "--include-package=src",
-        # Módulos que podem ser resolvidos por importação dinâmica.
+        # Namespace packages do ecossistema google — cada subpacote precisa
+        # ser incluído explicitamente, senão Nuitka pode não pegar.
         "--include-package=google.generativeai",
+        "--include-package=google.ai.generativelanguage_v1beta",
+        "--include-package=google.api_core",
+        "--include-package=google.auth",
+        "--include-package=google.protobuf",
+        "--include-package=grpc",
+        "--include-package=grpc._cython",
+        "--include-package=proto",
+        "--include-package=googleapis_common_protos",
+        # Outras libs com imports dinâmicos.
         "--include-package=pywinauto",
+        "--include-package=comtypes",
         "--include-package=rapidfuzz",
         "--include-package=PIL",
-        # Data files que essas libs carregam em runtime (cacert.pem, .proto,
-        # roots.pem etc.). Sem isso o certifi crasha logo no import.
+        "--include-package=certifi",
+        "--include-package=charset_normalizer",
+        "--include-package=idna",
+        "--include-package=urllib3",
+        "--include-package=requests",
+        # Data files (cacert.pem, .proto, roots.pem).
         "--include-package-data=certifi",
         "--include-package-data=google",
         "--include-package-data=grpc",
         "--include-package-data=pywinauto",
+        "--include-package-data=comtypes",
+        # Anti-bloat: cortar libs pesadas que sabidamente NÃO usamos.
+        "--noinclude-setuptools-mode=nofollow",
+        "--noinclude-pytest-mode=nofollow",
+        "--noinclude-unittest-mode=nofollow",
+        "--noinclude-IPython-mode=nofollow",
     ]
 
     icone = _icone()
