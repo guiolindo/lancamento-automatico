@@ -101,18 +101,21 @@ class LoteWorker(QObject):
 
     def run(self) -> None:
         try:
+            self.log_line.emit(">> LoteWorker.run(): iniciando thread do lote")
             from ..core.rpa_totvs import EmergencyAbortException, ManualAbortException, RpaTotvs
+            self.log_line.emit(">> Modulo rpa_totvs importado")
             rpa = RpaTotvs(
                 self.settings,
                 self.calibracao,
                 on_progress=self._on_progress,
                 aguardar_confirmacao=self._aguardar_confirmacao,
             )
+            self.log_line.emit(">> RpaTotvs instanciado")
             self.log_line.emit("-> Conectando à janela do TOTVS...")
-            self.log_line.emit("i Tecla END = parada de emergência a qualquer momento")
+            self.log_line.emit("i Tecla END = parada de emergência")
             try:
                 rpa.conectar()
-                self.log_line.emit("OK Janela conectada e em primeiro plano")
+                self.log_line.emit("OK Janela conectada")
 
                 sucessos = 0
                 falhas = 0

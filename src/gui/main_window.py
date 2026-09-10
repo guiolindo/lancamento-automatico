@@ -386,6 +386,17 @@ class MainWindow(QMainWindow):
                 f"OK Calibração salva ({len(self._calibracao.campos)} campos)"
             )
 
+    def _set_topo(self, on: bool) -> None:
+        """Coloca/tira a janela do modo 'sempre no topo' — usado durante RPA
+        pra o operador sempre ver o botão Cancelar mesmo com o TOTVS em foco."""
+        from PySide6.QtCore import Qt
+        flags = self.windowFlags()
+        if on:
+            self.setWindowFlags(flags | Qt.WindowStaysOnTopHint)
+        else:
+            self.setWindowFlags(flags & ~Qt.WindowStaysOnTopHint)
+        self.show()  # necessário para as flags entrarem em vigor
+
     def _executar(self) -> None:
         if not self._lancamentos:
             return
@@ -414,6 +425,10 @@ class MainWindow(QMainWindow):
         self._btn_extrair.setEnabled(False)
         self._btn_cancelar.setVisible(True)
         self._progress.setVisible(True)
+        # Sempre no topo durante a execução para o operador não perder o Cancelar
+        # mesmo com o TOTVS em foco.
+        self._set_topo(True)
+        self._log_line("i Janela em modo 'sempre no topo'. END = parada de emergência.")
         self._progress.setMaximum(len(lancamentos_exec))
         self._progress.setValue(0)
 
@@ -452,7 +467,8 @@ class MainWindow(QMainWindow):
         self._btn_extrair.setEnabled(True)
         self._btn_cancelar.setVisible(False)
         self._progress.setVisible(False)
-        self._log_line(f"■ Lote finalizado: {sucessos} sucessos, {falhas} falhas")
+        self._set_topo(False)
+        self._log_line(f"# Lote finalizado: {sucessos} sucessos, {falhas} falhas")
         QMessageBox.information(
             self, "Lote finalizado",
             f"Sucessos: {sucessos}\nFalhas: {falhas}",
@@ -463,6 +479,7 @@ class MainWindow(QMainWindow):
         self._btn_extrair.setEnabled(True)
         self._btn_cancelar.setVisible(False)
         self._progress.setVisible(False)
+        self._set_topo(False)
         QMessageBox.critical(self, "Erro no lote", msg)
 
     def _cancelar(self) -> None:
