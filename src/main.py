@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-33 (calibração com scroll + auto-detect Operador Financeiro)"
+BUILD_MARKER = "build-34 (redesign visual — paleta corporativa dark)"
 
 
 def main() -> int:
