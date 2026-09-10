@@ -18,7 +18,10 @@ from PySide6.QtWidgets import (
     QListWidget, QMessageBox, QPushButton, QVBoxLayout
 )
 
-from ..core.calibracao import CAMPOS, Calibracao
+from ..core.calibracao import CAMPOS, CAMPOS_OPCIONAIS, Calibracao
+
+
+_TODOS_CAMPOS = CAMPOS + CAMPOS_OPCIONAIS
 
 
 class CalibracaoDialog(QDialog):
@@ -29,6 +32,7 @@ class CalibracaoDialog(QDialog):
         self._calibracao = Calibracao(
             titulo_janela=calibracao.titulo_janela,
             campos=dict(calibracao.campos),
+            cores=dict(calibracao.cores),
         )
         self._linhas: dict[str, tuple[QLabel, QPushButton]] = {}
 
@@ -66,8 +70,10 @@ class CalibracaoDialog(QDialog):
 
         grid = QGridLayout()
         grid.setSpacing(8)
-        for i, (chave, rotulo, _is_btn) in enumerate(CAMPOS):
+        for i, (chave, rotulo, _is_btn) in enumerate(_TODOS_CAMPOS):
             lbl_nome = QLabel(rotulo)
+            if chave in ("popup_indicador", "popup_ok"):
+                lbl_nome.setProperty("muted", True)
             lbl_pos = QLabel(self._formatar_pos(chave))
             lbl_pos.setMinimumWidth(90)
             lbl_pos.setAlignment(Qt.AlignCenter)
@@ -80,6 +86,17 @@ class CalibracaoDialog(QDialog):
             grid.addWidget(btn, i, 2)
             self._linhas[chave] = (lbl_pos, btn)
         root.addLayout(grid)
+
+        dica_popup = QLabel(
+            "<i>Dica: para calibrar os campos do POPUP, provoque um erro "
+            "de duplicidade no TOTVS (tente lançar um Nro.Documento que "
+            "já existe). Com o popup 'Atenção' visível, capture os dois "
+            "campos opcionais acima. Isso é opcional mas RECOMENDADO — "
+            "sem eles o robô não detecta duplicidade em modo RemoteApp.</i>"
+        )
+        dica_popup.setWordWrap(True)
+        dica_popup.setProperty("muted", True)
+        root.addWidget(dica_popup)
 
         self._status = QLabel("")
         self._status.setProperty("muted", True)
@@ -138,7 +155,7 @@ class CalibracaoDialog(QDialog):
         self._timer.start(1000)
 
     def _rotulo(self, chave: str) -> str:
-        for k, r, _ in CAMPOS:
+        for k, r, _ in _TODOS_CAMPOS:
             if k == chave:
                 return r
         return chave
@@ -192,11 +209,25 @@ class CalibracaoDialog(QDialog):
             offset = (int(mx - win.left), int(my - win.top))
 
         self._calibracao.campos[self._chave_atual] = offset
+
+        # Para popup_indicador, também guarda a cor RGB do pixel — o robô
+        # compara essa cor em runtime pra detectar o popup.
+        if self._chave_atual == "popup_indicador":
+            try:
+                rgb = pyautogui.pixel(mx, my)
+                self._calibracao.cores["popup_indicador"] = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+            except Exception:  # noqa: BLE001
+                pass
+
         lbl, _btn = self._linhas[self._chave_atual]
         lbl.setText(self._formatar_pos(self._chave_atual))
         modo = "absoluto" if not janelas else f"offset ({offset[0]}, {offset[1]})"
+        extra = ""
+        if self._chave_atual == "popup_indicador" and "popup_indicador" in self._calibracao.cores:
+            r, g, b = self._calibracao.cores["popup_indicador"]
+            extra = f" | cor RGB ({r},{g},{b})"
         self._status.setText(
-            f"OK {self._rotulo(self._chave_atual)}: mouse em ({mx}, {my}) - {modo}"
+            f"OK {self._rotulo(self._chave_atual)}: mouse em ({mx}, {my}) - {modo}{extra}"
         )
 
     def _salvar(self) -> None:
