@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-27 (FIX NameError lancamentos_exec — bug do 'Testar 1')"
+BUILD_MARKER = "build-28 (typewrite em vez de paste + delays 2x mais rápidos)"
 
 
 def main() -> int:

@@ -170,37 +170,28 @@ class RpaTotvs:
     def _clicar(self, campo: str) -> None:
         import pyautogui
         x, y = self._pos_abs(campo)
-        pyautogui.moveTo(x, y, duration=0.05)
         pyautogui.click(x, y)
-        # Espera o RemoteApp propagar o foco pra dentro da VM. Sem isso, o
-        # Ctrl+A/Ctrl+V a seguir podem cair no campo anterior.
         self._sleep("apos_click_ms")
 
-    def _limpar_campo(self) -> None:
-        """Ctrl+A + Delete pra apagar valor existente (datas pré-preenchidas)."""
-        import pyautogui
-        pyautogui.hotkey("ctrl", "a")
-        self._sleep("apos_limpar_ms")
-        pyautogui.press("delete")
-        self._sleep("apos_limpar_ms")
-
-    def _colar(self, texto: str) -> None:
-        import pyautogui
-        try:
-            import pyperclip
-            pyperclip.copy(texto)
-            time.sleep(0.05)
-            pyautogui.hotkey("ctrl", "v")
-        except Exception:  # noqa: BLE001
-            pyautogui.typewrite(texto, interval=0.03)
-        self._sleep("apos_paste_ms")
-
     def _preencher(self, campo: str, valor: str) -> None:
+        """Click → Ctrl+A → typewrite. Substitui o antigo click+Ctrl+A+Del+Ctrl+V.
+
+        Motivos:
+        - Campos com máscara de data no TOTVS ignoram Ctrl+V, aceitam só
+          teclado. typewrite envia tecla por tecla, sempre funciona.
+        - Ctrl+A seleciona o valor atual; typewrite sobrescreve a seleção
+          diretamente. Elimina a etapa 'Delete' + espera.
+        - Menos etapas = mais rápido.
+        """
         self._check_abort()
         log.info("preencher %s = %r", campo, valor)
+        import pyautogui
         self._clicar(campo)
-        self._limpar_campo()
-        self._colar(valor)
+        pyautogui.hotkey("ctrl", "a")
+        self._sleep("apos_selectall_ms")
+        intervalo = float(self._delays.get("intervalo_digitacao_s", 0.005))
+        pyautogui.typewrite(valor, interval=intervalo)
+        self._sleep("apos_typewrite_ms")
         self._sleep("entre_campos_ms")
 
     # ---------- popup de duplicidade ----------
