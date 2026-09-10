@@ -20,6 +20,24 @@ from datetime import datetime
 from pathlib import Path
 
 
+# Blinda stdin/stdout/stderr ANTES de qualquer coisa. Sem console (modo GUI),
+# eles podem estar None e qualquer print/warning de uma lib mata o processo
+# com STATUS_FATAL_APP_EXIT. Isso é redundante com --force-stdout-spec, mas
+# tem custo zero e cobre o caso do Nuitka falhar em criar os arquivos.
+def _garantir_stdio() -> None:
+    for nome in ("stdin", "stdout", "stderr"):
+        atual = getattr(sys, nome, None)
+        if atual is None or getattr(atual, "closed", False):
+            try:
+                modo = "r" if nome == "stdin" else "w"
+                setattr(sys, nome, open(os.devnull, modo, encoding="utf-8", errors="ignore"))
+            except Exception:  # noqa: BLE001
+                pass
+
+
+_garantir_stdio()
+
+
 def _log_startup_error(err: BaseException) -> None:
     """Grava qualquer erro de boot num log ao lado do executável."""
     try:
