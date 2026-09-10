@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-32 (Backspace15 + Delete15 pra apagar + snapshot-diff pra popup)"
+BUILD_MARKER = "build-33 (calibração com scroll + auto-detect Operador Financeiro)"
 
 
 def main() -> int:
