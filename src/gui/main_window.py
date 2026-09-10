@@ -421,7 +421,7 @@ class MainWindow(QMainWindow):
         self._btn_cancelar.setVisible(True)
         self._progress.setVisible(True)
         self._set_topo(True)  # no-op agora
-        self._log_line(">> INICIANDO EXECUCAO NO TOTVS (build 28) — END = emergencia")
+        self._log_line(">> INICIANDO EXECUCAO NO TOTVS (build 29) — END = emergencia")
 
         # Define lancamentos_exec ANTES do setMaximum. Bug antigo: usava
         # lancamentos_exec antes de definir (NameError silencioso).

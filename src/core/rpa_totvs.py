@@ -174,23 +174,29 @@ class RpaTotvs:
         self._sleep("apos_click_ms")
 
     def _preencher(self, campo: str, valor: str) -> None:
-        """Click → Ctrl+A → typewrite. Substitui o antigo click+Ctrl+A+Del+Ctrl+V.
+        """Click → End → Backspace bomba → typewrite (uppercase).
 
-        Motivos:
-        - Campos com máscara de data no TOTVS ignoram Ctrl+V, aceitam só
-          teclado. typewrite envia tecla por tecla, sempre funciona.
-        - Ctrl+A seleciona o valor atual; typewrite sobrescreve a seleção
-          diretamente. Elimina a etapa 'Delete' + espera.
-        - Menos etapas = mais rápido.
+        Ctrl+A não funciona em campos mascarados do TOTVS (datas, alguns
+        edits Delphi). Backspace repetido apaga direto do fim do campo,
+        independente de seleção. End no início garante que o cursor está
+        no fim antes do backspace.
+
+        Valor sempre em UPPERCASE — Observação e alguns outros campos do
+        TOTVS exigem maiúsculas.
         """
         self._check_abort()
-        log.info("preencher %s = %r", campo, valor)
+        valor_up = valor.upper() if isinstance(valor, str) else str(valor)
+        log.info("preencher %s = %r", campo, valor_up)
         import pyautogui
         self._clicar(campo)
-        pyautogui.hotkey("ctrl", "a")
+        # End: cursor pro fim do campo
+        pyautogui.press("end")
+        time.sleep(0.03)
+        # Backspace 30x apaga tudo, mesmo em campo mascarado
+        pyautogui.press("backspace", presses=30, interval=0.005)
         self._sleep("apos_selectall_ms")
         intervalo = float(self._delays.get("intervalo_digitacao_s", 0.005))
-        pyautogui.typewrite(valor, interval=intervalo)
+        pyautogui.typewrite(valor_up, interval=intervalo)
         self._sleep("apos_typewrite_ms")
         self._sleep("entre_campos_ms")
 
