@@ -36,19 +36,16 @@ DEFAULTS: dict[str, Any] = {
     "gemini_api_key": "",
     "gemini_model": "gemini-3.5-flash-lite",
     "delays": {
-        # Delays ajustados 2-3x mais rápidos que a versão anterior.
-        # Estratégia agora é Ctrl+A + typewrite (mais confiável que Ctrl+V
-        # em campos com máscara de data). Se der problema em algum PC
-        # mais lento, edite ~/.lancamento-automatico/settings.json.
-        "apos_click_ms": 150,
-        "apos_selectall_ms": 60,
-        "intervalo_digitacao_s": 0.005,   # entre teclas do typewrite
-        "apos_typewrite_ms": 100,
-        "entre_campos_ms": 150,
-        "apos_especie_ms": 600,           # banco/agência auto-preencher
-        "apos_pessoa_ms": 600,            # P.Nota auto-preencher
-        "apos_gerar_parcelas_ms": 1500,
-        "apos_confirmar_ms": 1500,
+        # Delays enxutos. Se algum PC específico ficar rápido demais e errar,
+        # editar ~/.lancamento-automatico/settings.json.
+        "apos_click_ms": 100,             # tempo pro foco chegar na VM
+        "apos_selectall_ms": 40,          # tempo pro Ctrl+A registrar
+        "intervalo_digitacao_s": 0.003,   # entre teclas do typewrite
+        "entre_campos_ms": 80,
+        "apos_especie_ms": 400,           # banco/agência auto-preencher
+        "apos_pessoa_ms": 400,            # P.Nota auto-preencher
+        "apos_gerar_parcelas_ms": 1000,
+        "apos_confirmar_ms": 1000,
         "timeout_janela_s": 30,
     },
     "rpa": {

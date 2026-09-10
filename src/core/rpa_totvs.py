@@ -174,38 +174,24 @@ class RpaTotvs:
         self._sleep("apos_click_ms")
 
     def _preencher(self, campo: str, valor: str) -> None:
-        """Triple-click + Ctrl+A + Backspace × 15 + typewrite(UPPERCASE).
+        """Click + Ctrl+A + typewrite (UPPERCASE). Simples e rápido.
 
-        Belt AND suspenders: se uma abordagem falhar, a próxima pega.
-        - Triple-click: seleciona a linha inteira em TEdit Delphi comum.
-        - Ctrl+A: redundância, seleciona tudo em campos que respondem a atalho.
-        - Backspace × 15: apaga o que sobrar (campos mascarados que
-          ignoraram as duas seleções).
-        - typewrite: envia tecla por tecla (funciona em máscaras).
-        - .upper(): Observação e alguns campos exigem maiúsculas.
+        - Um único click coloca o cursor no campo (triple-click abria
+          calendário em Delphi TDateTimePicker).
+        - Ctrl+A após pausa suficiente pro foco chegar na VM seleciona
+          tudo. Usuário confirmou que Ctrl+A funciona manualmente.
+        - typewrite substitui a seleção — não precisa de Delete.
+        - .upper() garante MAIÚSCULO (Observação exige).
         """
         self._check_abort()
         valor_up = valor.upper() if isinstance(valor, str) else str(valor)
         log.info("preencher %s = %r", campo, valor_up)
         import pyautogui
-        x, y = self._pos_abs(campo)
-
-        # Triple-click coloca o cursor E seleciona o conteúdo da linha
-        pyautogui.tripleClick(x, y)
-        self._sleep("apos_click_ms")
-
-        # Redundância: Ctrl+A
+        self._clicar(campo)
         pyautogui.hotkey("ctrl", "a")
         self._sleep("apos_selectall_ms")
-
-        # Ultima redundância: apaga o que sobrou
-        pyautogui.press("backspace", presses=15, interval=0.005)
-        self._sleep("apos_selectall_ms")
-
-        # Digita o valor (maiúsculo)
-        intervalo = float(self._delays.get("intervalo_digitacao_s", 0.005))
+        intervalo = float(self._delays.get("intervalo_digitacao_s", 0.003))
         pyautogui.typewrite(valor_up, interval=intervalo)
-        self._sleep("apos_typewrite_ms")
         self._sleep("entre_campos_ms")
 
     # ---------- popup de duplicidade ----------
