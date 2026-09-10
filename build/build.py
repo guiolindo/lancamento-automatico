@@ -106,7 +106,11 @@ def run() -> int:
         "--include-package=grpc",
         "--include-package=grpc._cython",
         "--include-package=proto",
-        "--include-package=googleapis_common_protos",
+        # googleapis-common-protos NÃO é um pacote top-level — ele registra
+        # submódulos em google.rpc, google.type, google.api. Incluí-los.
+        "--include-package=google.rpc",
+        "--include-package=google.type",
+        "--include-package=google.api",
         # Outras libs com imports dinâmicos.
         "--include-package=pywinauto",
         "--include-package=comtypes",
