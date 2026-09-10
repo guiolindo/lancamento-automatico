@@ -1,5 +1,6 @@
 PySide6==6.7.2
-google-generativeai==0.8.3
+# google-generativeai removido: crashava em bundle Nuitka por causa de
+# gRPC/Cython (cygrpc.pyd). Chamamos a REST API diretamente via requests.
 pywinauto==0.6.8
 pyautogui==0.9.54
 Pillow==10.4.0
@@ -14,13 +15,6 @@ python-dateutil==2.9.0
 certifi==2024.7.4
 requests==2.32.3
 urllib3==2.2.3
-protobuf==5.28.3
-grpcio==1.66.2
-grpcio-status==1.66.2
-google-api-core==2.19.2
-google-auth==2.35.0
-googleapis-common-protos==1.65.0
-proto-plus==1.24.0
 
 # Empacotamento (opcional em runtime; necessário só para build/build.py)
 # Nuitka é MUITO melhor que PyInstaller para máquinas corporativas: gera
