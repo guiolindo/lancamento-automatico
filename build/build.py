@@ -94,6 +94,12 @@ def run() -> int:
         "--include-package=pywinauto",
         "--include-package=rapidfuzz",
         "--include-package=PIL",
+        # Data files que essas libs carregam em runtime (cacert.pem, .proto,
+        # roots.pem etc.). Sem isso o certifi crasha logo no import.
+        "--include-package-data=certifi",
+        "--include-package-data=google",
+        "--include-package-data=grpc",
+        "--include-package-data=pywinauto",
     ]
 
     icone = _icone()
