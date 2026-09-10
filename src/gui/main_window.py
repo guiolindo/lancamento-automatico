@@ -420,10 +420,8 @@ class MainWindow(QMainWindow):
         self._btn_extrair.setEnabled(False)
         self._btn_cancelar.setVisible(True)
         self._progress.setVisible(True)
-        # Sempre no topo durante a execução para o operador não perder o Cancelar
-        # mesmo com o TOTVS em foco.
-        self._set_topo(True)
-        self._log_line("i Janela em modo 'sempre no topo'. END = parada de emergência.")
+        self._set_topo(True)  # no-op agora
+        self._log_line(">> INICIANDO EXECUCAO NO TOTVS (build 26) — END = emergencia")
         self._progress.setMaximum(len(lancamentos_exec))
         self._progress.setValue(0)
 
