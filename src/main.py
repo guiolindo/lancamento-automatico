@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-26 (setWindowFlags removido, QThread sem parent)"
+BUILD_MARKER = "build-27 (FIX NameError lancamentos_exec — bug do 'Testar 1')"
 
 
 def main() -> int:
