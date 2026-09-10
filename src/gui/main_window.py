@@ -402,7 +402,10 @@ class MainWindow(QMainWindow):
             self, "Confirmar execução",
             f"{len(self._lancamentos)} lançamentos serão lançados no TOTVS.\n\n"
             "A tela 'Inclusão de Títulos' precisa estar aberta e em branco.\n"
-            "Não use o mouse ou teclado durante a execução.\n\nContinuar?",
+            "Não use o mouse ou teclado durante a execução.\n\n"
+            "🛑 Parada de emergência: aperte a tecla END a qualquer momento.\n"
+            "🛑 Também funciona: arrastar o mouse pro CANTO SUPERIOR ESQUERDO da tela.\n\n"
+            "Continuar?",
         )
         if resp != QMessageBox.Yes:
             return

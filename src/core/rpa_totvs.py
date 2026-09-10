@@ -18,12 +18,18 @@ janela, capturadas via calibração inicial, e cliques/teclado via
 from __future__ import annotations
 
 import random
+import threading
 import time
 from typing import Callable, Optional
 
 from .calibracao import Calibracao
 from .logger import log
 from .models import Lancamento, StatusLancamento
+
+
+# Códigos de tecla virtuais do Windows (para GetAsyncKeyState).
+VK_END = 0x23
+VK_ESCAPE = 0x1B
 
 
 def _gerar_nro_documento() -> str:
@@ -33,6 +39,39 @@ def _gerar_nro_documento() -> str:
 
 class ManualAbortException(RuntimeError):
     """O operador pediu para parar o lote no modo revisão manual."""
+
+
+class EmergencyAbortException(RuntimeError):
+    """O operador apertou a tecla de emergência (END)."""
+
+
+def _trazer_para_frente(win) -> None:
+    """Força a janela pro topo, mesmo se estiver minimizada.
+
+    pygetwindow.activate() falha silenciosamente às vezes no Windows.
+    Combinamos com ctypes SetForegroundWindow + ShowWindow(SW_RESTORE).
+    """
+    try:
+        import ctypes
+        hwnd = getattr(win, "_hWnd", None)
+        if hwnd is None:
+            return
+        user32 = ctypes.windll.user32
+        SW_RESTORE = 9
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, SW_RESTORE)
+        # SetForegroundWindow tem restrições no Windows moderno — envia um
+        # ALT antes ajuda a driblar a proteção contra roubo de foco.
+        user32.keybd_event(0x12, 0, 0, 0)   # Alt down
+        user32.keybd_event(0x12, 0, 2, 0)   # Alt up
+        user32.SetForegroundWindow(hwnd)
+        try:
+            win.activate()
+        except Exception:  # noqa: BLE001
+            pass
+        time.sleep(0.3)
+    except Exception:  # noqa: BLE001
+        log.exception("Falha ao trazer janela pra frente (segue mesmo assim)")
 
 
 class RpaTotvs:
@@ -55,37 +94,70 @@ class RpaTotvs:
         self._delays = settings.get("delays", {})
         self._rpa_cfg = settings.get("rpa", {})
         self._win = None  # janela do TOTVS
+        # Emergência: END global cancela o lote imediatamente.
+        self._abort_event = threading.Event()
+        self._hotkey_thread: Optional[threading.Thread] = None
 
     # ---------- conexão ----------
 
     def conectar(self) -> None:
+        # Ativa watcher da tecla de emergência END.
+        self._start_hotkey_watcher()
+
         titulo = (self.calibracao.titulo_janela or "").strip()
         if not titulo:
-            # Modo absoluto: offsets são coordenadas de tela. Sem janela pra
-            # localizar. Isso funciona desde que o TOTVS não seja movido.
             log.info("RpaTotvs: modo absoluto (sem título de janela)")
             self._win = None
             return
 
         import pygetwindow as gw
-        timeout = int(self._delays.get("timeout_janela_s", 20))
+        timeout = int(self._delays.get("timeout_janela_s", 30))
         deadline = time.time() + timeout
         log.info("RpaTotvs: procurando janela '%s'", titulo)
         while time.time() < deadline:
             janelas = [w for w in gw.getAllWindows() if titulo.lower() in (w.title or "").lower()]
             if janelas:
                 self._win = janelas[0]
-                try:
-                    self._win.activate()
-                except Exception:  # noqa: BLE001
-                    pass
+                _trazer_para_frente(self._win)
                 log.info("RpaTotvs: janela em (%d, %d) tamanho %dx%d",
                          self._win.left, self._win.top,
                          self._win.width, self._win.height)
-                time.sleep(0.3)
                 return
             time.sleep(0.5)
         raise RuntimeError(f"Janela '{titulo}' não encontrada em {timeout}s")
+
+    def encerrar(self) -> None:
+        """Para o hotkey watcher — chamado ao fim do lote."""
+        self._abort_event.set()
+
+    # ---------- emergência ----------
+
+    def _start_hotkey_watcher(self) -> None:
+        if self._hotkey_thread and self._hotkey_thread.is_alive():
+            return
+
+        def watcher() -> None:
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+            except Exception:  # noqa: BLE001
+                return
+            while not self._abort_event.is_set():
+                try:
+                    if user32.GetAsyncKeyState(VK_END) & 0x8000:
+                        log.warning("Tecla END pressionada — abortando lote")
+                        self._abort_event.set()
+                        return
+                except Exception:  # noqa: BLE001
+                    return
+                time.sleep(0.05)
+
+        self._hotkey_thread = threading.Thread(target=watcher, daemon=True)
+        self._hotkey_thread.start()
+
+    def _check_abort(self) -> None:
+        if self._abort_event.is_set():
+            raise EmergencyAbortException("Cancelado pela tecla END")
 
     # ---------- helpers de click/teclado ----------
 
@@ -130,6 +202,7 @@ class RpaTotvs:
         self._sleep("apos_paste_ms")
 
     def _preencher(self, campo: str, valor: str) -> None:
+        self._check_abort()
         log.info("preencher %s = %r", campo, valor)
         self._clicar(campo)
         self._limpar_campo()
@@ -198,8 +271,14 @@ class RpaTotvs:
         max_tent = int(self._rpa_cfg.get("max_tentativas_duplicidade", 10))
         lanc.status = StatusLancamento.EM_ANDAMENTO
         self._notificar(lanc, "Iniciando")
+        self._check_abort()
 
         try:
+            # Re-força o TOTVS pra frente a cada lançamento — o operador pode
+            # ter clicado em outro app e voltado.
+            if self._win is not None:
+                _trazer_para_frente(self._win)
+
             # Cabeçalho — só uma vez por lançamento.
             self._preencher_cabecalho(lanc)
 
@@ -239,6 +318,8 @@ class RpaTotvs:
 
             raise RuntimeError(f"Falhou após {max_tent} tentativas de Nro.Documento")
         except ManualAbortException:
+            raise
+        except EmergencyAbortException:
             raise
         except Exception as e:  # noqa: BLE001
             lanc.status = StatusLancamento.FALHA
@@ -282,18 +363,21 @@ def executar_lote(
     parar_em_falha: bool = False,
 ) -> tuple[int, int]:
     rpa = RpaTotvs(settings, calibracao, on_progress=on_progress, aguardar_confirmacao=aguardar_confirmacao)
-    rpa.conectar()
+    try:
+        rpa.conectar()
 
-    sucessos = 0
-    falhas = 0
-    for lanc in lancamentos:
-        try:
-            rpa.lancar(lanc)
-            sucessos += 1
-        except ManualAbortException:
-            break
-        except Exception:  # noqa: BLE001
-            falhas += 1
-            if parar_em_falha:
+        sucessos = 0
+        falhas = 0
+        for lanc in lancamentos:
+            try:
+                rpa.lancar(lanc)
+                sucessos += 1
+            except (ManualAbortException, EmergencyAbortException):
                 break
-    return sucessos, falhas
+            except Exception:  # noqa: BLE001
+                falhas += 1
+                if parar_em_falha:
+                    break
+        return sucessos, falhas
+    finally:
+        rpa.encerrar()

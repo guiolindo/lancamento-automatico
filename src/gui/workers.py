@@ -101,39 +101,46 @@ class LoteWorker(QObject):
 
     def run(self) -> None:
         try:
-            from ..core.rpa_totvs import ManualAbortException, RpaTotvs
+            from ..core.rpa_totvs import EmergencyAbortException, ManualAbortException, RpaTotvs
             rpa = RpaTotvs(
                 self.settings,
                 self.calibracao,
                 on_progress=self._on_progress,
                 aguardar_confirmacao=self._aguardar_confirmacao,
             )
-            self.log_line.emit("→ Conectando à janela do TOTVS…")
-            rpa.conectar()
-            self.log_line.emit("✓ Janela conectada")
+            self.log_line.emit("-> Conectando à janela do TOTVS...")
+            self.log_line.emit("i Tecla END = parada de emergência a qualquer momento")
+            try:
+                rpa.conectar()
+                self.log_line.emit("OK Janela conectada e em primeiro plano")
 
-            sucessos = 0
-            falhas = 0
-            total = len(self.lancamentos)
-            for i, lanc in enumerate(self.lancamentos):
-                if self._cancelar:
-                    self.log_line.emit("⏹ Execução cancelada pelo usuário")
-                    break
-                self._i_atual = i
-                self.progresso.emit(i, total, f"{lanc.filial_nome} — {lanc.tipo_folha}")
-                try:
-                    rpa.lancar(lanc)
-                    sucessos += 1
-                except ManualAbortException:
-                    self.log_line.emit("⏹ Lote interrompido pelo operador")
-                    break
-                except Exception as e:  # noqa: BLE001
-                    falhas += 1
-                    self.log_line.emit(f"✗ Falha em {lanc.filial_nome}/{lanc.tipo_folha}: {e}")
-                    if self.parar_em_falha:
+                sucessos = 0
+                falhas = 0
+                total = len(self.lancamentos)
+                for i, lanc in enumerate(self.lancamentos):
+                    if self._cancelar:
+                        self.log_line.emit("|| Execução cancelada pelo usuário")
                         break
-                self.lancamento_atualizado.emit(i)
-            self.finished.emit(sucessos, falhas)
+                    self._i_atual = i
+                    self.progresso.emit(i, total, f"{lanc.filial_nome} - {lanc.tipo_folha}")
+                    try:
+                        rpa.lancar(lanc)
+                        sucessos += 1
+                    except ManualAbortException:
+                        self.log_line.emit("|| Lote interrompido no modo revisão manual")
+                        break
+                    except EmergencyAbortException:
+                        self.log_line.emit("!! EMERGÊNCIA: tecla END pressionada — lote abortado")
+                        break
+                    except Exception as e:  # noqa: BLE001
+                        falhas += 1
+                        self.log_line.emit(f"X Falha em {lanc.filial_nome}/{lanc.tipo_folha}: {e}")
+                        if self.parar_em_falha:
+                            break
+                    self.lancamento_atualizado.emit(i)
+                self.finished.emit(sucessos, falhas)
+            finally:
+                rpa.encerrar()
         except Exception as e:  # noqa: BLE001
             log.exception("Falha no lote")
             self.error.emit(str(e))
