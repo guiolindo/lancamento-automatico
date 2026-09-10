@@ -1,27 +1,28 @@
-"""Tema visual profissional (dark modern) para a aplicação."""
+"""Tema visual — ferramenta profissional de operação fiscal (dark)."""
 
 COLORS = {
-    "bg_0": "#0F1218",
-    "bg_1": "#151A22",
-    "bg_2": "#1C2230",
-    "bg_3": "#252C3D",
-    "border": "#2A3244",
-    "border_soft": "#1F2634",
-    "text": "#E6E9F0",
-    "text_muted": "#8892A6",
-    "accent": "#4F8CFF",
-    "accent_hover": "#6BA0FF",
-    "accent_pressed": "#3D74E0",
-    "success": "#3BD787",
-    "warning": "#F5B851",
-    "danger": "#F26B6B",
+    "bg_0": "#171A1F",
+    "bg_1": "#20252D",
+    "bg_2": "#282F3A",
+    "bg_3": "#2F3644",
+    "border": "#353D4A",
+    "border_soft": "#2A313D",
+    "text": "#F1F5F9",
+    "text_muted": "#A8B3C2",
+    "text_disabled": "#667085",
+    "accent": "#2563EB",
+    "accent_hover": "#3B82F6",
+    "accent_pressed": "#1D4ED8",
+    "success": "#16A34A",
+    "warning": "#D97706",
+    "danger": "#DC2626",
 }
 
 
 QSS = f"""
 * {{
-    font-family: "Segoe UI", "Inter", "SF Pro Text", sans-serif;
-    font-size: 13px;
+    font-family: "Segoe UI Variable", "Segoe UI", "Inter", sans-serif;
+    font-size: 14px;
     color: {COLORS["text"]};
 }}
 
@@ -36,9 +37,9 @@ QMainWindow, QDialog {{
 }}
 #SidebarBrand {{
     color: {COLORS["text"]};
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 600;
-    padding: 24px 20px 8px 20px;
+    padding: 24px 20px 4px 20px;
 }}
 #SidebarSubtitle {{
     color: {COLORS["text_muted"]};
@@ -71,7 +72,7 @@ QPushButton[nav="true"][active="true"] {{
     background: {COLORS["bg_0"]};
 }}
 QLabel[h1="true"] {{
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 600;
     color: {COLORS["text"]};
 }}
@@ -88,8 +89,8 @@ QLabel[muted="true"] {{
 /* ---------- Cards ---------- */
 QFrame[card="true"] {{
     background: {COLORS["bg_1"]};
-    border: 1px solid {COLORS["border_soft"]};
-    border-radius: 10px;
+    border: 1px solid {COLORS["border"]};
+    border-radius: 6px;
 }}
 
 /* ---------- Inputs ---------- */
@@ -98,11 +99,17 @@ QLineEdit, QDateEdit, QComboBox, QPlainTextEdit, QTextEdit {{
     border: 1px solid {COLORS["border"]};
     border-radius: 6px;
     padding: 8px 10px;
+    min-height: 18px;
     color: {COLORS["text"]};
     selection-background-color: {COLORS["accent"]};
+    selection-color: white;
 }}
 QLineEdit:focus, QDateEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{
     border: 1px solid {COLORS["accent"]};
+}}
+QLineEdit:disabled, QComboBox:disabled {{
+    color: {COLORS["text_disabled"]};
+    background: {COLORS["bg_1"]};
 }}
 QComboBox::drop-down {{
     border: none;
@@ -112,24 +119,30 @@ QComboBox QAbstractItemView {{
     background: {COLORS["bg_2"]};
     border: 1px solid {COLORS["border"]};
     selection-background-color: {COLORS["accent"]};
+    selection-color: white;
     padding: 4px;
 }}
 
 /* ---------- Buttons ---------- */
 QPushButton {{
-    background: {COLORS["bg_3"]};
+    background: {COLORS["bg_2"]};
     border: 1px solid {COLORS["border"]};
     border-radius: 6px;
-    padding: 8px 16px;
+    padding: 9px 16px;
     color: {COLORS["text"]};
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
+    min-height: 20px;
 }}
 QPushButton:hover {{
-    background: {COLORS["bg_2"]};
-    border-color: {COLORS["accent"]};
+    background: {COLORS["bg_3"]};
+    border-color: {COLORS["border"]};
+}}
+QPushButton:pressed {{
+    background: {COLORS["bg_1"]};
 }}
 QPushButton:disabled {{
-    color: {COLORS["text_muted"]};
+    color: {COLORS["text_disabled"]};
     background: {COLORS["bg_1"]};
     border-color: {COLORS["border_soft"]};
 }}
@@ -150,25 +163,30 @@ QPushButton[danger="true"] {{
     color: white;
     border: 1px solid {COLORS["danger"]};
 }}
+QPushButton[danger="true"]:hover {{
+    background: #EF4444;
+    border-color: #EF4444;
+}}
 
 /* ---------- Table ---------- */
 QTableView, QTableWidget {{
     background: {COLORS["bg_1"]};
     alternate-background-color: {COLORS["bg_2"]};
     gridline-color: {COLORS["border_soft"]};
-    border: 1px solid {COLORS["border_soft"]};
-    border-radius: 8px;
+    border: 1px solid {COLORS["border"]};
+    border-radius: 6px;
     selection-background-color: {COLORS["accent"]};
     selection-color: white;
+    font-size: 13px;
 }}
 QHeaderView::section {{
     background: {COLORS["bg_2"]};
     color: {COLORS["text_muted"]};
-    padding: 8px 10px;
+    padding: 9px 10px;
     border: none;
-    border-bottom: 1px solid {COLORS["border_soft"]};
+    border-bottom: 1px solid {COLORS["border"]};
     font-weight: 600;
-    font-size: 11px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }}
@@ -180,34 +198,37 @@ QTableView::item, QTableWidget::item {{
 /* ---------- Scroll ---------- */
 QScrollBar:vertical {{
     background: transparent;
-    width: 10px;
+    width: 12px;
     margin: 0;
 }}
 QScrollBar::handle:vertical {{
-    background: {COLORS["bg_3"]};
-    border-radius: 5px;
+    background: {COLORS["border"]};
+    border-radius: 6px;
     min-height: 30px;
 }}
 QScrollBar::handle:vertical:hover {{
-    background: {COLORS["border"]};
+    background: #4B5563;
 }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
     height: 0;
 }}
 QScrollBar:horizontal {{
     background: transparent;
-    height: 10px;
+    height: 12px;
 }}
 QScrollBar::handle:horizontal {{
-    background: {COLORS["bg_3"]};
-    border-radius: 5px;
+    background: {COLORS["border"]};
+    border-radius: 6px;
     min-width: 30px;
+}}
+QScrollBar::handle:horizontal:hover {{
+    background: #4B5563;
 }}
 
 /* ---------- Progress ---------- */
 QProgressBar {{
     background: {COLORS["bg_2"]};
-    border: 1px solid {COLORS["border_soft"]};
+    border: 1px solid {COLORS["border"]};
     border-radius: 6px;
     height: 10px;
     text-align: center;
@@ -228,24 +249,24 @@ QLabel[badge="pendente"] {{
     font-weight: 600;
 }}
 QLabel[badge="andamento"] {{
-    background: rgba(79, 140, 255, 0.15);
-    color: {COLORS["accent"]};
+    background: rgba(37, 99, 235, 0.15);
+    color: {COLORS["accent_hover"]};
     border-radius: 4px;
     padding: 3px 8px;
     font-size: 11px;
     font-weight: 600;
 }}
 QLabel[badge="sucesso"] {{
-    background: rgba(59, 215, 135, 0.15);
-    color: {COLORS["success"]};
+    background: rgba(22, 163, 74, 0.15);
+    color: #22C55E;
     border-radius: 4px;
     padding: 3px 8px;
     font-size: 11px;
     font-weight: 600;
 }}
 QLabel[badge="falha"] {{
-    background: rgba(242, 107, 107, 0.15);
-    color: {COLORS["danger"]};
+    background: rgba(220, 38, 38, 0.15);
+    color: #EF4444;
     border-radius: 4px;
     padding: 3px 8px;
     font-size: 11px;
@@ -255,9 +276,9 @@ QLabel[badge="falha"] {{
 /* ---------- Log console ---------- */
 QPlainTextEdit#LogConsole {{
     background: {COLORS["bg_0"]};
-    border: 1px solid {COLORS["border_soft"]};
-    border-radius: 8px;
-    font-family: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+    border: 1px solid {COLORS["border"]};
+    border-radius: 6px;
+    font-family: "Cascadia Mono", "Consolas", monospace;
     font-size: 12px;
     color: {COLORS["text_muted"]};
 }}
@@ -277,5 +298,17 @@ QCheckBox::indicator {{
 QCheckBox::indicator:checked {{
     background: {COLORS["accent"]};
     border-color: {COLORS["accent"]};
+}}
+QCheckBox::indicator:hover {{
+    border-color: {COLORS["accent"]};
+}}
+
+/* ---------- ToolTip ---------- */
+QToolTip {{
+    background: {COLORS["bg_3"]};
+    color: {COLORS["text"]};
+    border: 1px solid {COLORS["border"]};
+    border-radius: 4px;
+    padding: 6px 8px;
 }}
 """
