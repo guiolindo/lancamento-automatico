@@ -348,7 +348,7 @@ class MainWindow(QMainWindow):
         worker.finished.connect(self._on_extraido)
         worker.error.connect(self._on_erro_extracao)
 
-        thread = QThread(self)
+        thread = QThread()
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(thread.quit)
@@ -387,15 +387,10 @@ class MainWindow(QMainWindow):
             )
 
     def _set_topo(self, on: bool) -> None:
-        """Coloca/tira a janela do modo 'sempre no topo' — usado durante RPA
-        pra o operador sempre ver o botão Cancelar mesmo com o TOTVS em foco."""
-        from PySide6.QtCore import Qt
-        flags = self.windowFlags()
-        if on:
-            self.setWindowFlags(flags | Qt.WindowStaysOnTopHint)
-        else:
-            self.setWindowFlags(flags & ~Qt.WindowStaysOnTopHint)
-        self.show()  # necessário para as flags entrarem em vigor
+        """DESABILITADO: setWindowFlags reparenta o handle nativo e parece
+        estar quebrando o QThread que é iniciado logo depois. O operador
+        alterna manualmente Alt+Tab entre app e TOTVS por enquanto."""
+        pass
 
     def _executar(self) -> None:
         if not self._lancamentos:
@@ -450,7 +445,9 @@ class MainWindow(QMainWindow):
         worker.error.connect(self._on_erro_lote)
 
         log.info("_executar: criando QThread")
-        thread = QThread(self)
+        # QThread sem parent — parent=MainWindow pode gerar problema
+        # quando algum outro código toca em setWindowFlags/show do parent.
+        thread = QThread()
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         thread.started.connect(lambda: log.info("QThread.started fired"))
