@@ -174,27 +174,35 @@ class RpaTotvs:
         self._sleep("apos_click_ms")
 
     def _preencher(self, campo: str, valor: str) -> None:
-        """Click → End → Backspace bomba → typewrite (uppercase).
+        """Triple-click + Ctrl+A + Backspace × 15 + typewrite(UPPERCASE).
 
-        Ctrl+A não funciona em campos mascarados do TOTVS (datas, alguns
-        edits Delphi). Backspace repetido apaga direto do fim do campo,
-        independente de seleção. End no início garante que o cursor está
-        no fim antes do backspace.
-
-        Valor sempre em UPPERCASE — Observação e alguns outros campos do
-        TOTVS exigem maiúsculas.
+        Belt AND suspenders: se uma abordagem falhar, a próxima pega.
+        - Triple-click: seleciona a linha inteira em TEdit Delphi comum.
+        - Ctrl+A: redundância, seleciona tudo em campos que respondem a atalho.
+        - Backspace × 15: apaga o que sobrar (campos mascarados que
+          ignoraram as duas seleções).
+        - typewrite: envia tecla por tecla (funciona em máscaras).
+        - .upper(): Observação e alguns campos exigem maiúsculas.
         """
         self._check_abort()
         valor_up = valor.upper() if isinstance(valor, str) else str(valor)
         log.info("preencher %s = %r", campo, valor_up)
         import pyautogui
-        self._clicar(campo)
-        # End: cursor pro fim do campo
-        pyautogui.press("end")
-        time.sleep(0.03)
-        # Backspace 30x apaga tudo, mesmo em campo mascarado
-        pyautogui.press("backspace", presses=30, interval=0.005)
+        x, y = self._pos_abs(campo)
+
+        # Triple-click coloca o cursor E seleciona o conteúdo da linha
+        pyautogui.tripleClick(x, y)
+        self._sleep("apos_click_ms")
+
+        # Redundância: Ctrl+A
+        pyautogui.hotkey("ctrl", "a")
         self._sleep("apos_selectall_ms")
+
+        # Ultima redundância: apaga o que sobrou
+        pyautogui.press("backspace", presses=15, interval=0.005)
+        self._sleep("apos_selectall_ms")
+
+        # Digita o valor (maiúsculo)
         intervalo = float(self._delays.get("intervalo_digitacao_s", 0.005))
         pyautogui.typewrite(valor_up, interval=intervalo)
         self._sleep("apos_typewrite_ms")
