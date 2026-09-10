@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-28 (typewrite em vez de paste + delays 2x mais rápidos)"
+BUILD_MARKER = "build-29 (backspace bomba + UPPERCASE + End antes)"
 
 
 def main() -> int:
