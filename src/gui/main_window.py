@@ -439,7 +439,9 @@ class MainWindow(QMainWindow):
                 f"i Modo teste: apenas o 1o lançamento ({lancamentos_exec[0].filial_nome} / "
                 f"{lancamentos_exec[0].tipo_folha})"
             )
+        log.info("_executar: criando LoteWorker")
         worker = LoteWorker(lancamentos_exec, self.settings.data, self._calibracao)
+        log.info("_executar: conectando sinais")
         worker.log_line.connect(self._log_line)
         worker.progresso.connect(self._on_progresso)
         worker.lancamento_atualizado.connect(self._tabela.atualizar_linha)
@@ -447,16 +449,20 @@ class MainWindow(QMainWindow):
         worker.finished.connect(self._on_lote_finalizado)
         worker.error.connect(self._on_erro_lote)
 
+        log.info("_executar: criando QThread")
         thread = QThread(self)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
+        thread.started.connect(lambda: log.info("QThread.started fired"))
         worker.finished.connect(thread.quit)
         worker.error.connect(thread.quit)
         thread.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
         self._thread = thread
         self._worker_lote = worker
+        log.info("_executar: chamando thread.start()")
         thread.start()
+        log.info("_executar: thread.start() retornou; se isRunning=%s", thread.isRunning())
 
     def _on_progresso(self, i: int, total: int, msg: str) -> None:
         self._progress.setValue(i + 1)

@@ -99,23 +99,59 @@ class LoteWorker(QObject):
         self._evento_confirmacao.wait()
         return self._resposta_confirmacao and not self._cancelar
 
-    def run(self) -> None:
+    def _emit_e_log(self, msg: str) -> None:
+        """Emite pro sinal E grava direto no arquivo — se o sinal falhar
+        por alguma razão, o log em disco sobrevive."""
         try:
-            self.log_line.emit(">> LoteWorker.run(): iniciando thread do lote")
-            from ..core.rpa_totvs import EmergencyAbortException, ManualAbortException, RpaTotvs
-            self.log_line.emit(">> Modulo rpa_totvs importado")
-            rpa = RpaTotvs(
-                self.settings,
-                self.calibracao,
-                on_progress=self._on_progress,
-                aguardar_confirmacao=self._aguardar_confirmacao,
-            )
-            self.log_line.emit(">> RpaTotvs instanciado")
-            self.log_line.emit("-> Conectando à janela do TOTVS...")
-            self.log_line.emit("i Tecla END = parada de emergência")
+            log.info(msg)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            self.log_line.emit(msg)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def run(self) -> None:
+        # NUNCA deixa a run morrer sem gravar em algum lugar. Sequência:
+        # 1. log em arquivo direto (independente do Qt)
+        # 2. tenta emitir sinal pra GUI
+        # 3. try/except em cada etapa individual
+        try:
+            log.info(">> LoteWorker.run() ENTRADA no thread")
+            self._emit_e_log(">> LoteWorker.run(): iniciando thread do lote")
+
             try:
-                rpa.conectar()
-                self.log_line.emit("OK Janela conectada")
+                from ..core.rpa_totvs import EmergencyAbortException, ManualAbortException, RpaTotvs
+            except BaseException as e:  # noqa: BLE001
+                log.exception("Falha importando rpa_totvs")
+                self._emit_e_log(f"XX Falha importando rpa_totvs: {type(e).__name__}: {e}")
+                self.error.emit(f"import rpa_totvs falhou: {e}")
+                return
+            self._emit_e_log(">> Modulo rpa_totvs importado")
+
+            try:
+                rpa = RpaTotvs(
+                    self.settings,
+                    self.calibracao,
+                    on_progress=self._on_progress,
+                    aguardar_confirmacao=self._aguardar_confirmacao,
+                )
+            except BaseException as e:  # noqa: BLE001
+                log.exception("Falha instanciando RpaTotvs")
+                self._emit_e_log(f"XX Falha instanciando RpaTotvs: {type(e).__name__}: {e}")
+                self.error.emit(f"RpaTotvs() falhou: {e}")
+                return
+            self._emit_e_log(">> RpaTotvs instanciado")
+            self._emit_e_log("-> Conectando à janela do TOTVS...")
+            self._emit_e_log("i Tecla END = parada de emergência")
+            try:
+                try:
+                    rpa.conectar()
+                except BaseException as e:  # noqa: BLE001
+                    log.exception("Falha em rpa.conectar()")
+                    self._emit_e_log(f"XX Falha em conectar(): {type(e).__name__}: {e}")
+                    raise
+                self._emit_e_log("OK Janela conectada")
 
                 sucessos = 0
                 falhas = 0
