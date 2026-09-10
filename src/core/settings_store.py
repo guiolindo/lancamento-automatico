@@ -34,7 +34,7 @@ def _default_path() -> Path:
 
 DEFAULTS: dict[str, Any] = {
     "gemini_api_key": "",
-    "gemini_model": "gemini-2.5-flash-lite",
+    "gemini_model": "gemini-3.5-flash-lite",
     "delays": {
         "entre_campos_ms": 150,
         "apos_especie_ms": 800,
@@ -77,10 +77,12 @@ class SettingsStore:
     def _migrar_modelos_obsoletos(self) -> None:
         """Substitui nomes de modelo Gemini removidos/descontinuados."""
         obsoletos = {
-            "gemini-2.0-flash-exp": "gemini-2.5-flash-lite",
-            "gemini-1.0-pro": "gemini-2.5-flash-lite",
-            "gemini-pro": "gemini-2.5-flash-lite",
-            "gemini-pro-vision": "gemini-2.5-flash-lite",
+            "gemini-2.0-flash-exp": "gemini-3.5-flash-lite",
+            "gemini-2.5-flash-lite": "gemini-3.5-flash-lite",
+            "gemini-2.5-flash": "gemini-3.5-flash-lite",
+            "gemini-1.0-pro": "gemini-3.5-flash-lite",
+            "gemini-pro": "gemini-3.5-flash-lite",
+            "gemini-pro-vision": "gemini-3.5-flash-lite",
         }
         atual = self._data.get("gemini_model")
         if atual in obsoletos:
