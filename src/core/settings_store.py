@@ -72,6 +72,22 @@ class SettingsStore:
             log.exception("Falha lendo settings.json — usando defaults")
             self._data = json.loads(json.dumps(DEFAULTS))
         self._merge_defaults(self._data, DEFAULTS)
+        self._migrar_modelos_obsoletos()
+
+    def _migrar_modelos_obsoletos(self) -> None:
+        """Substitui nomes de modelo Gemini removidos/descontinuados."""
+        obsoletos = {
+            "gemini-2.0-flash-exp": "gemini-2.5-flash-lite",
+            "gemini-1.0-pro": "gemini-2.5-flash-lite",
+            "gemini-pro": "gemini-2.5-flash-lite",
+            "gemini-pro-vision": "gemini-2.5-flash-lite",
+        }
+        atual = self._data.get("gemini_model")
+        if atual in obsoletos:
+            novo = obsoletos[atual]
+            log.info("Migrando modelo Gemini: %s -> %s", atual, novo)
+            self._data["gemini_model"] = novo
+            self.save()
 
     def _merge_defaults(self, current: dict, defaults: dict) -> None:
         for k, v in defaults.items():
