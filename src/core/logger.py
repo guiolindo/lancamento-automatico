@@ -7,7 +7,29 @@ from pathlib import Path
 
 
 def _log_dir() -> Path:
-    base = Path.home() / ".lancamento-automatico" / "logs"
+    """Localiza pasta de log com fallback se Path.home() falhar."""
+    import os
+    candidatos = []
+    try:
+        candidatos.append(Path.home())
+    except Exception:  # noqa: BLE001
+        pass
+    for var in ("USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP"):
+        val = os.environ.get(var)
+        if val:
+            candidatos.append(Path(val))
+    # último recurso: ao lado do exe
+    candidatos.append(Path(sys.argv[0]).resolve().parent)
+
+    for c in candidatos:
+        try:
+            base = c / ".lancamento-automatico" / "logs"
+            base.mkdir(parents=True, exist_ok=True)
+            return base
+        except Exception:  # noqa: BLE001
+            continue
+    # se ainda assim falhou, usa /tmp equivalente
+    base = Path(os.getcwd()) / "logs"
     base.mkdir(parents=True, exist_ok=True)
     return base
 
