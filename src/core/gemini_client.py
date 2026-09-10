@@ -6,12 +6,14 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-import google.generativeai as genai
-from PIL import Image
-
 from .logger import log
 from .mapping import MappingRepository
 from .models import Filial, Imposto, Lancamento, LinhaExtracao, StatusLancamento
+
+# NÃO importar google.generativeai nem PIL aqui no topo. São libs pesadas
+# que podem falhar no boot do bundle e derrubar o app inteiro (o erro
+# STATUS_FATAL_APP_EXIT que vimos). Importamos dentro das funções que
+# realmente usam.
 
 
 PROMPT_TEMPLATE = """Você é um extrator estruturado de dados de relatórios fiscais brasileiros.
@@ -52,7 +54,9 @@ class GeminiClient:
     def __init__(self, api_key: str, model: str = "gemini-2.0-flash-exp"):
         if not api_key:
             raise ValueError("Chave da API Gemini não configurada")
+        import google.generativeai as genai  # lazy: só ao usar
         genai.configure(api_key=api_key)
+        self._genai = genai
         self._model = genai.GenerativeModel(model)
         self._model_name = model
 
@@ -79,7 +83,8 @@ class GeminiClient:
     def _carregar_arquivo(self, arquivo: Path):
         suffix = arquivo.suffix.lower()
         if suffix == ".pdf":
-            return genai.upload_file(str(arquivo))
+            return self._genai.upload_file(str(arquivo))
+        from PIL import Image  # lazy
         return Image.open(arquivo)
 
     def _parse_json(self, texto: str) -> dict:

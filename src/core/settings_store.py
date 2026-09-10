@@ -8,8 +8,27 @@ from .logger import log
 
 
 def _default_path() -> Path:
-    base = Path.home() / ".lancamento-automatico"
-    base.mkdir(parents=True, exist_ok=True)
+    """Localiza pasta de config com fallback se Path.home() falhar."""
+    import os
+    import sys
+    candidatos = []
+    try:
+        candidatos.append(Path.home())
+    except Exception:  # noqa: BLE001
+        pass
+    for var in ("USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP"):
+        val = os.environ.get(var)
+        if val:
+            candidatos.append(Path(val))
+    candidatos.append(Path(sys.argv[0]).resolve().parent)
+    for c in candidatos:
+        try:
+            base = c / ".lancamento-automatico"
+            base.mkdir(parents=True, exist_ok=True)
+            return base / "settings.json"
+        except Exception:  # noqa: BLE001
+            continue
+    base = Path(os.getcwd())
     return base / "settings.json"
 
 
