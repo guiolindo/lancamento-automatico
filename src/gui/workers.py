@@ -36,25 +36,28 @@ class ExtracaoWorker(QObject):
 
     def run(self) -> None:
         try:
-            self.log_line.emit(f"→ Enviando '{self.arquivo.name}' para o Gemini…")
+            self.log_line.emit(f"-> Enviando '{self.arquivo.name}' para o Gemini...")
+            self.log_line.emit("-> Instanciando cliente Gemini (transporte REST)")
             client = GeminiClient(self.api_key, self.modelo)
+            self.log_line.emit("-> Cliente pronto; chamando extrair()")
             extracao = client.extrair(self.arquivo, self.imposto)
             self.log_line.emit(
-                f"✓ Extração recebida: {len(extracao.get('linhas', []))} linhas, "
-                f"referência {extracao.get('mes_ref','?')}/{extracao.get('ano_ref','?')}"
+                f"OK Extracao recebida: {len(extracao.get('linhas', []))} linhas, "
+                f"referencia {extracao.get('mes_ref','?')}/{extracao.get('ano_ref','?')}"
             )
             lancamentos, nao_resolvidas = montar_lancamentos(
                 extracao, self.imposto, self.mapping, self.data_emissao,
             )
             if nao_resolvidas:
                 self.log_line.emit(
-                    f"⚠ {len(nao_resolvidas)} filial(is) não resolvida(s) no de-para"
+                    f"[!] {len(nao_resolvidas)} filial(is) nao resolvida(s) no de-para"
                 )
-            self.log_line.emit(f"✓ {len(lancamentos)} lançamentos prontos para revisão")
+            self.log_line.emit(f"OK {len(lancamentos)} lancamentos prontos para revisao")
             self.finished.emit(lancamentos, nao_resolvidas)
-        except Exception as e:  # noqa: BLE001
+        except BaseException as e:  # noqa: BLE001
             log.exception("Falha na extração")
-            self.error.emit(str(e))
+            # Envia tipo + mensagem para a GUI para diagnóstico rápido.
+            self.error.emit(f"{type(e).__name__}: {e}")
 
 
 class LoteWorker(QObject):

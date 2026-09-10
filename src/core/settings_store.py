@@ -34,7 +34,7 @@ def _default_path() -> Path:
 
 DEFAULTS: dict[str, Any] = {
     "gemini_api_key": "",
-    "gemini_model": "gemini-2.0-flash-exp",
+    "gemini_model": "gemini-2.5-flash-lite",
     "delays": {
         "entre_campos_ms": 150,
         "apos_especie_ms": 800,
