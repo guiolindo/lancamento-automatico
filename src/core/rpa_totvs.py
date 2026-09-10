@@ -101,28 +101,40 @@ class RpaTotvs:
     # ---------- conexão ----------
 
     def conectar(self) -> None:
-        # Ativa watcher da tecla de emergência END.
+        log.info("conectar(): iniciando")
         self._start_hotkey_watcher()
+        log.info("conectar(): hotkey watcher (END) ativo")
 
         titulo = (self.calibracao.titulo_janela or "").strip()
         if not titulo:
-            log.info("RpaTotvs: modo absoluto (sem título de janela)")
+            log.info("conectar(): modo absoluto (sem título de janela)")
             self._win = None
             return
 
+        log.info("conectar(): importando pygetwindow")
         import pygetwindow as gw
+        log.info("conectar(): pygetwindow importado")
         timeout = int(self._delays.get("timeout_janela_s", 30))
         deadline = time.time() + timeout
-        log.info("RpaTotvs: procurando janela '%s'", titulo)
+        log.info("conectar(): procurando janela contendo '%s' (timeout %ds)", titulo, timeout)
+        tentativa = 0
         while time.time() < deadline:
-            janelas = [w for w in gw.getAllWindows() if titulo.lower() in (w.title or "").lower()]
+            tentativa += 1
+            try:
+                todas = gw.getAllWindows()
+            except Exception as e:  # noqa: BLE001
+                log.exception("conectar(): erro em getAllWindows(): %s", e)
+                raise
+            janelas = [w for w in todas if titulo.lower() in (w.title or "").lower()]
             if janelas:
                 self._win = janelas[0]
+                log.info("conectar(): janela achada na tentativa %d: '%s'", tentativa, self._win.title)
                 _trazer_para_frente(self._win)
-                log.info("RpaTotvs: janela em (%d, %d) tamanho %dx%d",
+                log.info("conectar(): janela em (%d, %d) tamanho %dx%d",
                          self._win.left, self._win.top,
                          self._win.width, self._win.height)
                 return
+            log.info("conectar(): tentativa %d — %d janelas visíveis, nenhuma casou", tentativa, len(todas))
             time.sleep(0.5)
         raise RuntimeError(f"Janela '{titulo}' não encontrada em {timeout}s")
 
