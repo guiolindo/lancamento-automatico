@@ -97,43 +97,49 @@ class RpaTotvs:
         wx, wy = self._win.left, self._win.top
         return int(wx + ox), int(wy + oy)
 
-    def _sleep(self, chave: str, default_ms: int = 150) -> None:
+    def _sleep(self, chave: str, default_ms: int = 400) -> None:
         ms = int(self._delays.get(chave, default_ms))
         time.sleep(ms / 1000.0)
 
     def _clicar(self, campo: str) -> None:
         import pyautogui
         x, y = self._pos_abs(campo)
+        pyautogui.moveTo(x, y, duration=0.05)
         pyautogui.click(x, y)
-        self._sleep("entre_campos_ms")
+        # Espera o RemoteApp propagar o foco pra dentro da VM. Sem isso, o
+        # Ctrl+A/Ctrl+V a seguir podem cair no campo anterior.
+        self._sleep("apos_click_ms")
 
     def _limpar_campo(self) -> None:
         """Ctrl+A + Delete pra apagar valor existente (datas pré-preenchidas)."""
         import pyautogui
         pyautogui.hotkey("ctrl", "a")
-        time.sleep(0.05)
+        self._sleep("apos_limpar_ms")
         pyautogui.press("delete")
-        time.sleep(0.05)
+        self._sleep("apos_limpar_ms")
 
     def _colar(self, texto: str) -> None:
         import pyautogui
         try:
             import pyperclip
             pyperclip.copy(texto)
+            time.sleep(0.05)
             pyautogui.hotkey("ctrl", "v")
         except Exception:  # noqa: BLE001
-            # fallback: digita direto
-            pyautogui.typewrite(texto, interval=0.02)
-        time.sleep(0.05)
+            pyautogui.typewrite(texto, interval=0.03)
+        self._sleep("apos_paste_ms")
 
     def _preencher(self, campo: str, valor: str) -> None:
+        log.info("preencher %s = %r", campo, valor)
         self._clicar(campo)
         self._limpar_campo()
         self._colar(valor)
+        self._sleep("entre_campos_ms")
 
     # ---------- popup de duplicidade ----------
 
-    def _popup_duplicidade(self) -> bool:
+    def _achar_popup(self):
+        """Retorna a janela do popup 'Atenção' se existir."""
         import pygetwindow as gw
         try:
             titulo_pai = ((self._win.title if self._win else "") or "").lower()
@@ -142,16 +148,49 @@ class RpaTotvs:
                 if any(k in t for k in ("atenção", "atencao", "aviso", "erro")):
                     if titulo_pai and t == titulo_pai:
                         continue
-                    log.info("Popup detectado: '%s'", w.title)
-                    return True
+                    return w
         except Exception:  # noqa: BLE001
             pass
+        return None
+
+    def _popup_duplicidade(self) -> bool:
+        p = self._achar_popup()
+        if p is not None:
+            log.info("Popup detectado: '%s' em (%d, %d) %dx%d",
+                     p.title, p.left, p.top, p.width, p.height)
+            return True
         return False
 
     def _fechar_popup(self) -> None:
+        """Ativa o popup e clica no botão OK (aprox. centro-inferior).
+
+        Também tenta espaço/enter/alt+F4 como redundância — algumas janelas
+        respondem a um, outras a outro.
+        """
         import pyautogui
-        pyautogui.press("enter")
-        time.sleep(0.4)
+        p = self._achar_popup()
+        if p is not None:
+            try:
+                p.activate()
+                time.sleep(0.2)
+            except Exception:  # noqa: BLE001
+                pass
+            # Clique no centro-inferior — OK costuma ficar ali (ver screenshot
+            # do popup do usuário: botão OK centralizado embaixo)
+            cx = int(p.left + p.width / 2)
+            cy = int(p.top + p.height - 30)
+            pyautogui.moveTo(cx, cy, duration=0.05)
+            pyautogui.click(cx, cy)
+            time.sleep(0.5)
+        # Redundância — se o popup ainda existir, tenta teclas
+        if self._achar_popup() is not None:
+            pyautogui.press("enter")
+            time.sleep(0.3)
+        if self._achar_popup() is not None:
+            pyautogui.press("space")
+            time.sleep(0.3)
+        if self._achar_popup() is not None:
+            log.warning("Popup NÃO fechou após click/enter/space")
 
     # ---------- fluxo principal ----------
 
