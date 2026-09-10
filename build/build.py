@@ -71,11 +71,12 @@ def run() -> int:
         # imprimir warnings durante o boot, mas o stdout/stderr não existe
         # (porque estamos em modo GUI). Redirecionamos pra arquivos ao
         # lado do exe.
-        # %PROGRAM_DIR% = diretório do exe (%PROGRAM_BASE% seria o caminho
-        # do exe sem extensão, o que faz o Nuitka tentar criar um subdir
-        # com nome do exe e explodir com FileNotFoundError).
-        "--force-stdout-spec=%PROGRAM_DIR%/stdout.log",
-        "--force-stderr-spec=%PROGRAM_DIR%/stderr.log",
+        # Variáveis aceitas pelo Nuitka são poucas — PROGRAM_DIR não existe.
+        # Uso %TEMP% (sempre existe no Windows) para não depender do path
+        # do exe. Os logs de boot próprios (boot_trace.log, startup_error.log)
+        # continuam na pasta do exe, então nada muda pro usuário.
+        "--force-stdout-spec=%TEMP%/LancamentoAutomatico.stdout.log",
+        "--force-stderr-spec=%TEMP%/LancamentoAutomatico.stderr.log",
         # Performance de build (não de runtime): desabilita LTO — LTO custa
         # 20+ min extras em máquinas com PySide6 e não muda anti-AV.
         "--lto=no",
