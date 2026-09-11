@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-38 (visão — corrigido valor faturado)"
+BUILD_MARKER = "build-39 (visão — vencimento corrigido em massa, valor Y+4)"
 
 
 def main() -> int:

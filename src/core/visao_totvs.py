@@ -39,9 +39,9 @@ CAMPOS_OFFSET_ANCHOR_CHILD: dict[str, tuple[int, int]] = {
     "observacao":         (175, 215),
     "nro_documento":      (125, 251),
     "dt_emissao":         (347, 251),
-    "valor":              (513, 248),
+    "valor":              (513, 252),
     "dt_contabilizacao":  (112, 272),
-    "vencimento":         (413, 297),
+    "vencimento":         (248, 297),
     "btn_gerar_parcelas": (588, 363),
 }
 
