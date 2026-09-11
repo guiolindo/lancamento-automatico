@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-41 (tela de De-Para de filiais)"
+BUILD_MARKER = "build-42 (Gemini recebe catálogo de filiais + aliases)"
 
 
 def main() -> int:

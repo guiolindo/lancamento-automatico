@@ -40,7 +40,7 @@ class ExtracaoWorker(QObject):
             self.log_line.emit("-> Instanciando cliente Gemini (transporte REST)")
             client = GeminiClient(self.api_key, self.modelo)
             self.log_line.emit("-> Cliente pronto; chamando extrair()")
-            extracao = client.extrair(self.arquivo, self.imposto)
+            extracao = client.extrair(self.arquivo, self.imposto, self.mapping)
             self.log_line.emit(
                 f"OK Extracao recebida: {len(extracao.get('linhas', []))} linhas, "
                 f"referencia {extracao.get('mes_ref','?')}/{extracao.get('ano_ref','?')}"
