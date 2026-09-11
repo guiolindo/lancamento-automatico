@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-39 (visão — vencimento corrigido em massa, valor Y+4)"
+BUILD_MARKER = "build-40 (CapsLock off + delays enxutos v2)"
 
 
 def main() -> int:

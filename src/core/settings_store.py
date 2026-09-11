@@ -36,18 +36,20 @@ DEFAULTS: dict[str, Any] = {
     "gemini_api_key": "",
     "gemini_model": "gemini-3.5-flash-lite",
     "delays": {
-        # Delays enxutos. Se algum PC específico ficar rápido demais e errar,
-        # editar ~/.lancamento-automatico/settings.json.
-        "apos_click_ms": 100,             # tempo pro foco chegar na VM
-        "apos_selectall_ms": 40,          # tempo pro Ctrl+A registrar
-        "intervalo_digitacao_s": 0.003,   # entre teclas do typewrite
-        "entre_campos_ms": 80,
-        "apos_especie_ms": 400,           # banco/agência auto-preencher
-        "apos_pessoa_ms": 400,            # P.Nota auto-preencher
-        "apos_gerar_parcelas_ms": 1000,
-        "apos_confirmar_ms": 1000,
+        # Delays enxutos v2 — visão computacional já entrega click preciso,
+        # não precisa mais de folga generosa. Se algum PC ficar rápido demais
+        # e o TOTVS "furar" letras, aumente pontualmente no settings.json.
+        "apos_click_ms": 40,              # foco chega na VM
+        "apos_selectall_ms": 15,          # backspace/delete registrar
+        "intervalo_digitacao_s": 0.002,   # entre teclas do typewrite
+        "entre_campos_ms": 30,
+        "apos_especie_ms": 300,           # banco/agência auto-preencher
+        "apos_pessoa_ms": 300,            # P.Nota auto-preencher
+        "apos_gerar_parcelas_ms": 800,
+        "apos_confirmar_ms": 800,
         "timeout_janela_s": 30,
     },
+    "delays_version": 2,
     "rpa": {
         "titulo_janela": "Operador Financeiro",
         "titulo_janela_erro": "",
@@ -78,6 +80,18 @@ class SettingsStore:
             self._data = json.loads(json.dumps(DEFAULTS))
         self._merge_defaults(self._data, DEFAULTS)
         self._migrar_modelos_obsoletos()
+        self._migrar_delays()
+
+    def _migrar_delays(self) -> None:
+        """Força atualizar delays quando bump de versão — usuário existente
+        pega os novos defaults sem apagar settings.json."""
+        versao_atual = self._data.get("delays_version", 1)
+        versao_defaults = DEFAULTS.get("delays_version", 1)
+        if versao_atual < versao_defaults:
+            log.info("Migrando delays v%d -> v%d", versao_atual, versao_defaults)
+            self._data["delays"] = json.loads(json.dumps(DEFAULTS["delays"]))
+            self._data["delays_version"] = versao_defaults
+            self.save()
 
     def _migrar_modelos_obsoletos(self) -> None:
         """Substitui nomes de modelo Gemini removidos/descontinuados."""
