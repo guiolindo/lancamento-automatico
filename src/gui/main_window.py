@@ -299,7 +299,7 @@ class MainWindow(QMainWindow):
         head.addStretch(1)
 
         self._chk_apenas_primeiro = QCheckBox("Testar só o 1º")
-        self._chk_apenas_primeiro.setChecked(True)
+        self._chk_apenas_primeiro.setChecked(False)
         self._chk_apenas_primeiro.setToolTip(
             "Executa só o primeiro lançamento — pra validar antes do lote inteiro."
         )
