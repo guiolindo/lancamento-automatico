@@ -34,20 +34,40 @@ PROMPT_TEMPLATE = """Você é um extrator estruturado de dados de relatórios fi
 
 Extraia do documento em anexo TODAS as linhas de filiais e seus valores por tipo de folha.
 
-## CATÁLOGO DE FILIAIS (nome canônico ← sinônimos aceitos)
+## CATÁLOGO DE FILIAIS (nome canônico ← sinônimos JÁ conhecidos)
 
-Cada relatório vem de um setor diferente e usa abreviações/apelidos próprios
-para as filiais. Use este catálogo para normalizar: se o documento mostrar
-uma abreviação (ex.: "CTG", "L VERDE", "SAJ", "CD 040"), retorne o
-NOME CANÔNICO correspondente na chave "filial_documento", NÃO o texto bruto.
+Cada relatório vem de um setor diferente e cada setor tem apelidos/abreviações
+próprios pras filiais. O catálogo abaixo lista as filiais oficiais e os
+sinônimos que o app já conhece — mas é INCOMPLETO por natureza, novas
+abreviações aparecem sempre.
 
 {catalogo}
 
-Regras adicionais para o casamento:
-- Match é case-insensitive e ignora acentos.
-- Ignore prefixos como "MULTICOM ATACADO E VAREJO S/A -".
-- Se nenhum item do catálogo bater, aí sim devolva o texto exato do documento
-  (o app tenta um fuzzy match depois).
+## COMO NORMALIZAR "filial_documento"
+
+Sua tarefa é sempre devolver o NOME CANÔNICO (a coluna "Nome" do catálogo),
+NÃO o texto bruto do documento. Para chegar lá, tente na ordem:
+
+1. Match exato (ignora caixa e acentos) com o nome canônico ou com um
+   sinônimo já listado.
+2. Se falhou, TENTE INFERIR pela convenção brasileira de abreviação:
+   - Iniciais de cidade: "SAJ" → Santo Antonio de Jesus; "CTG" → Contagem;
+     "LEM" → Luis Eduardo Magalhaes; "VDC" → Vitoria da Conquista.
+   - Palavra parcial ou truncada: "CTGM" / "CONTAG" → Contagem;
+     "L VERDE" / "LN VERDE" → Serra Verde (Linha Verde é o mesmo lugar);
+     "P AFONSO" → Paulo Afonso; "RIB NEVES" → Ribeirao das Neves;
+     "F DE SANTANA" / "F SANTANA" → Feira de Santana.
+   - Códigos numéricos: "CD 040", "CD-040", "CD300", "300" → CD Ribeirao das
+     Neves (mesmo código TOTVS); "301" → CD Campina Verde; "502" → ADM Barao.
+   - Prefixos operacionais: "CD X" é sempre um centro de distribuição;
+     "ADM X" é administrativo/comercial; sem prefixo é loja.
+3. Ignore prefixos institucionais tipo "MULTICOM ATACADO E VAREJO S/A -".
+4. Só devolva o texto bruto quando NÃO houver candidato plausível (ex.:
+   filial nova que a empresa acabou de abrir e nem existe no catálogo).
+   Nesse caso o app cai num fuzzy match depois.
+
+NÃO invente códigos. Você só precisa devolver o nome canônico; o app resolve
+o código sozinho.
 
 ## REGRAS GERAIS
 

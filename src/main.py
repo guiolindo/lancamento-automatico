@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-42 (Gemini recebe catálogo de filiais + aliases)"
+BUILD_MARKER = "build-43 (Gemini infere abreviações globalmente, não só lookup)"
 
 
 def main() -> int:
