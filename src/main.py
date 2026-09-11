@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-52 (teste auto-update: 'Testar só o 1º' desmarcado por padrão)"
+BUILD_MARKER = "build-53 (atualização obrigatória no boot + auto-restart pós-apply)"
 
 
 def main() -> int:
