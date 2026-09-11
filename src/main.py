@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-48 (redesign real: dashboard + identidade Economart)"
+BUILD_MARKER = "build-49 (fix crítico: END falso positivo no watcher)"
 
 
 def main() -> int:

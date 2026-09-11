@@ -152,14 +152,29 @@ class RpaTotvs:
             try:
                 import ctypes
                 user32 = ctypes.windll.user32
+                # CRÍTICO: sem restype, ctypes assume c_int (32-bit) mas
+                # GetAsyncKeyState devolve SHORT (16-bit). Os 16 bits altos
+                # ficam com lixo do registrador — se o lixo tiver o bit
+                # 0x8000 setado por acaso, dispara falso positivo de 'END
+                # pressionada'. Isso quebrava o fluxo de revisão manual.
+                user32.GetAsyncKeyState.restype = ctypes.c_short
+                user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
             except Exception:  # noqa: BLE001
                 return
+            # Precisa ver a tecla pressionada em 2 amostras seguidas — filtra
+            # spikes de 1 ciclo (ex: race quando um modal fecha).
+            confirmacoes = 0
             while not self._abort_event.is_set():
                 try:
-                    if user32.GetAsyncKeyState(VK_END) & 0x8000:
-                        log.warning("Tecla END pressionada — abortando lote")
-                        self._abort_event.set()
-                        return
+                    estado = user32.GetAsyncKeyState(VK_END)
+                    if estado & 0x8000:
+                        confirmacoes += 1
+                        if confirmacoes >= 2:
+                            log.warning("Tecla END pressionada — abortando lote")
+                            self._abort_event.set()
+                            return
+                    else:
+                        confirmacoes = 0
                 except Exception:  # noqa: BLE001
                     return
                 time.sleep(0.05)
