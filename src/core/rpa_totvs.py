@@ -37,6 +37,23 @@ def _gerar_nro_documento() -> str:
     return str(random.randint(1_000_000, 9_999_999))
 
 
+def _capslock_off() -> None:
+    """Se CapsLock estiver ligado, desliga (Windows).
+    Sem isso, typewrite('ABC') envia SHIFT+letra que com Caps ativo
+    vira minúscula — tudo entra no TOTVS lowercase."""
+    try:
+        import ctypes
+        VK_CAPITAL = 0x14
+        KEYEVENTF_KEYUP = 0x0002
+        user32 = ctypes.WinDLL('user32', use_last_error=True)
+        if user32.GetKeyState(VK_CAPITAL) & 1:
+            user32.keybd_event(VK_CAPITAL, 0, 0, 0)
+            user32.keybd_event(VK_CAPITAL, 0, KEYEVENTF_KEYUP, 0)
+            log.info("CapsLock estava ligado — desliguei")
+    except Exception:  # noqa: BLE001
+        pass
+
+
 class ManualAbortException(RuntimeError):
     """O operador pediu para parar o lote no modo revisão manual."""
 
@@ -84,6 +101,7 @@ class RpaTotvs:
 
     def conectar(self) -> None:
         log.info("conectar(): iniciando")
+        _capslock_off()
         self._start_hotkey_watcher()
         log.info("conectar(): hotkey watcher (END) ativo")
 
@@ -186,9 +204,10 @@ class RpaTotvs:
         log.info("preencher %s = %r", campo, valor_up)
         import pyautogui
         self._clicar(campo)
-        pyautogui.press("backspace", presses=15, interval=0.005)
-        pyautogui.press("delete", presses=15, interval=0.005)
+        pyautogui.press("backspace", presses=12, interval=0.002)
+        pyautogui.press("delete", presses=12, interval=0.002)
         self._sleep("apos_selectall_ms")
+        _capslock_off()  # defesa: usuário pode ter apertado Caps entre lançamentos
         intervalo = float(self._delays.get("intervalo_digitacao_s", 0.003))
         pyautogui.typewrite(valor_up, interval=intervalo)
         self._sleep("entre_campos_ms")
