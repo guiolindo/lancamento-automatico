@@ -1,21 +1,20 @@
 """
-Diálogo de cadastro de filiais (De-Para).
+Diálogo de cadastro de filiais (De-Para) — versão card-based.
 
-Substitui a edição manual do mapeamento.json — o operador adiciona,
-remove e edita filiais numa tabela; ao Salvar, grava de volta no JSON
-mantendo os blocos que não são de-para (comentários, impostos).
+Cada filial é uma linha em card. Sem QTableWidget/cellWidget que
+sofriam de bugs de overlap.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QComboBox, QDialog, QHBoxLayout, QHeaderView, QLabel,
-    QLineEdit, QMessageBox, QPushButton, QSpinBox, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget
+    QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+    QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
 )
 
 from ..core.mapping import MappingRepository
@@ -25,90 +24,155 @@ EMPRESAS = ["MG", "BA", "CD_ADM"]
 TIPOS = ["LOJA", "CD", "ADM"]
 
 
+class FilialRow(QFrame):
+    """Uma linha visual de filial — 2 sub-linhas."""
+
+    def __init__(self, empresa: str, codigo: int, nome: str, tipo: str,
+                 aliases: list[str], on_remove, parent=None):
+        super().__init__(parent)
+        self.setProperty("filialRow", True)
+        self._on_remove = on_remove
+
+        v = QVBoxLayout(self)
+        v.setContentsMargins(14, 12, 14, 12)
+        v.setSpacing(8)
+
+        # ----- Linha 1: Empresa | Código | Nome | Tipo | Remover
+        r1 = QHBoxLayout()
+        r1.setSpacing(10)
+
+        self.combo_emp = QComboBox()
+        self.combo_emp.addItems(EMPRESAS)
+        if empresa in EMPRESAS:
+            self.combo_emp.setCurrentText(empresa)
+        self.combo_emp.setFixedWidth(110)
+        r1.addWidget(self.combo_emp)
+
+        self.spin_cod = QSpinBox()
+        self.spin_cod.setRange(1, 9999)
+        self.spin_cod.setValue(codigo)
+        self.spin_cod.setButtonSymbols(QSpinBox.NoButtons)
+        self.spin_cod.setAlignment(Qt.AlignCenter)
+        self.spin_cod.setFixedWidth(90)
+        r1.addWidget(self.spin_cod)
+
+        self.edit_nome = QLineEdit(nome)
+        self.edit_nome.setPlaceholderText("Nome da filial")
+        r1.addWidget(self.edit_nome, 1)
+
+        self.combo_tipo = QComboBox()
+        self.combo_tipo.addItems(TIPOS)
+        if tipo in TIPOS:
+            self.combo_tipo.setCurrentText(tipo)
+        self.combo_tipo.setFixedWidth(100)
+        r1.addWidget(self.combo_tipo)
+
+        btn_rem = QPushButton("Remover")
+        btn_rem.setProperty("danger", True)
+        btn_rem.setFixedWidth(96)
+        btn_rem.clicked.connect(lambda: self._on_remove(self))
+        r1.addWidget(btn_rem)
+
+        v.addLayout(r1)
+
+        # ----- Linha 2: Aliases
+        r2 = QHBoxLayout()
+        r2.setSpacing(10)
+        lb_al = QLabel("Aliases")
+        lb_al.setProperty("inlineLabel", True)
+        lb_al.setFixedWidth(60)
+        r2.addWidget(lb_al)
+
+        self.edit_alias = QLineEdit(", ".join(aliases))
+        self.edit_alias.setPlaceholderText(
+            "Separe com vírgula. Ex: SAJ, ANTONIO JESUS, ST ANTONIO"
+        )
+        r2.addWidget(self.edit_alias, 1)
+        v.addLayout(r2)
+
+    def dados(self) -> dict:
+        aliases = [a.strip() for a in self.edit_alias.text().split(",") if a.strip()]
+        return {
+            "empresa": self.combo_emp.currentText(),
+            "codigo": int(self.spin_cod.value()),
+            "nome": self.edit_nome.text().strip(),
+            "tipo": self.combo_tipo.currentText(),
+            "aliases": aliases,
+        }
+
+
 class DeParaDialog(QDialog):
     def __init__(self, mapping: MappingRepository, mapping_path: Path, parent=None):
         super().__init__(parent)
         self.setWindowTitle("De-Para de filiais")
-        self.resize(1000, 640)
+        self.resize(920, 680)
+        self.setMinimumSize(720, 520)
         self.mapping = mapping
         self.mapping_path = mapping_path
         self._dados_originais: dict = {}
+        self._rows: list[FilialRow] = []
 
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(20, 16, 20, 16)
-        raiz.setSpacing(12)
+        raiz.setContentsMargins(24, 20, 24, 20)
+        raiz.setSpacing(14)
 
+        # ----- Cabeçalho
         titulo = QLabel("Cadastro de Filiais")
         titulo.setProperty("h1", True)
         raiz.addWidget(titulo)
 
         instr = QLabel(
-            "Adicione as filiais/lojas/CDs com seus códigos TOTVS. "
-            "Em <b>Aliases</b>, coloque as diferentes formas que o nome pode "
-            "aparecer nos relatórios (separadas por vírgula) — o app usa isso "
-            "pra resolver \"SAJ\" → \"Santo Antonio de Jesus\", por exemplo."
+            "Cadastre filiais/lojas/CDs com os códigos TOTVS. Em <b>Aliases</b>, "
+            "coloque as formas que o nome aparece nos relatórios — o app usa isso "
+            "pra resolver abreviações."
         )
         instr.setWordWrap(True)
         instr.setProperty("muted", True)
         raiz.addWidget(instr)
 
-        # Toolbar
+        # ----- Toolbar
         toolbar = QHBoxLayout()
+        toolbar.setSpacing(8)
+
         btn_add = QPushButton("+ Adicionar filial")
-        btn_add.clicked.connect(self._adicionar_linha)
+        btn_add.setProperty("primary", True)
+        btn_add.clicked.connect(self._adicionar)
         toolbar.addWidget(btn_add)
-
-        btn_rem = QPushButton("− Remover selecionada")
-        btn_rem.setProperty("danger", True)
-        btn_rem.clicked.connect(self._remover_linha)
-        toolbar.addWidget(btn_rem)
-
-        toolbar.addStretch(1)
 
         btn_reload = QPushButton("Recarregar do arquivo")
         btn_reload.clicked.connect(self._recarregar)
         toolbar.addWidget(btn_reload)
 
-        raiz.addLayout(toolbar)
+        toolbar.addStretch(1)
 
-        # Tabela
-        self.tabela = QTableWidget()
-        self.tabela.setColumnCount(5)
-        self.tabela.setHorizontalHeaderLabels(["Empresa", "Código", "Nome", "Tipo", "Aliases (separar com vírgula)"])
-        self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tabela.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.tabela.verticalHeader().setVisible(False)
-        # Row height suficiente pros widgets embutidos (QComboBox, QLineEdit)
-        # não transbordarem. 44 é folgado; menos que isso a seta do combo
-        # colide com o texto.
-        self.tabela.verticalHeader().setDefaultSectionSize(44)
-        self.tabela.setShowGrid(False)
-        self.tabela.setAlternatingRowColors(True)
-
-        h = self.tabela.horizontalHeader()
-        h.setSectionResizeMode(0, QHeaderView.Fixed)
-        h.setSectionResizeMode(1, QHeaderView.Fixed)
-        h.setSectionResizeMode(2, QHeaderView.Interactive)
-        h.setSectionResizeMode(3, QHeaderView.Fixed)
-        h.setSectionResizeMode(4, QHeaderView.Stretch)
-        self.tabela.setColumnWidth(0, 110)   # combo Empresa
-        self.tabela.setColumnWidth(1, 90)    # spin Código
-        self.tabela.setColumnWidth(2, 240)   # Nome
-        self.tabela.setColumnWidth(3, 100)   # combo Tipo
-        raiz.addWidget(self.tabela, 1)
-
-        # Rodapé
-        acoes = QHBoxLayout()
         self.lbl_status = QLabel("")
         self.lbl_status.setProperty("muted", True)
-        acoes.addWidget(self.lbl_status, 1)
+        toolbar.addWidget(self.lbl_status)
 
+        raiz.addLayout(toolbar)
+
+        # ----- Área rolável com os cards
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._container = QWidget()
+        self._lista = QVBoxLayout(self._container)
+        self._lista.setContentsMargins(2, 2, 8, 2)
+        self._lista.setSpacing(10)
+        self._lista.addStretch(1)  # espaçador no fim
+        scroll.setWidget(self._container)
+        raiz.addWidget(scroll, 1)
+
+        # ----- Rodapé com ações
+        acoes = QHBoxLayout()
+        acoes.addStretch(1)
         btn_cancel = QPushButton("Cancelar")
         btn_cancel.clicked.connect(self.reject)
         acoes.addWidget(btn_cancel)
 
-        btn_salvar = QPushButton("Salvar")
+        btn_salvar = QPushButton("Salvar tudo")
         btn_salvar.setProperty("primary", True)
+        btn_salvar.setMinimumWidth(140)
         btn_salvar.clicked.connect(self._salvar)
         acoes.addWidget(btn_salvar)
         raiz.addLayout(acoes)
@@ -121,10 +185,10 @@ class DeParaDialog(QDialog):
         with open(self.mapping_path, "r", encoding="utf-8") as f:
             self._dados_originais = json.load(f)
 
-        self.tabela.setRowCount(0)
+        self._limpar()
         for empresa_chave, empresa in (self._dados_originais.get("empresas") or {}).items():
             for filial in empresa.get("filiais", []):
-                self._append_linha(
+                self._append_row(
                     empresa_chave,
                     int(filial["codigo"]),
                     filial.get("nome", ""),
@@ -133,11 +197,17 @@ class DeParaDialog(QDialog):
                 )
         self._atualizar_status()
 
+    def _limpar(self) -> None:
+        for row in list(self._rows):
+            self._lista.removeWidget(row)
+            row.deleteLater()
+        self._rows.clear()
+
     def _recarregar(self) -> None:
-        if self.tabela.rowCount() > 0:
+        if self._rows:
             resp = QMessageBox.question(
                 self, "Recarregar",
-                "Descartar as alterações não salvas e recarregar do arquivo?",
+                "Descartar alterações não salvas e recarregar do arquivo?",
             )
             if resp != QMessageBox.Yes:
                 return
@@ -145,132 +215,72 @@ class DeParaDialog(QDialog):
 
     # ---------- edição ----------
 
-    def _append_linha(self, empresa: str, codigo: int, nome: str, tipo: str, aliases: list[str]) -> None:
-        linha = self.tabela.rowCount()
-        self.tabela.insertRow(linha)
+    def _append_row(self, empresa: str, codigo: int, nome: str, tipo: str,
+                    aliases: list[str]) -> FilialRow:
+        row = FilialRow(empresa, codigo, nome, tipo, aliases, on_remove=self._remover)
+        # Insere antes do stretch final
+        self._lista.insertWidget(self._lista.count() - 1, row)
+        self._rows.append(row)
+        return row
 
-        combo_emp = QComboBox()
-        combo_emp.addItems(EMPRESAS)
-        if empresa in EMPRESAS:
-            combo_emp.setCurrentText(empresa)
-        self.tabela.setCellWidget(linha, 0, self._envolver_celula(combo_emp))
-        self._combos_emp = getattr(self, "_combos_emp", [])
-
-        spin_cod = QSpinBox()
-        spin_cod.setRange(1, 9999)
-        spin_cod.setValue(codigo)
-        spin_cod.setButtonSymbols(QSpinBox.NoButtons)
-        spin_cod.setAlignment(Qt.AlignCenter)
-        self.tabela.setCellWidget(linha, 1, self._envolver_celula(spin_cod))
-
-        edit_nome = QLineEdit(nome)
-        self.tabela.setCellWidget(linha, 2, self._envolver_celula(edit_nome))
-
-        combo_tipo = QComboBox()
-        combo_tipo.addItems(TIPOS)
-        if tipo in TIPOS:
-            combo_tipo.setCurrentText(tipo)
-        self.tabela.setCellWidget(linha, 3, self._envolver_celula(combo_tipo))
-
-        edit_alias = QLineEdit(", ".join(aliases))
-        edit_alias.setPlaceholderText("Ex: SAJ, SANTO ANTONIO DE JESUS")
-        self.tabela.setCellWidget(linha, 4, self._envolver_celula(edit_alias))
-
-    def _envolver_celula(self, widget: QWidget) -> QWidget:
-        """Envolve o widget num container com margens pequenas — evita
-        que ele ocupe 100% da célula e cole nas bordas / colida com a
-        borda do cabeçalho da tabela."""
-        wrapper = QWidget()
-        lay = QHBoxLayout(wrapper)
-        lay.setContentsMargins(6, 4, 6, 4)
-        lay.setSpacing(0)
-        widget.setMaximumHeight(30)
-        lay.addWidget(widget)
-        return wrapper
-
-    def _obter_widget(self, linha: int, coluna: int) -> QWidget:
-        wrapper = self.tabela.cellWidget(linha, coluna)
-        # Widget real é o filho do wrapper
-        lay = wrapper.layout()
-        return lay.itemAt(0).widget()
-
-    def _adicionar_linha(self) -> None:
-        codigos = set()
-        for l in range(self.tabela.rowCount()):
-            sb: QSpinBox = self._obter_widget(l, 1)  # type: ignore
-            codigos.add(sb.value())
+    def _adicionar(self) -> None:
+        codigos = {r.spin_cod.value() for r in self._rows}
         proximo = max(codigos) + 1 if codigos else 1
-
-        self._append_linha("MG", proximo, "", "LOJA", [])
-        self.tabela.selectRow(self.tabela.rowCount() - 1)
-        edit = self._obter_widget(self.tabela.rowCount() - 1, 2)
-        if edit:
-            edit.setFocus()
+        row = self._append_row("MG", proximo, "", "LOJA", [])
+        row.edit_nome.setFocus()
         self._atualizar_status()
 
-    def _remover_linha(self) -> None:
-        linhas = sorted({idx.row() for idx in self.tabela.selectedIndexes()}, reverse=True)
-        if not linhas:
-            return
-        for l in linhas:
-            self.tabela.removeRow(l)
+    def _remover(self, row: FilialRow) -> None:
+        self._rows.remove(row)
+        self._lista.removeWidget(row)
+        row.deleteLater()
         self._atualizar_status()
 
     def _atualizar_status(self) -> None:
-        self.lbl_status.setText(f"{self.tabela.rowCount()} filial(is)")
+        self.lbl_status.setText(f"{len(self._rows)} filial(is)")
 
     # ---------- salvar ----------
 
     def _coletar(self) -> dict[str, dict]:
-        """Reconstrói o bloco 'empresas' a partir da tabela."""
         empresas: dict[str, dict] = {}
         for chave in EMPRESAS:
-            desc_original = ((self._dados_originais.get("empresas") or {}).get(chave, {}) or {}).get(
-                "descricao", chave
-            )
-            empresas[chave] = {"descricao": desc_original, "filiais": []}
+            desc = ((self._dados_originais.get("empresas") or {})
+                    .get(chave, {}) or {}).get("descricao", chave)
+            empresas[chave] = {"descricao": desc, "filiais": []}
 
-        for l in range(self.tabela.rowCount()):
-            emp: str = self._obter_widget(l, 0).currentText()  # type: ignore
-            cod: int = int(self._obter_widget(l, 1).value())  # type: ignore
-            nome: str = self._obter_widget(l, 2).text().strip()  # type: ignore
-            tipo: str = self._obter_widget(l, 3).currentText()  # type: ignore
-            aliases_txt: str = self._obter_widget(l, 4).text()  # type: ignore
-            aliases = [a.strip() for a in aliases_txt.split(",") if a.strip()]
-
-            if not nome:
-                raise ValueError(f"Linha {l+1}: nome vazio")
-
-            empresas[emp]["filiais"].append({
-                "codigo": cod,
-                "nome": nome,
-                "tipo": tipo,
-                "aliases": aliases,
+        for i, row in enumerate(self._rows):
+            d = row.dados()
+            if not d["nome"]:
+                raise ValueError(f"Linha {i+1}: nome vazio")
+            empresas[d["empresa"]]["filiais"].append({
+                "codigo": d["codigo"],
+                "nome": d["nome"],
+                "tipo": d["tipo"],
+                "aliases": d["aliases"],
             })
         return empresas
 
     def _salvar(self) -> None:
         try:
-            novas_empresas = self._coletar()
+            novas = self._coletar()
         except ValueError as e:
             QMessageBox.warning(self, "Dados incompletos", str(e))
             return
 
-        # Detecta código duplicado (mesmo código em duas linhas) — TOTVS não aceita.
-        codigos: dict[int, str] = {}
-        for chave, bloco in novas_empresas.items():
+        # Código duplicado
+        vistos: dict[int, str] = {}
+        for chave, bloco in novas.items():
             for f in bloco["filiais"]:
-                if f["codigo"] in codigos:
+                if f["codigo"] in vistos:
                     QMessageBox.warning(
                         self, "Código duplicado",
-                        f"Código {f['codigo']} aparece em '{codigos[f['codigo']]}' e '{f['nome']}'.",
+                        f"Código {f['codigo']} aparece em '{vistos[f['codigo']]}' e '{f['nome']}'.",
                     )
                     return
-                codigos[f["codigo"]] = f["nome"]
+                vistos[f["codigo"]] = f["nome"]
 
-        # Preserva _comentario e impostos, substitui só empresas.
         dados = dict(self._dados_originais)
-        dados["empresas"] = novas_empresas
+        dados["empresas"] = novas
 
         try:
             with open(self.mapping_path, "w", encoding="utf-8") as f:
@@ -279,13 +289,12 @@ class DeParaDialog(QDialog):
             QMessageBox.critical(self, "Erro ao salvar", str(e))
             return
 
-        # Recarrega o repositório em memória — próxima extração já usa.
         try:
             self.mapping.reload()
         except Exception as e:  # noqa: BLE001
             QMessageBox.warning(
                 self, "Salvou, mas...",
-                f"Arquivo gravado, porém falhou ao recarregar em memória: {e}\n"
+                f"Arquivo gravado, mas falhou ao recarregar em memória: {e}\n"
                 "Feche e reabra o app.",
             )
         self.accept()

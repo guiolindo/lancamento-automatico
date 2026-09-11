@@ -19,7 +19,7 @@ from .calibracao_dialog import CalibracaoDialog
 from .depara_dialog import DeParaDialog
 from .preview_table import PreviewTable
 from .setup_dialog import SetupDialog
-from .theme import QSS
+from .theme import qss
 from .workers import ExtracaoWorker, LoteWorker
 
 
@@ -38,8 +38,9 @@ class MainWindow(QMainWindow):
         self.mapping_path = mapping_path
         self.setWindowTitle("Lançamento Automático — TOTVS")
         self.resize(1280, 820)
-        self.setMinimumSize(1080, 680)
-        self.setStyleSheet(QSS)
+        self.setMinimumSize(980, 640)
+        self._tema = self.settings.get("tema", "escuro") or "escuro"
+        self.setStyleSheet(qss(self._tema))
 
         self._thread: QThread | None = None
         self._worker_extracao: ExtracaoWorker | None = None
@@ -115,12 +116,36 @@ class MainWindow(QMainWindow):
         v.addWidget(self._lbl_status_calib)
         self._atualizar_status_calibracao()
 
-        rodape = QLabel("v0.1.0  ·  build 35")
+        # Botão de toggle de tema
+        toggle_wrap = QWidget()
+        toggle_lay = QHBoxLayout(toggle_wrap)
+        toggle_lay.setContentsMargins(20, 4, 20, 6)
+        self._btn_tema = QPushButton()
+        self._btn_tema.setProperty("themetoggle", True)
+        self._btn_tema.setCursor(Qt.PointingHandCursor)
+        self._btn_tema.clicked.connect(self._toggle_tema)
+        self._atualizar_texto_tema()
+        toggle_lay.addWidget(self._btn_tema)
+        v.addWidget(toggle_wrap)
+
+        rodape = QLabel("v0.1.0  ·  build 47")
         rodape.setProperty("muted", True)
-        rodape.setContentsMargins(20, 0, 20, 0)
+        rodape.setContentsMargins(20, 4, 20, 0)
         v.addWidget(rodape)
 
         return side
+
+    def _atualizar_texto_tema(self) -> None:
+        if self._tema == "claro":
+            self._btn_tema.setText("🌙  Modo escuro")
+        else:
+            self._btn_tema.setText("☀  Modo claro")
+
+    def _toggle_tema(self) -> None:
+        self._tema = "claro" if self._tema == "escuro" else "escuro"
+        self.settings.set("tema", self._tema)
+        self.setStyleSheet(qss(self._tema))
+        self._atualizar_texto_tema()
 
     def _montar_content(self) -> QWidget:
         wrap = QFrame()
@@ -183,47 +208,75 @@ class MainWindow(QMainWindow):
     # ---------------- Toolbar parâmetros ----------------
 
     def _toolbar_parametros(self) -> QFrame:
+        """Toolbar de parâmetros em 2 linhas — evita o botão 'Extrair' ser
+        cortado quando a janela fica apertada. Linha 1: campos. Linha 2:
+        arquivo + botão de ação alinhado à direita."""
         bar = QFrame()
         bar.setProperty("toolbar", True)
-        row = QHBoxLayout(bar)
-        row.setContentsMargins(16, 12, 16, 12)
-        row.setSpacing(14)
+        v = QVBoxLayout(bar)
+        v.setContentsMargins(18, 14, 18, 14)
+        v.setSpacing(12)
 
-        # Imposto
-        row.addWidget(self._campo_inline("Imposto"))
+        # ----- Linha 1: Imposto + Data
+        r1 = QHBoxLayout()
+        r1.setSpacing(14)
+
+        col_imp = QVBoxLayout()
+        col_imp.setSpacing(4)
+        col_imp.addWidget(self._campo_inline("Imposto"))
         self._combo_imposto = QComboBox()
         self._combo_imposto.addItem("IRRF")
-        self._combo_imposto.setFixedWidth(120)
-        row.addWidget(self._combo_imposto)
+        self._combo_imposto.setMinimumWidth(140)
+        col_imp.addWidget(self._combo_imposto)
+        r1.addLayout(col_imp)
 
-        row.addWidget(self._divisor_vertical())
-
-        # Data
-        row.addWidget(self._campo_inline("Data"))
+        col_data = QVBoxLayout()
+        col_data.setSpacing(4)
+        col_data.addWidget(self._campo_inline("Data de referência"))
         self._date_emissao = QDateEdit(QDate.currentDate())
         self._date_emissao.setDisplayFormat("dd/MM/yyyy")
         self._date_emissao.setCalendarPopup(True)
-        self._date_emissao.setFixedWidth(140)
-        row.addWidget(self._date_emissao)
+        self._date_emissao.setMinimumWidth(150)
+        col_data.addWidget(self._date_emissao)
+        r1.addLayout(col_data)
 
-        row.addWidget(self._divisor_vertical())
+        r1.addStretch(1)
+        v.addLayout(r1)
 
-        # Arquivo
-        row.addWidget(self._campo_inline("Documento"))
+        # ----- Linha 2: Arquivo + botões
+        r2 = QHBoxLayout()
+        r2.setSpacing(10)
+
+        col_arq = QVBoxLayout()
+        col_arq.setSpacing(4)
+        col_arq.addWidget(self._campo_inline("Documento (PDF ou imagem)"))
+        arq_row = QHBoxLayout()
+        arq_row.setSpacing(8)
         self._label_arquivo = QLabel("Nenhum arquivo selecionado")
         self._label_arquivo.setProperty("muted", True)
-        self._label_arquivo.setMinimumWidth(200)
-        row.addWidget(self._label_arquivo, 1)
+        # Encolhe sem cortar botão — se apertar demais, texto some primeiro.
+        self._label_arquivo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self._label_arquivo.setMinimumWidth(80)
+        arq_row.addWidget(self._label_arquivo, 1)
         btn_pick = QPushButton("Selecionar…")
+        btn_pick.setMinimumWidth(110)
         btn_pick.clicked.connect(self._selecionar_arquivo)
-        row.addWidget(btn_pick)
+        arq_row.addWidget(btn_pick)
+        col_arq.addLayout(arq_row)
+        r2.addLayout(col_arq, 1)
 
-        # Extrair (primário à direita)
+        # Botão Extrair alinhado embaixo, min-width garantido
+        col_btn = QVBoxLayout()
+        col_btn.setSpacing(4)
+        col_btn.addWidget(QLabel(""))  # spacer p/ alinhar com o label acima
         self._btn_extrair = QPushButton("Extrair com Gemini")
         self._btn_extrair.setProperty("primary", True)
+        self._btn_extrair.setMinimumWidth(180)
         self._btn_extrair.clicked.connect(self._extrair)
-        row.addWidget(self._btn_extrair)
+        col_btn.addWidget(self._btn_extrair)
+        r2.addLayout(col_btn)
 
+        v.addLayout(r2)
         return bar
 
     def _campo_inline(self, texto: str) -> QLabel:
@@ -362,7 +415,7 @@ class MainWindow(QMainWindow):
 
     def _abrir_setup(self, inicial: bool = False) -> None:
         dlg = SetupDialog(self, current_key=self.settings.get("gemini_api_key", ""))
-        dlg.setStyleSheet(QSS)
+        dlg.setStyleSheet(qss(self._tema))
         if dlg.exec():
             self.settings.set("gemini_api_key", dlg.chave())
             self._log_line("✓ Chave da API Gemini salva")
@@ -388,7 +441,7 @@ class MainWindow(QMainWindow):
             self._abrir_setup()
         elif chave == "mapeamento":
             dlg = DeParaDialog(self.mapping, self.mapping_path, self)
-            dlg.setStyleSheet(QSS)
+            dlg.setStyleSheet(qss(self._tema))
             if dlg.exec():
                 self._log_line("✓ De-Para atualizado e recarregado")
 
@@ -481,7 +534,7 @@ class MainWindow(QMainWindow):
 
     def _abrir_calibracao(self) -> None:
         dlg = CalibracaoDialog(self._calibracao, self)
-        dlg.setStyleSheet(QSS)
+        dlg.setStyleSheet(qss(self._tema))
         if dlg.exec():
             self._calibracao = dlg.calibracao()
             calib_store.salvar(self._calibracao)
