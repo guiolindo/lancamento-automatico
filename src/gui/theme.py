@@ -90,7 +90,48 @@ QLabel[muted="true"] {{
 QFrame[card="true"] {{
     background: {COLORS["bg_1"]};
     border: 1px solid {COLORS["border"]};
-    border-radius: 6px;
+    border-radius: 8px;
+}}
+QFrame[cardFooter="true"] {{
+    background: {COLORS["bg_0"]};
+    border-top: 1px solid {COLORS["border_soft"]};
+    border-bottom-left-radius: 7px;
+    border-bottom-right-radius: 7px;
+}}
+
+/* ---------- KPI Cards ---------- */
+QFrame[kpi="true"] {{
+    background: {COLORS["bg_1"]};
+    border: 1px solid {COLORS["border"]};
+    border-radius: 8px;
+}}
+QLabel[kpiValue="true"] {{
+    font-size: 22px;
+    font-weight: 700;
+    color: {COLORS["text"]};
+}}
+
+/* ---------- Toolbar ---------- */
+QFrame[toolbar="true"] {{
+    background: {COLORS["bg_1"]};
+    border: 1px solid {COLORS["border"]};
+    border-radius: 8px;
+}}
+QLabel[inlineLabel="true"] {{
+    color: {COLORS["text_muted"]};
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding-right: 2px;
+}}
+QFrame#Divisor {{
+    background: {COLORS["border"]};
+    border: none;
+}}
+QFrame#DivisorH {{
+    background: {COLORS["border_soft"]};
+    border: none;
 }}
 
 /* ---------- Inputs ---------- */
