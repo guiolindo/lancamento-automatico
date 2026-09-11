@@ -471,6 +471,56 @@ class MainWindow(QMainWindow):
     def _verificar_setup(self) -> None:
         if not self.settings.get("gemini_api_key"):
             self._abrir_setup(inicial=True)
+        # Check de atualização automático no boot — 2s depois pra dar tempo
+        # da janela renderizar antes do modal aparecer.
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(2000, self._check_atualizacao_boot)
+
+    def _check_atualizacao_boot(self) -> None:
+        """Verifica update no boot em background. Se tem, dispara modal
+        obrigatório (só botão Sim — sem escapatória)."""
+        import threading
+        from ..core import updater
+        from ..main import BUILD_MARKER
+
+        def worker():
+            info = updater.check(BUILD_MARKER)
+            if info and info.tem_atualizacao:
+                # Volta pro main thread pra mostrar o modal
+                from PySide6.QtCore import QMetaObject, Qt as _Qt
+                # Invoca via slot (setter em property funciona bem pra passar dado
+                # simples). Simpler: usar singleShot com closure.
+                from PySide6.QtCore import QTimer as _QT
+                _QT.singleShot(0, lambda: self._modal_obrigatorio(info))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _modal_obrigatorio(self, info) -> None:
+        """Mostra modal 'Nova versão disponível — Sim, atualizar' sem
+        botão de dispensar. Único jeito de sair sem atualizar é fechar
+        a janela do Windows (X). Toda vez que abrir volta o aviso."""
+        tam_mb = info.asset_tamanho / (1024 * 1024)
+        box = QMessageBox(self)
+        box.setWindowTitle("Atualização obrigatória")
+        box.setIcon(QMessageBox.Warning)
+        box.setText(
+            "<b>Nova versão do app disponível.</b><br><br>"
+            f"Atual: <code>{info.build_marker_local}</code><br>"
+            f"Nova:  <code>{info.build_marker_remoto}</code><br><br>"
+            "Atualizações podem trazer <b>filial nova, imposto novo ou "
+            "correção crítica</b>. Esse tipo de app não pode ficar "
+            "desatualizado.<br><br>"
+            f"O download tem {tam_mb:.1f} MB e roda em segundo plano — "
+            "você continua trabalhando enquanto baixa. Depois o app "
+            "aplica sozinho na próxima abertura."
+        )
+        botao_sim = box.addButton("Sim, atualizar agora", QMessageBox.AcceptRole)
+        box.setDefaultButton(botao_sim)
+        # Nada de Cancel/Depois — só sai fechando pelo X.
+        box.exec()
+        if box.clickedButton() is botao_sim:
+            self._log_line(f"→ Baixando atualização {info.build_marker_remoto}…")
+            self._updater_bar.iniciar(info)
 
     def _abrir_setup(self, inicial: bool = False) -> None:
         dlg = SetupDialog(self, current_key=self.settings.get("gemini_api_key", ""))

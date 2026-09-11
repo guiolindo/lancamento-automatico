@@ -188,6 +188,32 @@ def _aplicar_pendente() -> bool:
     return True
 
 
+def _reiniciar_como_novo_exe() -> None:
+    """Após aplicar update, esse mesmo processo AINDA está rodando com o
+    binário antigo carregado em RAM. Dispara o exe novo em outro processo
+    e mata esse — usuário vê UMA vez fechando/abrindo, não duas."""
+    import subprocess
+    exe_atual = Path(sys.argv[0]).resolve()
+    _boot_trace(f"reiniciando pra pegar código novo: {exe_atual}")
+    try:
+        # DETACHED_PROCESS = 0x00000008 (Windows) — spawnfilho independente
+        # do console/terminal do pai. CREATE_NEW_PROCESS_GROUP = 0x00000200.
+        flags = 0
+        if sys.platform == "win32":
+            flags = 0x00000008 | 0x00000200
+        subprocess.Popen(
+            [str(exe_atual)] + sys.argv[1:],
+            close_fds=True,
+            creationflags=flags,
+        )
+        _boot_trace("processo novo lançado — encerrando o atual")
+    except Exception as e:  # noqa: BLE001
+        _boot_trace(f"FALHA ao reiniciar: {e} — usuário terá que abrir de novo manualmente")
+        return
+    # Encerra esse processo — sem imports pesados, sem app.exec()
+    os._exit(0)
+
+
 # ---------- 5. Boot com tracing ----------
 def main() -> int:
     _boot_trace("launcher: início")
@@ -196,7 +222,11 @@ def main() -> int:
         try:
             aplicou = _aplicar_pendente()
             if aplicou:
-                _boot_trace("update pendente aplicado")
+                _boot_trace("update pendente aplicado — reiniciando pra pegar código novo")
+                _reiniciar_como_novo_exe()
+                # Se _reiniciar falhou (não deveria), segue com o código velho
+                # e loga aviso. Usuário terá que abrir manualmente pra pegar
+                # a nova versão.
         except Exception as e:  # noqa: BLE001
             _boot_trace(f"aviso: erro aplicando update pendente: {e}")
 
