@@ -16,6 +16,7 @@ from ..core.mapping import MappingRepository
 from ..core.models import Imposto, Lancamento
 from ..core.settings_store import SettingsStore
 from .calibracao_dialog import CalibracaoDialog
+from .depara_dialog import DeParaDialog
 from .preview_table import PreviewTable
 from .setup_dialog import SetupDialog
 from .theme import QSS
@@ -371,11 +372,10 @@ class MainWindow(QMainWindow):
         if chave == "configuracoes":
             self._abrir_setup()
         elif chave == "mapeamento":
-            QMessageBox.information(
-                self, "De-Para",
-                f"O de-para está em:\n{self.mapping_path}\n\n"
-                "Edite o arquivo JSON e reabra o app.",
-            )
+            dlg = DeParaDialog(self.mapping, self.mapping_path, self)
+            dlg.setStyleSheet(QSS)
+            if dlg.exec():
+                self._log_line("✓ De-Para atualizado e recarregado")
 
     def _selecionar_arquivo(self) -> None:
         ultimo = self.settings.get("ultima_pasta_upload", "") or str(Path.home())
