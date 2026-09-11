@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-37 (visão — coordenadas re-medidas com precisão pixel)"
+BUILD_MARKER = "build-38 (visão — corrigido valor faturado)"
 
 
 def main() -> int:
