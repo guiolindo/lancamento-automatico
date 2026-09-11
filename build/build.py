@@ -96,9 +96,9 @@ def run() -> int:
         f"--output-filename={NOME}.exe",
         # Empacota o mapeamento.json dentro da pasta standalone.
         f"--include-data-files={SRC / 'config' / 'mapeamento.json'}=config/mapeamento.json",
-        # Templates de referência da tela do TOTVS (visão computacional
-        # auto-detecta posições sem calibração manual).
-        f"--include-data-dir={SRC / 'assets' / 'totvs_reference'}=src/assets/totvs_reference",
+        # Templates de referência da tela do TOTVS + branding (ícones,
+        # wordmark) — a pasta inteira src/assets/ vai pro bundle.
+        f"--include-data-dir={SRC / 'assets'}=src/assets",
         # Nosso pacote — o launcher só faz import dinâmico dele.
         "--include-package=src",
         # Libs com imports dinâmicos.

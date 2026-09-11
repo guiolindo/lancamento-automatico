@@ -63,6 +63,19 @@ class MainWindow(QMainWindow):
         root.addWidget(self._montar_sidebar())
         root.addWidget(self._montar_content(), 1)
 
+    def _buscar_asset(self, relativo: str) -> Path | None:
+        """Encontra um asset em src/assets tanto em dev quanto em exe compilado."""
+        import sys
+        candidatos = [
+            Path(__file__).resolve().parent.parent / "assets" / relativo,
+            Path(sys.executable).resolve().parent / "src" / "assets" / relativo,
+            Path(sys.executable).resolve().parent / "assets" / relativo,
+        ]
+        for c in candidatos:
+            if c.exists():
+                return c
+        return None
+
     def _montar_sidebar(self) -> QWidget:
         side = QFrame()
         side.setObjectName("Sidebar")
@@ -71,11 +84,23 @@ class MainWindow(QMainWindow):
         v.setContentsMargins(0, 0, 0, 20)
         v.setSpacing(0)
 
-        brand = QLabel("Lançamento")
+        # Cabeçalho da sidebar: símbolo + wordmark textual (o wordmark PNG
+        # tem texto azul-escuro, ficaria invisível no dark).
+        logo_path = self._buscar_asset("branding/logo_simbolo.png")
+        if logo_path:
+            from PySide6.QtGui import QPixmap
+            logo = QLabel()
+            logo.setObjectName("SidebarLogo")
+            pm = QPixmap(str(logo_path))
+            logo.setPixmap(pm.scaledToWidth(56, Qt.SmoothTransformation))
+            logo.setContentsMargins(24, 24, 24, 4)
+            v.addWidget(logo)
+
+        brand = QLabel("Econômart")
         brand.setObjectName("SidebarBrand")
         v.addWidget(brand)
 
-        sub = QLabel("AUTOMÁTICO · TOTVS")
+        sub = QLabel("LANÇAMENTO AUTOMÁTICO · TOTVS")
         sub.setObjectName("SidebarSubtitle")
         v.addWidget(sub)
 

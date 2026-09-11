@@ -75,16 +75,26 @@ class DeParaDialog(QDialog):
         self.tabela = QTableWidget()
         self.tabela.setColumnCount(5)
         self.tabela.setHorizontalHeaderLabels(["Empresa", "Código", "Nome", "Tipo", "Aliases (separar com vírgula)"])
-        self.tabela.setEditTriggers(QAbstractItemView.AllEditTriggers)
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tabela.verticalHeader().setDefaultSectionSize(34)
+        self.tabela.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.tabela.verticalHeader().setVisible(False)
+        # Row height suficiente pros widgets embutidos (QComboBox, QLineEdit)
+        # não transbordarem. 44 é folgado; menos que isso a seta do combo
+        # colide com o texto.
+        self.tabela.verticalHeader().setDefaultSectionSize(44)
+        self.tabela.setShowGrid(False)
+        self.tabela.setAlternatingRowColors(True)
+
         h = self.tabela.horizontalHeader()
-        h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(0, QHeaderView.Fixed)
+        h.setSectionResizeMode(1, QHeaderView.Fixed)
         h.setSectionResizeMode(2, QHeaderView.Interactive)
-        h.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.Fixed)
         h.setSectionResizeMode(4, QHeaderView.Stretch)
-        self.tabela.setColumnWidth(2, 220)
+        self.tabela.setColumnWidth(0, 110)   # combo Empresa
+        self.tabela.setColumnWidth(1, 90)    # spin Código
+        self.tabela.setColumnWidth(2, 240)   # Nome
+        self.tabela.setColumnWidth(3, 100)   # combo Tipo
         raiz.addWidget(self.tabela, 1)
 
         # Rodapé
@@ -143,38 +153,57 @@ class DeParaDialog(QDialog):
         combo_emp.addItems(EMPRESAS)
         if empresa in EMPRESAS:
             combo_emp.setCurrentText(empresa)
-        self.tabela.setCellWidget(linha, 0, combo_emp)
+        self.tabela.setCellWidget(linha, 0, self._envolver_celula(combo_emp))
+        self._combos_emp = getattr(self, "_combos_emp", [])
 
         spin_cod = QSpinBox()
         spin_cod.setRange(1, 9999)
         spin_cod.setValue(codigo)
-        self.tabela.setCellWidget(linha, 1, spin_cod)
+        spin_cod.setButtonSymbols(QSpinBox.NoButtons)
+        spin_cod.setAlignment(Qt.AlignCenter)
+        self.tabela.setCellWidget(linha, 1, self._envolver_celula(spin_cod))
 
         edit_nome = QLineEdit(nome)
-        self.tabela.setCellWidget(linha, 2, edit_nome)
+        self.tabela.setCellWidget(linha, 2, self._envolver_celula(edit_nome))
 
         combo_tipo = QComboBox()
         combo_tipo.addItems(TIPOS)
         if tipo in TIPOS:
             combo_tipo.setCurrentText(tipo)
-        self.tabela.setCellWidget(linha, 3, combo_tipo)
+        self.tabela.setCellWidget(linha, 3, self._envolver_celula(combo_tipo))
 
         edit_alias = QLineEdit(", ".join(aliases))
         edit_alias.setPlaceholderText("Ex: SAJ, SANTO ANTONIO DE JESUS")
-        self.tabela.setCellWidget(linha, 4, edit_alias)
+        self.tabela.setCellWidget(linha, 4, self._envolver_celula(edit_alias))
+
+    def _envolver_celula(self, widget: QWidget) -> QWidget:
+        """Envolve o widget num container com margens pequenas — evita
+        que ele ocupe 100% da célula e cole nas bordas / colida com a
+        borda do cabeçalho da tabela."""
+        wrapper = QWidget()
+        lay = QHBoxLayout(wrapper)
+        lay.setContentsMargins(6, 4, 6, 4)
+        lay.setSpacing(0)
+        widget.setMaximumHeight(30)
+        lay.addWidget(widget)
+        return wrapper
+
+    def _obter_widget(self, linha: int, coluna: int) -> QWidget:
+        wrapper = self.tabela.cellWidget(linha, coluna)
+        # Widget real é o filho do wrapper
+        lay = wrapper.layout()
+        return lay.itemAt(0).widget()
 
     def _adicionar_linha(self) -> None:
-        # Sugere próximo código livre (max+1)
         codigos = set()
         for l in range(self.tabela.rowCount()):
-            sb: QSpinBox = self.tabela.cellWidget(l, 1)  # type: ignore
+            sb: QSpinBox = self._obter_widget(l, 1)  # type: ignore
             codigos.add(sb.value())
         proximo = max(codigos) + 1 if codigos else 1
 
         self._append_linha("MG", proximo, "", "LOJA", [])
         self.tabela.selectRow(self.tabela.rowCount() - 1)
-        # Foca no nome pra o operador digitar direto
-        edit = self.tabela.cellWidget(self.tabela.rowCount() - 1, 2)
+        edit = self._obter_widget(self.tabela.rowCount() - 1, 2)
         if edit:
             edit.setFocus()
         self._atualizar_status()
@@ -202,11 +231,11 @@ class DeParaDialog(QDialog):
             empresas[chave] = {"descricao": desc_original, "filiais": []}
 
         for l in range(self.tabela.rowCount()):
-            emp: str = self.tabela.cellWidget(l, 0).currentText()  # type: ignore
-            cod: int = int(self.tabela.cellWidget(l, 1).value())  # type: ignore
-            nome: str = self.tabela.cellWidget(l, 2).text().strip()  # type: ignore
-            tipo: str = self.tabela.cellWidget(l, 3).currentText()  # type: ignore
-            aliases_txt: str = self.tabela.cellWidget(l, 4).text()  # type: ignore
+            emp: str = self._obter_widget(l, 0).currentText()  # type: ignore
+            cod: int = int(self._obter_widget(l, 1).value())  # type: ignore
+            nome: str = self._obter_widget(l, 2).text().strip()  # type: ignore
+            tipo: str = self._obter_widget(l, 3).currentText()  # type: ignore
+            aliases_txt: str = self._obter_widget(l, 4).text()  # type: ignore
             aliases = [a.strip() for a in aliases_txt.split(",") if a.strip()]
 
             if not nome:

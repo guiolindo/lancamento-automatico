@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-43 (Gemini infere abreviações globalmente, não só lookup)"
+BUILD_MARKER = "build-44 (branding Econômart + De-Para sem overlap)"
 
 
 def main() -> int:
@@ -68,6 +68,19 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Lançamento Automático TOTVS")
     app.setOrganizationName("Multicom")
+    # Ícone: barra de título, taskbar, alt-tab
+    try:
+        from PySide6.QtGui import QIcon
+        for cand in (
+            Path(__file__).resolve().parent / "assets" / "branding" / "logo_simbolo.png",
+            Path(sys.executable).resolve().parent / "src" / "assets" / "branding" / "logo_simbolo.png",
+            Path(sys.executable).resolve().parent / "assets" / "branding" / "logo_simbolo.png",
+        ):
+            if cand.exists():
+                app.setWindowIcon(QIcon(str(cand)))
+                break
+    except Exception:  # noqa: BLE001
+        pass
 
     try:
         _boot_trace("carregando SettingsStore")

@@ -38,8 +38,11 @@ QMainWindow, QDialog {{
 #SidebarBrand {{
     color: {COLORS["text"]};
     font-size: 18px;
-    font-weight: 600;
-    padding: 24px 20px 4px 20px;
+    font-weight: 700;
+    padding: 4px 20px 2px 20px;
+}}
+#SidebarLogo {{
+    padding: 0;
 }}
 #SidebarSubtitle {{
     color: {COLORS["text_muted"]};
