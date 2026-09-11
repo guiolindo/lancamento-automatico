@@ -84,23 +84,13 @@ class MainWindow(QMainWindow):
         v.setContentsMargins(0, 0, 0, 20)
         v.setSpacing(0)
 
-        # Cabeçalho da sidebar: símbolo + wordmark textual (o wordmark PNG
-        # tem texto azul-escuro, ficaria invisível no dark).
-        logo_path = self._buscar_asset("branding/logo_simbolo.png")
-        if logo_path:
-            from PySide6.QtGui import QPixmap
-            logo = QLabel()
-            logo.setObjectName("SidebarLogo")
-            pm = QPixmap(str(logo_path))
-            logo.setPixmap(pm.scaledToWidth(56, Qt.SmoothTransformation))
-            logo.setContentsMargins(24, 24, 24, 4)
-            v.addWidget(logo)
-
-        brand = QLabel("Econômart")
+        # Nome do app é genérico — é uma ferramenta de automação TOTVS,
+        # não um produto de nenhuma empresa específica.
+        brand = QLabel("Lançamento Automático")
         brand.setObjectName("SidebarBrand")
         v.addWidget(brand)
 
-        sub = QLabel("LANÇAMENTO AUTOMÁTICO · TOTVS")
+        sub = QLabel("TOTVS · CONSINCO")
         sub.setObjectName("SidebarSubtitle")
         v.addWidget(sub)
 
