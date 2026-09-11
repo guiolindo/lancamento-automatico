@@ -34,12 +34,27 @@ PROMPT_TEMPLATE = """Você é um extrator estruturado de dados de relatórios fi
 
 Extraia do documento em anexo TODAS as linhas de filiais e seus valores por tipo de folha.
 
-Regras:
+## CATÁLOGO DE FILIAIS (nome canônico ← sinônimos aceitos)
+
+Cada relatório vem de um setor diferente e usa abreviações/apelidos próprios
+para as filiais. Use este catálogo para normalizar: se o documento mostrar
+uma abreviação (ex.: "CTG", "L VERDE", "SAJ", "CD 040"), retorne o
+NOME CANÔNICO correspondente na chave "filial_documento", NÃO o texto bruto.
+
+{catalogo}
+
+Regras adicionais para o casamento:
+- Match é case-insensitive e ignora acentos.
+- Ignore prefixos como "MULTICOM ATACADO E VAREJO S/A -".
+- Se nenhum item do catálogo bater, aí sim devolva o texto exato do documento
+  (o app tenta um fuzzy match depois).
+
+## REGRAS GERAIS
+
 - Ignore linhas de totalização geral (ex.: "TOTAL GERAL").
 - Ignore marcações manuscritas (√, X, riscos, canetadas). Elas NÃO indicam pular linha — extraia sempre tudo.
 - Os valores estão em Real brasileiro (formato "R$ 1.234,56"). Retorne SEMPRE como número (float) sem separador de milhar e com ponto decimal. Ex.: "R$ 45.527,93" -> 45527.93.
 - Uma célula vazia deve virar 0 (zero) ou ser omitida do objeto "valores".
-- Preserve o nome da filial EXATAMENTE como está escrito no documento (mesmo com "MULTICOM ATACADO E VAREJO S/A -" no início).
 - Identifique o mês e ano de referência do imposto (ex.: "IRRF 07/2026" → mes_ref="07", ano_ref="2026").
 - As colunas esperadas são exatamente: {colunas}. Use esses nomes como chaves em "valores".
 
@@ -51,7 +66,7 @@ Retorne APENAS um JSON válido nesta estrutura, sem markdown, sem comentários:
   "ano_ref": "AAAA",
   "linhas": [
     {{
-      "filial_documento": "nome exato da filial no documento",
+      "filial_documento": "NOME CANÔNICO do catálogo, ou texto do documento se não bater",
       "valores": {{
         "ADIANTAMENTO": 45527.93,
         "FERIAS": 307.34,
@@ -64,6 +79,17 @@ Retorne APENAS um JSON válido nesta estrutura, sem markdown, sem comentários:
 """
 
 
+def _construir_catalogo(mapping: MappingRepository) -> str:
+    """Monta o texto do catálogo pra injetar no prompt.
+    Formato: '- Nome Canônico (código NNN) ← alias1, alias2, ...'"""
+    linhas = []
+    for filial in mapping.filiais:
+        aliases = [a for a in filial.aliases if a.upper().strip() != filial.nome.upper().strip()]
+        sinonimos = ", ".join(aliases) if aliases else "—"
+        linhas.append(f"- {filial.nome} (código {filial.codigo}) ← {sinonimos}")
+    return "\n".join(linhas) if linhas else "(catálogo vazio)"
+
+
 class GeminiClient:
     def __init__(self, api_key: str, model: str = "gemini-2.5-flash-lite"):
         if not api_key:
@@ -73,7 +99,7 @@ class GeminiClient:
         self._model_name = model
         log.info("GeminiClient: pronto")
 
-    def extrair(self, arquivo: Path, imposto: Imposto) -> dict:
+    def extrair(self, arquivo: Path, imposto: Imposto, mapping: MappingRepository) -> dict:
         arquivo = Path(arquivo)
         if not arquivo.exists():
             raise FileNotFoundError(arquivo)
@@ -81,6 +107,7 @@ class GeminiClient:
         prompt = PROMPT_TEMPLATE.format(
             colunas=", ".join(imposto.colunas_tipo_folha),
             imposto_chave=imposto.chave,
+            catalogo=_construir_catalogo(mapping),
         )
 
         log.info("extrair: lendo arquivo %s", arquivo.name)
