@@ -8,6 +8,13 @@ rapidfuzz==3.9.6
 pydantic==2.8.2
 keyring==25.2.1
 python-dateutil==2.9.0
+# Visão computacional pra auto-detectar posições dos campos do TOTVS
+# (elimina calibração manual). Versão headless: sem GUI, ~40MB no bundle,
+# suficiente pra matchTemplate + resize.
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+mss==9.0.2
+pygetwindow==0.0.9
 
 # Deps transitivas fixadas em versões conhecidamente compatíveis com Nuitka 2.4.
 # certifi >=2024.8 quebra no Nuitka 2.4 por causa de importlib.resources.files();

@@ -287,7 +287,11 @@ class MainWindow(QMainWindow):
 
         rodape.addStretch(1)
 
-        self._btn_calibrar = QPushButton("Calibrar TOTVS")
+        self._btn_calibrar = QPushButton("Recalibrar (opcional)")
+        self._btn_calibrar.setToolTip(
+            "O app detecta as posições automaticamente por visão computacional. "
+            "Use isso só se o auto-detect falhar (versão nova do TOTVS, layout muito diferente)."
+        )
         self._btn_calibrar.clicked.connect(self._abrir_calibracao)
         rodape.addWidget(self._btn_calibrar)
 
@@ -351,12 +355,11 @@ class MainWindow(QMainWindow):
 
     def _atualizar_status_calibracao(self) -> None:
         if self._calibracao.esta_completa():
-            self._lbl_status_calib.setText("● TOTVS calibrado")
+            self._lbl_status_calib.setText("● Calibração manual salva")
             self._lbl_status_calib.setStyleSheet("color:#22C55E; font-size:11px;")
         else:
-            faltam = len(self._calibracao.falta_calibrar())
-            self._lbl_status_calib.setText(f"● {faltam} campo(s) por calibrar")
-            self._lbl_status_calib.setStyleSheet("color:#D97706; font-size:11px;")
+            self._lbl_status_calib.setText("● Detecção automática (visão)")
+            self._lbl_status_calib.setStyleSheet("color:#3B82F6; font-size:11px;")
 
     # ---------------- Ações ----------------
 
@@ -480,15 +483,9 @@ class MainWindow(QMainWindow):
     def _executar(self) -> None:
         if not self._lancamentos:
             return
-        if not self._calibracao.esta_completa():
-            faltam = self._calibracao.falta_calibrar()
-            QMessageBox.warning(
-                self, "Calibração faltando",
-                "Antes de executar no TOTVS é preciso calibrar as posições dos "
-                "campos. Clique em 'Calibrar TOTVS'.\n\n"
-                f"Faltam: {', '.join(faltam)}",
-            )
-            return
+        # Não bloqueia mais por calibração incompleta — o worker tenta visão
+        # computacional primeiro (auto-detect). Só cai na calibração manual
+        # se a visão falhar E o operador não tiver calibrado nada antes.
         resp = QMessageBox.question(
             self, "Confirmar execução",
             f"{len(self._lancamentos)} lançamentos serão lançados no TOTVS.\n\n"

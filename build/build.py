@@ -96,6 +96,9 @@ def run() -> int:
         f"--output-filename={NOME}.exe",
         # Empacota o mapeamento.json dentro da pasta standalone.
         f"--include-data-files={SRC / 'config' / 'mapeamento.json'}=config/mapeamento.json",
+        # Templates de referência da tela do TOTVS (visão computacional
+        # auto-detecta posições sem calibração manual).
+        f"--include-data-dir={SRC / 'assets' / 'totvs_reference'}=src/assets/totvs_reference",
         # Nosso pacote — o launcher só faz import dinâmico dele.
         "--include-package=src",
         # Libs com imports dinâmicos.
@@ -108,6 +111,10 @@ def run() -> int:
         "--include-package=idna",
         "--include-package=urllib3",
         "--include-package=requests",
+        "--include-package=cv2",
+        "--include-package=numpy",
+        "--include-package=mss",
+        "--include-package=pygetwindow",
         # Data files (cacert.pem principalmente).
         "--include-package-data=certifi",
         "--include-package-data=pywinauto",
