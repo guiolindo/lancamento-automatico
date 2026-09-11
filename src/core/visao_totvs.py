@@ -32,17 +32,17 @@ from typing import Optional
 # Valores medidos a partir de src/assets/totvs_reference/child_ref.png,
 # onde o âncora está em (25, 5).
 CAMPOS_OFFSET_ANCHOR_CHILD: dict[str, tuple[int, int]] = {
-    "btn_confirmar":      (35, 40),
-    "empresa":            (80, 66),
-    "especie":            (440, 66),
-    "pessoa":             (80, 88),
+    "btn_confirmar":      (53, 43),
+    "empresa":            (75, 67),
+    "especie":            (452, 67),
+    "pessoa":             (77, 87),
     "observacao":         (175, 215),
-    "nro_documento":      (100, 251),
-    "dt_emissao":         (395, 251),
-    "valor":              (605, 251),
-    "dt_contabilizacao":  (125, 275),
-    "vencimento":         (305, 298),
-    "btn_gerar_parcelas": (550, 370),
+    "nro_documento":      (125, 251),
+    "dt_emissao":         (347, 251),
+    "valor":              (564, 251),
+    "dt_contabilizacao":  (112, 272),
+    "vencimento":         (413, 297),
+    "btn_gerar_parcelas": (588, 363),
 }
 
 # Popup 'Atenção' — offsets do TOP-LEFT do âncora 'Atenção'.
@@ -255,5 +255,18 @@ def preencher_calibracao_automatica(calibracao) -> tuple[bool, str]:
                                          int(p.popup_ok[1] - win.top))
         calibracao.campos["popup_indicador"] = (int(p.popup_indicador[0] - win.left),
                                                 int(p.popup_indicador[1] - win.top))
+
+    # Log detalhado (útil pra diagnosticar clicks fora)
+    from .logger import log
+    log.info("=" * 60)
+    log.info("VISÃO: janela '%s' em (%d,%d) %dx%d",
+             win.title, win.left, win.top, win.width, win.height)
+    log.info("VISÃO: âncora 'Inclusão de Títulos' em (%d,%d), escala %.2f, confiança %.0f%%",
+             r.origem_child[0], r.origem_child[1],
+             1.0, r.confianca_child * 100)
+    for k, (rx, ry) in sorted(calibracao.campos.items()):
+        log.info("VISÃO: %-20s offset janela (%4d,%4d)  -> tela abs (%4d,%4d)",
+                 k, rx, ry, win.left + rx, win.top + ry)
+    log.info("=" * 60)
 
     return True, f"Visão OK — confiança {r.confianca_child:.0%}, {len(r.campos)} campos."
