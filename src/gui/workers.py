@@ -129,6 +129,17 @@ class LoteWorker(QObject):
                 return
             self._emit_e_log(">> Modulo rpa_totvs importado")
 
+            # Auto-detecção via visão computacional. Se der certo, preenche
+            # calibracao.campos sem exigir calibração manual do operador.
+            try:
+                from ..core.visao_totvs import preencher_calibracao_automatica
+                ok_visao, msg_visao = preencher_calibracao_automatica(self.calibracao)
+                self._emit_e_log(f"[visão] {msg_visao}")
+                if not ok_visao:
+                    self._emit_e_log("[visão] fallback pra calibração manual salva")
+            except BaseException as e:  # noqa: BLE001
+                self._emit_e_log(f"[visão] módulo indisponível ({e}) — usando calibração manual")
+
             try:
                 rpa = RpaTotvs(
                     self.settings,

@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-35 (redesign layout — KPIs no topo, tabela dominante, toolbar de parâmetros)"
+BUILD_MARKER = "build-36 (visão automática — sem calibração manual)"
 
 
 def main() -> int:
