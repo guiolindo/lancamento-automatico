@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-45 (nome genérico do app, ícone Econômart preservado)"
+BUILD_MARKER = "build-46 (correção: é Economart, sem acento)"
 
 
 def main() -> int:
