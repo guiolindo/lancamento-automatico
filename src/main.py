@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-50 (auto-update diferido opção D)"
+BUILD_MARKER = "build-51 (workflow permissions: contents write pra release)"
 
 
 def main() -> int:

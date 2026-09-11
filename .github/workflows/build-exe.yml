@@ -6,6 +6,12 @@ on:
     tags: ['v*']
   workflow_dispatch: {}
 
+# Precisa 'contents: write' pra o softprops/action-gh-release conseguir
+# criar/atualizar a rolling release em push a main. Sem isso: HTTP 403
+# 'Resource not accessible by integration'.
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
