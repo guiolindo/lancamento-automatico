@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-49 (fix crítico: END falso positivo no watcher)"
+BUILD_MARKER = "build-50 (auto-update diferido opção D)"
 
 
 def main() -> int:

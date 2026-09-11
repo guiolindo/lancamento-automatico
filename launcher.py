@@ -102,10 +102,104 @@ def _show_error_dialog(msg: str) -> None:
         pass
 
 
-# ---------- 4. Boot com tracing ----------
+# ---------- 4. Aplicar update pendente (Opção D) ----------
+def _aplicar_pendente() -> bool:
+    """Se existe <install>/_next/READY, copia arquivos por cima do install
+    atual. Chamado ANTES de importar src.main — assim o próximo boot já
+    roda a versão nova. Devolve True se aplicou algo."""
+    import shutil
+    import json as _json
+    install = _exe_dir()
+    next_dir = install / "_next"
+    marker = next_dir / "READY"
+    if not marker.exists():
+        # Se tem _next incompleto (sem READY), limpa
+        if next_dir.exists():
+            shutil.rmtree(next_dir, ignore_errors=True)
+        return False
+
+    _boot_trace(f"update pendente detectado em {next_dir}")
+    try:
+        info = _json.loads(marker.read_text(encoding="utf-8"))
+        _boot_trace(f"update: build {info.get('build_marker')}")
+    except Exception:  # noqa: BLE001
+        pass
+
+    # No Windows dá pra RENOMEAR o .exe rodando (mas não apagar). Usamos
+    # isso pra swap: renomeia atual .exe pra .old, copia o novo no lugar.
+    exe_atual = Path(sys.argv[0]).resolve()
+    exe_nome = exe_atual.name
+    exe_novo = next_dir / exe_nome
+
+    # Limpa .old de updates anteriores
+    for f in install.glob("*.old"):
+        try:
+            f.unlink()
+        except OSError:
+            pass  # ainda locked, tenta no próximo boot
+
+    if exe_novo.exists() and exe_novo.stat().st_size > 0:
+        try:
+            # Renomeia self, sem problema no Windows
+            old_path = exe_atual.with_suffix(exe_atual.suffix + ".old")
+            if old_path.exists():
+                try:
+                    old_path.unlink()
+                except OSError:
+                    pass
+            exe_atual.rename(old_path)
+            shutil.copy2(exe_novo, exe_atual)
+            _boot_trace(f"exe substituído: {exe_atual}")
+        except OSError as e:
+            _boot_trace(f"FALHA ao swap exe: {e}")
+            # Não bloqueia — segue e tenta copiar os outros arquivos
+
+    # Copia todos os outros arquivos por cima
+    aplicados = 0
+    falhas = 0
+    for src in next_dir.rglob("*"):
+        if src.is_dir():
+            continue
+        if src.name == "READY":
+            continue
+        rel = src.relative_to(next_dir)
+        if rel.name == exe_nome:
+            continue  # já foi feito acima
+        dst = install / rel
+        try:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            aplicados += 1
+        except OSError:
+            falhas += 1
+
+    _boot_trace(f"update aplicado: {aplicados} arquivos, {falhas} falhas")
+
+    # Limpa _next SÓ se não houve falhas — assim próximo boot re-tenta
+    if falhas == 0:
+        shutil.rmtree(next_dir, ignore_errors=True)
+    else:
+        # Remove pelo menos o READY pra não ficar re-aplicando em loop
+        try:
+            marker.unlink()
+        except OSError:
+            pass
+
+    return True
+
+
+# ---------- 5. Boot com tracing ----------
 def main() -> int:
     _boot_trace("launcher: início")
     try:
+        _boot_trace("verificando update pendente")
+        try:
+            aplicou = _aplicar_pendente()
+            if aplicou:
+                _boot_trace("update pendente aplicado")
+        except Exception as e:  # noqa: BLE001
+            _boot_trace(f"aviso: erro aplicando update pendente: {e}")
+
         _boot_trace("importando src.main")
         from src.main import main as run
         _boot_trace("src.main importado com sucesso")

@@ -22,6 +22,7 @@ from .depara_dialog import DeParaDialog
 from .preview_table import PreviewTable
 from .setup_dialog import SetupDialog
 from .theme import qss
+from .updater_bar import UpdaterBar
 from .workers import ExtracaoWorker, LoteWorker
 
 
@@ -152,6 +153,11 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
+        # Barra de atualização (escondida por padrão, aparece no topo
+        # quando o operador clica Atualizar)
+        self._updater_bar = UpdaterBar()
+        lay.addWidget(self._updater_bar)
+
         lay.addWidget(self._montar_topbar())
         lay.addWidget(self._montar_content(), 1)
 
@@ -185,6 +191,13 @@ class MainWindow(QMainWindow):
         self._lbl_status_calib_top.setProperty("muted", True)
         h.addWidget(self._lbl_status_calib_top)
         self._atualizar_status_calibracao()
+
+        self._btn_atualizar = QPushButton("Atualizar")
+        self._btn_atualizar.setProperty("ghost", True)
+        self._btn_atualizar.setToolTip("Verificar se há uma versão nova no GitHub")
+        self._btn_atualizar.setCursor(Qt.PointingHandCursor)
+        self._btn_atualizar.clicked.connect(self._verificar_atualizacao)
+        h.addWidget(self._btn_atualizar)
 
         return bar
 
@@ -701,3 +714,49 @@ class MainWindow(QMainWindow):
     def _log_line(self, msg: str) -> None:
         self._log.appendPlainText(f"[{datetime.now():%H:%M:%S}] {msg}")
         log.info(msg)
+
+    # ---------------- Atualizador ----------------
+
+    def _verificar_atualizacao(self) -> None:
+        """Consulta GitHub e oferece baixar se tem versão nova."""
+        from ..core import updater
+        from ..main import BUILD_MARKER
+        self._btn_atualizar.setEnabled(False)
+        self._btn_atualizar.setText("Verificando…")
+        # Feito no main thread mesmo — request rápido (15s timeout)
+        try:
+            info = updater.check(BUILD_MARKER)
+        finally:
+            self._btn_atualizar.setEnabled(True)
+            self._btn_atualizar.setText("Atualizar")
+
+        if info is None:
+            QMessageBox.information(
+                self, "Atualização",
+                "Não consegui consultar o GitHub agora — pode ser conexão ou "
+                "ainda não tem release publicada.",
+            )
+            return
+        if not info.tem_atualizacao:
+            QMessageBox.information(
+                self, "Atualização",
+                f"Você já tá na versão mais recente.\n\nLocal: {info.build_marker_local}",
+            )
+            return
+
+        # Tem update
+        tam_mb = info.asset_tamanho / (1024 * 1024)
+        resp = QMessageBox.question(
+            self, "Nova versão disponível",
+            f"Versão nova encontrada:\n\n"
+            f"Atual:  {info.build_marker_local}\n"
+            f"Nova:   {info.build_marker_remoto}\n\n"
+            f"Tamanho do download: {tam_mb:.1f} MB\n\n"
+            "O app vai baixar em segundo plano e aplicar na PRÓXIMA vez que "
+            "você abrir. Você pode continuar usando normalmente.\n\n"
+            "Baixar agora?",
+        )
+        if resp != QMessageBox.Yes:
+            return
+        self._log_line(f"→ Baixando atualização {info.build_marker_remoto}…")
+        self._updater_bar.iniciar(info)
