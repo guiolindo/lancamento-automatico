@@ -3,8 +3,7 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QSize, Qt, QThread
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import QDate, Qt, QThread
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDateEdit, QFileDialog, QFrame, QHBoxLayout, QLabel,
     QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
@@ -37,8 +36,8 @@ class MainWindow(QMainWindow):
         self.mapping = mapping
         self.mapping_path = mapping_path
         self.setWindowTitle("Lançamento Automático — TOTVS")
-        self.resize(1200, 780)
-        self.setMinimumSize(1000, 640)
+        self.resize(1280, 820)
+        self.setMinimumSize(1080, 680)
         self.setStyleSheet(QSS)
 
         self._thread: QThread | None = None
@@ -66,7 +65,7 @@ class MainWindow(QMainWindow):
     def _montar_sidebar(self) -> QWidget:
         side = QFrame()
         side.setObjectName("Sidebar")
-        side.setFixedWidth(220)
+        side.setFixedWidth(224)
         v = QVBoxLayout(side)
         v.setContentsMargins(0, 0, 0, 20)
         v.setSpacing(0)
@@ -87,10 +86,20 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(lambda _=False, k=key: self._trocar_secao(k))
             self._nav_buttons[key] = btn
             v.addWidget(btn)
+        # marca primeiro como ativo
+        self._nav_buttons["dashboard"].setProperty("active", True)
 
         v.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        rodape = QLabel("v0.1.0")
+        # Status calibração
+        self._lbl_status_calib = QLabel()
+        self._lbl_status_calib.setProperty("muted", True)
+        self._lbl_status_calib.setContentsMargins(20, 8, 20, 4)
+        self._lbl_status_calib.setWordWrap(True)
+        v.addWidget(self._lbl_status_calib)
+        self._atualizar_status_calibracao()
+
+        rodape = QLabel("v0.1.0  ·  build 35")
         rodape.setProperty("muted", True)
         rodape.setContentsMargins(20, 0, 20, 0)
         v.addWidget(rodape)
@@ -101,152 +110,212 @@ class MainWindow(QMainWindow):
         wrap = QFrame()
         wrap.setObjectName("Content")
         v = QVBoxLayout(wrap)
-        v.setContentsMargins(32, 28, 32, 24)
-        v.setSpacing(20)
+        v.setContentsMargins(28, 24, 28, 20)
+        v.setSpacing(16)
 
-        titulo = QLabel("Novo lote de lançamentos")
-        titulo.setProperty("h1", True)
-        v.addWidget(titulo)
+        # ---- Header: título + KPIs
+        v.addLayout(self._header_kpis())
 
-        subtitulo = QLabel("Envie o resumo do imposto, revise os lançamentos gerados e execute no TOTVS.")
-        subtitulo.setProperty("muted", True)
-        v.addWidget(subtitulo)
+        # ---- Barra fina de parâmetros
+        v.addWidget(self._toolbar_parametros())
 
-        v.addWidget(self._card_parametros())
+        # ---- Tabela dominante (stretch=1)
         v.addWidget(self._card_preview(), 1)
+
+        # ---- Log rodapé compacto
         v.addWidget(self._card_log())
 
         return wrap
 
-    def _card_parametros(self) -> QFrame:
+    # ---------------- Header + KPIs ----------------
+
+    def _header_kpis(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(16)
+
+        col = QVBoxLayout()
+        col.setSpacing(2)
+        titulo = QLabel("Novo lote de lançamentos")
+        titulo.setProperty("h1", True)
+        col.addWidget(titulo)
+        sub = QLabel("Envie o resumo do imposto, revise os lançamentos gerados e execute no TOTVS.")
+        sub.setProperty("muted", True)
+        col.addWidget(sub)
+        row.addLayout(col, 1)
+
+        self._kpi_qtd, kpi_qtd_card = self._kpi_card("Lançamentos", "0")
+        self._kpi_valor, kpi_valor_card = self._kpi_card("Valor total (R$)", "0,00")
+        row.addWidget(kpi_qtd_card)
+        row.addWidget(kpi_valor_card)
+        return row
+
+    def _kpi_card(self, rotulo: str, valor: str) -> tuple[QLabel, QFrame]:
         card = QFrame()
-        card.setProperty("card", True)
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(14)
+        card.setProperty("kpi", True)
+        card.setMinimumWidth(180)
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(18, 12, 18, 12)
+        lay.setSpacing(2)
+        lb_rot = QLabel(rotulo)
+        lb_rot.setProperty("muted", True)
+        lay.addWidget(lb_rot)
+        lb_val = QLabel(valor)
+        lb_val.setProperty("kpiValue", True)
+        lay.addWidget(lb_val)
+        return lb_val, card
 
-        titulo = QLabel("1. Documento e parâmetros")
-        titulo.setProperty("h2", True)
-        layout.addWidget(titulo)
+    # ---------------- Toolbar parâmetros ----------------
 
-        linha = QHBoxLayout()
-        linha.setSpacing(12)
+    def _toolbar_parametros(self) -> QFrame:
+        bar = QFrame()
+        bar.setProperty("toolbar", True)
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(16, 12, 16, 12)
+        row.setSpacing(14)
 
-        # imposto
-        col_imp = QVBoxLayout()
-        col_imp.addWidget(self._label_campo("Imposto"))
+        # Imposto
+        row.addWidget(self._campo_inline("Imposto"))
         self._combo_imposto = QComboBox()
-        for chave in ("IRRF",):
-            self._combo_imposto.addItem(chave)
-        col_imp.addWidget(self._combo_imposto)
-        linha.addLayout(col_imp)
+        self._combo_imposto.addItem("IRRF")
+        self._combo_imposto.setFixedWidth(120)
+        row.addWidget(self._combo_imposto)
 
-        # data
-        col_data = QVBoxLayout()
-        col_data.addWidget(self._label_campo("Data de emissão / vencimento"))
+        row.addWidget(self._divisor_vertical())
+
+        # Data
+        row.addWidget(self._campo_inline("Data"))
         self._date_emissao = QDateEdit(QDate.currentDate())
         self._date_emissao.setDisplayFormat("dd/MM/yyyy")
         self._date_emissao.setCalendarPopup(True)
-        col_data.addWidget(self._date_emissao)
-        linha.addLayout(col_data)
+        self._date_emissao.setFixedWidth(140)
+        row.addWidget(self._date_emissao)
 
-        # arquivo
-        col_arq = QVBoxLayout()
-        col_arq.addWidget(self._label_campo("Documento (PDF ou imagem)"))
-        arq_row = QHBoxLayout()
+        row.addWidget(self._divisor_vertical())
+
+        # Arquivo
+        row.addWidget(self._campo_inline("Documento"))
         self._label_arquivo = QLabel("Nenhum arquivo selecionado")
         self._label_arquivo.setProperty("muted", True)
-        arq_row.addWidget(self._label_arquivo, 1)
+        self._label_arquivo.setMinimumWidth(200)
+        row.addWidget(self._label_arquivo, 1)
         btn_pick = QPushButton("Selecionar…")
         btn_pick.clicked.connect(self._selecionar_arquivo)
-        arq_row.addWidget(btn_pick)
-        col_arq.addLayout(arq_row)
-        linha.addLayout(col_arq, 1)
+        row.addWidget(btn_pick)
 
-        layout.addLayout(linha)
-
-        acoes = QHBoxLayout()
-        acoes.addStretch(1)
+        # Extrair (primário à direita)
         self._btn_extrair = QPushButton("Extrair com Gemini")
         self._btn_extrair.setProperty("primary", True)
         self._btn_extrair.clicked.connect(self._extrair)
-        acoes.addWidget(self._btn_extrair)
-        layout.addLayout(acoes)
+        row.addWidget(self._btn_extrair)
 
-        return card
+        return bar
+
+    def _campo_inline(self, texto: str) -> QLabel:
+        lb = QLabel(texto)
+        lb.setProperty("muted", True)
+        lb.setProperty("inlineLabel", True)
+        return lb
+
+    def _divisor_vertical(self) -> QFrame:
+        div = QFrame()
+        div.setObjectName("Divisor")
+        div.setFixedSize(1, 24)
+        return div
+
+    # ---------------- Preview (a tabela) ----------------
 
     def _card_preview(self) -> QFrame:
         card = QFrame()
         card.setProperty("card", True)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(12)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
+        # cabeçalho interno
         cab = QHBoxLayout()
-        titulo = QLabel("2. Revisão dos lançamentos")
+        cab.setContentsMargins(20, 14, 20, 12)
+        cab.setSpacing(10)
+        titulo = QLabel("Revisão dos lançamentos")
         titulo.setProperty("h2", True)
         cab.addWidget(titulo)
+
+        self._label_status_revisao = QLabel("Aguardando extração")
+        self._label_status_revisao.setProperty("badge", "pendente")
+        cab.addWidget(self._label_status_revisao)
+
         cab.addStretch(1)
 
-        self._label_resumo = QLabel("—")
-        self._label_resumo.setProperty("muted", True)
-        cab.addWidget(self._label_resumo)
-        layout.addLayout(cab)
-
-        self._tabela = PreviewTable()
-        layout.addWidget(self._tabela, 1)
-
-        self._progress = QProgressBar()
-        self._progress.setVisible(False)
-        layout.addWidget(self._progress)
-
-        acoes = QHBoxLayout()
-
         self._chk_confirmar_auto = QCheckBox(
-            "Confirmar automaticamente (o robô aperta o + ao final de cada lançamento)"
+            "Confirmar '+' automaticamente"
         )
         confirmar_padrao = bool(self.settings.get("rpa.confirmar_automaticamente", True))
         self._chk_confirmar_auto.setChecked(confirmar_padrao)
         self._chk_confirmar_auto.stateChanged.connect(self._on_toggle_confirmar_auto)
-        acoes.addWidget(self._chk_confirmar_auto)
+        cab.addWidget(self._chk_confirmar_auto)
 
-        self._chk_apenas_primeiro = QCheckBox(
-            "Testar só o primeiro lançamento"
-        )
+        self._chk_apenas_primeiro = QCheckBox("Testar só o 1º")
         self._chk_apenas_primeiro.setChecked(True)
         self._chk_apenas_primeiro.setToolTip(
-            "Executa apenas o primeiro lançamento da tabela, pra você ver "
-            "se a calibração e os delays estão certos antes de rodar o lote inteiro."
+            "Executa apenas o primeiro lançamento — ideal pra validar calibração."
         )
-        acoes.addWidget(self._chk_apenas_primeiro)
+        cab.addWidget(self._chk_apenas_primeiro)
 
-        acoes.addStretch(1)
+        layout.addLayout(cab)
+
+        # separador horizontal
+        sep = QFrame()
+        sep.setObjectName("DivisorH")
+        sep.setFixedHeight(1)
+        layout.addWidget(sep)
+
+        # tabela — coração do produto, ocupa tudo
+        self._tabela = PreviewTable()
+        self._tabela.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.addWidget(self._tabela, 1)
+
+        # rodapé de ações
+        rodape_wrap = QFrame()
+        rodape_wrap.setProperty("cardFooter", True)
+        rodape = QHBoxLayout(rodape_wrap)
+        rodape.setContentsMargins(20, 12, 20, 14)
+        rodape.setSpacing(10)
+
+        self._progress = QProgressBar()
+        self._progress.setVisible(False)
+        self._progress.setMinimumWidth(240)
+        rodape.addWidget(self._progress, 1)
+
+        rodape.addStretch(1)
 
         self._btn_calibrar = QPushButton("Calibrar TOTVS")
         self._btn_calibrar.clicked.connect(self._abrir_calibracao)
-        acoes.addWidget(self._btn_calibrar)
+        rodape.addWidget(self._btn_calibrar)
 
         self._btn_cancelar = QPushButton("Cancelar execução")
         self._btn_cancelar.setProperty("danger", True)
         self._btn_cancelar.setVisible(False)
         self._btn_cancelar.clicked.connect(self._cancelar)
-        acoes.addWidget(self._btn_cancelar)
+        rodape.addWidget(self._btn_cancelar)
 
-        self._btn_executar = QPushButton("Executar no TOTVS")
+        self._btn_executar = QPushButton("▶  Executar no TOTVS")
         self._btn_executar.setProperty("primary", True)
         self._btn_executar.setEnabled(False)
+        self._btn_executar.setMinimumWidth(200)
         self._btn_executar.clicked.connect(self._executar)
-        acoes.addWidget(self._btn_executar)
-        layout.addLayout(acoes)
+        rodape.addWidget(self._btn_executar)
 
+        layout.addWidget(rodape_wrap)
         return card
+
+    # ---------------- Log ----------------
 
     def _card_log(self) -> QFrame:
         card = QFrame()
         card.setProperty("card", True)
+        card.setFixedHeight(150)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 14, 20, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(20, 10, 20, 12)
+        layout.setSpacing(6)
 
         cab = QHBoxLayout()
         titulo = QLabel("Log")
@@ -261,15 +330,9 @@ class MainWindow(QMainWindow):
         self._log = QPlainTextEdit()
         self._log.setObjectName("LogConsole")
         self._log.setReadOnly(True)
-        self._log.setFixedHeight(140)
-        layout.addWidget(self._log)
+        layout.addWidget(self._log, 1)
 
         return card
-
-    def _label_campo(self, texto: str) -> QLabel:
-        lb = QLabel(texto)
-        lb.setProperty("muted", True)
-        return lb
 
     # ---------------- Setup ----------------
 
@@ -286,6 +349,15 @@ class MainWindow(QMainWindow):
         elif inicial:
             self._log_line("⚠ Sem chave configurada — extração ficará indisponível")
 
+    def _atualizar_status_calibracao(self) -> None:
+        if self._calibracao.esta_completa():
+            self._lbl_status_calib.setText("● TOTVS calibrado")
+            self._lbl_status_calib.setStyleSheet("color:#22C55E; font-size:11px;")
+        else:
+            faltam = len(self._calibracao.falta_calibrar())
+            self._lbl_status_calib.setText(f"● {faltam} campo(s) por calibrar")
+            self._lbl_status_calib.setStyleSheet("color:#D97706; font-size:11px;")
+
     # ---------------- Ações ----------------
 
     def _trocar_secao(self, chave: str) -> None:
@@ -299,7 +371,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self, "De-Para",
                 f"O de-para está em:\n{self.mapping_path}\n\n"
-                "Edite o arquivo JSON e use 'Recarregar' abaixo.",
+                "Edite o arquivo JSON e reabra o app.",
             )
 
     def _selecionar_arquivo(self) -> None:
@@ -315,6 +387,9 @@ class MainWindow(QMainWindow):
         self._arquivo_selecionado = p
         self.settings.set("ultima_pasta_upload", str(p.parent))
         self._label_arquivo.setText(p.name)
+        self._label_arquivo.setProperty("muted", False)
+        self._label_arquivo.style().unpolish(self._label_arquivo)
+        self._label_arquivo.style().polish(self._label_arquivo)
         self._log_line(f"→ Arquivo selecionado: {p.name}")
 
     def _imposto_atual(self) -> Imposto:
@@ -331,7 +406,7 @@ class MainWindow(QMainWindow):
             return
 
         self._btn_extrair.setEnabled(False)
-        self._label_resumo.setText("Extraindo…")
+        self._set_status_revisao("andamento", "Extraindo…")
 
         qd = self._date_emissao.date().toPython()
         emissao = date(qd.year, qd.month, qd.day)
@@ -339,7 +414,7 @@ class MainWindow(QMainWindow):
         worker = ExtracaoWorker(
             arquivo=self._arquivo_selecionado,
             api_key=api_key,
-            modelo=self.settings.get("gemini_model", "gemini-2.0-flash-exp"),
+            modelo=self.settings.get("gemini_model", "gemini-3.5-flash-lite"),
             imposto=self._imposto_atual(),
             mapping=self.mapping,
             data_emissao=emissao,
@@ -359,21 +434,31 @@ class MainWindow(QMainWindow):
         self._worker_extracao = worker
         thread.start()
 
+    def _set_status_revisao(self, badge: str, texto: str) -> None:
+        self._label_status_revisao.setProperty("badge", badge)
+        self._label_status_revisao.setText(texto)
+        self._label_status_revisao.style().unpolish(self._label_status_revisao)
+        self._label_status_revisao.style().polish(self._label_status_revisao)
+
+    def _formatar_moeda(self, valor: float) -> str:
+        return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
     def _on_extraido(self, lancamentos: list, nao_resolvidas: list) -> None:
         self._btn_extrair.setEnabled(True)
         self._lancamentos = lancamentos
         self._tabela.carregar(lancamentos)
-        total_valor = sum(l.valor for l in lancamentos)
-        valor_fmt = f"{total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        self._label_resumo.setText(
-            f"{len(lancamentos)} lançamentos · R$ {valor_fmt}"
-            + (f"  ·  ⚠ {len(nao_resolvidas)} não resolvidas" if nao_resolvidas else "")
-        )
+        total = sum(l.valor for l in lancamentos)
+        self._kpi_qtd.setText(str(len(lancamentos)))
+        self._kpi_valor.setText(self._formatar_moeda(total))
+        if nao_resolvidas:
+            self._set_status_revisao("falha", f"{len(nao_resolvidas)} filial(is) não resolvida(s)")
+        else:
+            self._set_status_revisao("sucesso", "Pronto para executar")
         self._btn_executar.setEnabled(bool(lancamentos))
 
     def _on_erro_extracao(self, msg: str) -> None:
         self._btn_extrair.setEnabled(True)
-        self._label_resumo.setText("Falha na extração")
+        self._set_status_revisao("falha", "Falha na extração")
         QMessageBox.critical(self, "Erro na extração", msg)
 
     def _abrir_calibracao(self) -> None:
@@ -385,11 +470,11 @@ class MainWindow(QMainWindow):
             self._log_line(
                 f"OK Calibração salva ({len(self._calibracao.campos)} campos)"
             )
+            self._atualizar_status_calibracao()
 
     def _set_topo(self, on: bool) -> None:
-        """DESABILITADO: setWindowFlags reparenta o handle nativo e parece
-        estar quebrando o QThread que é iniciado logo depois. O operador
-        alterna manualmente Alt+Tab entre app e TOTVS por enquanto."""
+        """DESABILITADO — setWindowFlags reparenta o handle nativo e quebra
+        o QThread que é iniciado logo depois."""
         pass
 
     def _executar(self) -> None:
@@ -420,11 +505,9 @@ class MainWindow(QMainWindow):
         self._btn_extrair.setEnabled(False)
         self._btn_cancelar.setVisible(True)
         self._progress.setVisible(True)
-        self._set_topo(True)  # no-op agora
-        self._log_line(">> INICIANDO EXECUCAO NO TOTVS (build 33) — END = emergencia")
+        self._set_status_revisao("andamento", "Executando…")
+        self._log_line(">> INICIANDO EXECUCAO NO TOTVS (build 35) — END = emergencia")
 
-        # Define lancamentos_exec ANTES do setMaximum. Bug antigo: usava
-        # lancamentos_exec antes de definir (NameError silencioso).
         lancamentos_exec = self._lancamentos
         if self._chk_apenas_primeiro.isChecked() and lancamentos_exec:
             lancamentos_exec = [lancamentos_exec[0]]
@@ -438,7 +521,6 @@ class MainWindow(QMainWindow):
 
         log.info("_executar: criando LoteWorker")
         worker = LoteWorker(lancamentos_exec, self.settings.data, self._calibracao)
-        log.info("_executar: conectando sinais")
         worker.log_line.connect(self._log_line)
         worker.progresso.connect(self._on_progresso)
         worker.lancamento_atualizado.connect(self._tabela.atualizar_linha)
@@ -446,9 +528,6 @@ class MainWindow(QMainWindow):
         worker.finished.connect(self._on_lote_finalizado)
         worker.error.connect(self._on_erro_lote)
 
-        log.info("_executar: criando QThread")
-        # QThread sem parent — parent=MainWindow pode gerar problema
-        # quando algum outro código toca em setWindowFlags/show do parent.
         thread = QThread()
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
@@ -459,9 +538,7 @@ class MainWindow(QMainWindow):
         thread.finished.connect(thread.deleteLater)
         self._thread = thread
         self._worker_lote = worker
-        log.info("_executar: chamando thread.start()")
         thread.start()
-        log.info("_executar: thread.start() retornou; se isRunning=%s", thread.isRunning())
 
     def _on_progresso(self, i: int, total: int, msg: str) -> None:
         self._progress.setValue(i + 1)
@@ -472,7 +549,10 @@ class MainWindow(QMainWindow):
         self._btn_extrair.setEnabled(True)
         self._btn_cancelar.setVisible(False)
         self._progress.setVisible(False)
-        self._set_topo(False)
+        if falhas == 0:
+            self._set_status_revisao("sucesso", f"{sucessos} lançados")
+        else:
+            self._set_status_revisao("falha", f"{sucessos} ok · {falhas} falha(s)")
         self._log_line(f"# Lote finalizado: {sucessos} sucessos, {falhas} falhas")
         QMessageBox.information(
             self, "Lote finalizado",
@@ -484,7 +564,7 @@ class MainWindow(QMainWindow):
         self._btn_extrair.setEnabled(True)
         self._btn_cancelar.setVisible(False)
         self._progress.setVisible(False)
-        self._set_topo(False)
+        self._set_status_revisao("falha", "Erro no lote")
         QMessageBox.critical(self, "Erro no lote", msg)
 
     def _cancelar(self) -> None:
@@ -502,7 +582,6 @@ class MainWindow(QMainWindow):
         )
 
     def _on_pedir_confirmacao_manual(self, index: int, resumo: str) -> None:
-        """Chamado quando o worker termina de preencher e espera o operador."""
         if not self._worker_lote:
             return
         box = QMessageBox(self)

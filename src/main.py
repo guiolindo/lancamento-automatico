@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-34 (redesign visual — paleta corporativa dark)"
+BUILD_MARKER = "build-35 (redesign layout — KPIs no topo, tabela dominante, toolbar de parâmetros)"
 
 
 def main() -> int:
