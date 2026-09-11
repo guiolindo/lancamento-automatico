@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
-from PySide6.QtCore import QDate, Qt, QThread
+from PySide6.QtCore import QDate, QSize, Qt, QThread
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDateEdit, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
-    QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
+    QCheckBox, QComboBox, QDateEdit, QFileDialog, QFrame, QGridLayout,
+    QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPlainTextEdit,
+    QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
+    QVBoxLayout, QWidget
 )
 
 from ..core import calibracao as calib_store
@@ -23,11 +25,18 @@ from .theme import qss
 from .workers import ExtracaoWorker, LoteWorker
 
 
+# Cada item de nav: (chave, ícone Unicode, tooltip)
 NAV_ITEMS = [
-    ("dashboard", "Lançamento"),
-    ("mapeamento", "De-Para"),
-    ("configuracoes", "Configurações"),
+    ("dashboard",     "📊", "Novo Lote"),
+    ("mapeamento",    "🏢", "Filiais (De-Para)"),
+    ("configuracoes", "⚙",  "Configurações"),
 ]
+
+NOME_SECAO = {
+    "dashboard":     "Novo Lote",
+    "mapeamento":    "Filiais (De-Para)",
+    "configuracoes": "Configurações",
+}
 
 
 class MainWindow(QMainWindow):
@@ -37,8 +46,8 @@ class MainWindow(QMainWindow):
         self.mapping = mapping
         self.mapping_path = mapping_path
         self.setWindowTitle("Lançamento Automático — TOTVS")
-        self.resize(1280, 820)
-        self.setMinimumSize(980, 640)
+        self.resize(1320, 840)
+        self.setMinimumSize(1040, 680)
         self._tema = self.settings.get("tema", "escuro") or "escuro"
         self.setStyleSheet(qss(self._tema))
 
@@ -48,24 +57,14 @@ class MainWindow(QMainWindow):
         self._arquivo_selecionado: Path | None = None
         self._lancamentos: list[Lancamento] = []
         self._calibracao = calib_store.carregar()
+        self._eventos: list[str] = []
 
         self._montar_ui()
         self._verificar_setup()
 
     # ---------------- UI ----------------
 
-    def _montar_ui(self) -> None:
-        central = QWidget()
-        self.setCentralWidget(central)
-        root = QHBoxLayout(central)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-
-        root.addWidget(self._montar_sidebar())
-        root.addWidget(self._montar_content(), 1)
-
     def _buscar_asset(self, relativo: str) -> Path | None:
-        """Encontra um asset em src/assets tanto em dev quanto em exe compilado."""
         import sys
         candidatos = [
             Path(__file__).resolve().parent.parent / "assets" / relativo,
@@ -77,69 +76,67 @@ class MainWindow(QMainWindow):
                 return c
         return None
 
+    def _montar_ui(self) -> None:
+        central = QWidget()
+        self.setCentralWidget(central)
+        root = QHBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        root.addWidget(self._montar_sidebar())
+        root.addWidget(self._montar_shell(), 1)
+
+    # -------- Sidebar fina (só ícones) --------
+
     def _montar_sidebar(self) -> QWidget:
         side = QFrame()
         side.setObjectName("Sidebar")
-        side.setFixedWidth(224)
+        side.setFixedWidth(64)
         v = QVBoxLayout(side)
-        v.setContentsMargins(0, 0, 0, 20)
+        v.setContentsMargins(0, 0, 0, 12)
         v.setSpacing(0)
 
-        # Nome do app é genérico — é uma ferramenta de automação TOTVS,
-        # não um produto de nenhuma empresa específica.
-        brand = QLabel("Lançamento Automático")
-        brand.setObjectName("SidebarBrand")
-        v.addWidget(brand)
+        # Logo Economart pequena no topo
+        logo_path = self._buscar_asset("branding/logo_simbolo.png")
+        if logo_path:
+            logo = QLabel()
+            logo.setObjectName("SidebarLogo")
+            pm = QPixmap(str(logo_path))
+            logo.setPixmap(pm.scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            logo.setAlignment(Qt.AlignCenter)
+            v.addWidget(logo)
 
-        sub = QLabel("TOTVS · CONSINCO")
-        sub.setObjectName("SidebarSubtitle")
-        v.addWidget(sub)
-
+        # Ícones de nav
         self._nav_buttons: dict[str, QPushButton] = {}
-        for key, label in NAV_ITEMS:
-            btn = QPushButton(label)
-            btn.setProperty("nav", True)
+        for key, icon, tip in NAV_ITEMS:
+            btn = QPushButton(icon)
+            btn.setProperty("navIcon", True)
+            btn.setToolTip(tip)
             btn.setCursor(Qt.PointingHandCursor)
             btn.clicked.connect(lambda _=False, k=key: self._trocar_secao(k))
             self._nav_buttons[key] = btn
             v.addWidget(btn)
-        # marca primeiro como ativo
+
         self._nav_buttons["dashboard"].setProperty("active", True)
+        v.addStretch(1)
 
-        v.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
-
-        # Status calibração
-        self._lbl_status_calib = QLabel()
-        self._lbl_status_calib.setProperty("muted", True)
-        self._lbl_status_calib.setContentsMargins(20, 8, 20, 4)
-        self._lbl_status_calib.setWordWrap(True)
-        v.addWidget(self._lbl_status_calib)
-        self._atualizar_status_calibracao()
-
-        # Botão de toggle de tema
-        toggle_wrap = QWidget()
-        toggle_lay = QHBoxLayout(toggle_wrap)
-        toggle_lay.setContentsMargins(20, 4, 20, 6)
+        # Toggle de tema pequeno no rodapé
         self._btn_tema = QPushButton()
-        self._btn_tema.setProperty("themetoggle", True)
+        self._btn_tema.setProperty("navIcon", True)
         self._btn_tema.setCursor(Qt.PointingHandCursor)
         self._btn_tema.clicked.connect(self._toggle_tema)
         self._atualizar_texto_tema()
-        toggle_lay.addWidget(self._btn_tema)
-        v.addWidget(toggle_wrap)
-
-        rodape = QLabel("v0.1.0  ·  build 47")
-        rodape.setProperty("muted", True)
-        rodape.setContentsMargins(20, 4, 20, 0)
-        v.addWidget(rodape)
+        v.addWidget(self._btn_tema)
 
         return side
 
     def _atualizar_texto_tema(self) -> None:
         if self._tema == "claro":
-            self._btn_tema.setText("🌙  Modo escuro")
+            self._btn_tema.setText("🌙")
+            self._btn_tema.setToolTip("Mudar pra modo escuro")
         else:
-            self._btn_tema.setText("☀  Modo claro")
+            self._btn_tema.setText("☀")
+            self._btn_tema.setToolTip("Mudar pra modo claro")
 
     def _toggle_tema(self) -> None:
         self._tema = "claro" if self._tema == "escuro" else "escuro"
@@ -147,80 +144,228 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(qss(self._tema))
         self._atualizar_texto_tema()
 
+    # -------- Shell: topbar + content --------
+
+    def _montar_shell(self) -> QWidget:
+        shell = QWidget()
+        lay = QVBoxLayout(shell)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        lay.addWidget(self._montar_topbar())
+        lay.addWidget(self._montar_content(), 1)
+
+        return shell
+
+    def _montar_topbar(self) -> QWidget:
+        bar = QFrame()
+        bar.setObjectName("Topbar")
+        bar.setFixedHeight(56)
+        h = QHBoxLayout(bar)
+        h.setContentsMargins(28, 0, 28, 0)
+        h.setSpacing(8)
+
+        # Breadcrumb: Home › Novo Lote
+        lb_home = QLabel("Início")
+        lb_home.setProperty("breadcrumb", True)
+        h.addWidget(lb_home)
+
+        lb_sep = QLabel("›")
+        lb_sep.setProperty("breadcrumb", True)
+        h.addWidget(lb_sep)
+
+        self._lb_secao = QLabel(NOME_SECAO["dashboard"])
+        self._lb_secao.setProperty("breadcrumbActive", True)
+        h.addWidget(self._lb_secao)
+
+        h.addStretch(1)
+
+        # Ações rápidas do topbar
+        self._lbl_status_calib_top = QLabel()
+        self._lbl_status_calib_top.setProperty("muted", True)
+        h.addWidget(self._lbl_status_calib_top)
+        self._atualizar_status_calibracao()
+
+        return bar
+
+    # -------- Content --------
+
     def _montar_content(self) -> QWidget:
         wrap = QFrame()
         wrap.setObjectName("Content")
         v = QVBoxLayout(wrap)
-        v.setContentsMargins(28, 24, 28, 20)
-        v.setSpacing(16)
+        v.setContentsMargins(28, 24, 28, 24)
+        v.setSpacing(20)
 
-        # ---- Header: título + KPIs
-        v.addLayout(self._header_kpis())
+        # Título de página
+        titulo_wrap = QVBoxLayout()
+        titulo_wrap.setSpacing(4)
+        kicker = QLabel("AUTOMAÇÃO FISCAL")
+        kicker.setProperty("sectionKicker", True)
+        titulo_wrap.addWidget(kicker)
+        titulo = QLabel("Novo lote de lançamentos")
+        titulo.setProperty("h1", True)
+        titulo_wrap.addWidget(titulo)
+        sub = QLabel("Extraia, revise e execute os lançamentos no TOTVS em um só fluxo.")
+        sub.setProperty("subtle", True)
+        titulo_wrap.addWidget(sub)
+        v.addLayout(titulo_wrap)
 
-        # ---- Barra fina de parâmetros
-        v.addWidget(self._toolbar_parametros())
+        # Grid de KPIs (4 cards)
+        v.addWidget(self._grid_kpis())
 
-        # ---- Tabela dominante (stretch=1)
-        v.addWidget(self._card_preview(), 1)
-
-        # ---- Log rodapé compacto
-        v.addWidget(self._card_log())
+        # Área principal em 2 colunas: Novo Lote (grande) + Atividade
+        col2 = QHBoxLayout()
+        col2.setSpacing(16)
+        col2.addWidget(self._card_novo_lote(), 3)
+        col2.addWidget(self._card_atividade(), 1)
+        v.addLayout(col2, 1)
 
         return wrap
 
-    # ---------------- Header + KPIs ----------------
+    # -------- KPIs --------
 
-    def _header_kpis(self) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setSpacing(16)
+    def _grid_kpis(self) -> QWidget:
+        wrap = QWidget()
+        grid = QGridLayout(wrap)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(14)
 
-        col = QVBoxLayout()
-        col.setSpacing(2)
-        titulo = QLabel("Novo lote de lançamentos")
-        titulo.setProperty("h1", True)
-        col.addWidget(titulo)
-        sub = QLabel("Envie o resumo do imposto, revise os lançamentos gerados e execute no TOTVS.")
-        sub.setProperty("muted", True)
-        col.addWidget(sub)
-        row.addLayout(col, 1)
+        self._kpi_qtd, k1 = self._kpi_card("Lançamentos", "0", "Preparados nesta sessão", highlight=True)
+        self._kpi_valor, k2 = self._kpi_card("Valor total", "R$ 0,00", "Soma do lote atual")
+        self._kpi_calibr, k3 = self._kpi_card("Detecção", "Visão auto", "Sem calibração manual")
+        self._kpi_ultima, k4 = self._kpi_card("Última execução", "—", "Aguardando primeiro lote")
 
-        self._kpi_qtd, kpi_qtd_card = self._kpi_card("Lançamentos", "0")
-        self._kpi_valor, kpi_valor_card = self._kpi_card("Valor total (R$)", "0,00")
-        row.addWidget(kpi_qtd_card)
-        row.addWidget(kpi_valor_card)
-        return row
+        for i, k in enumerate([k1, k2, k3, k4]):
+            grid.addWidget(k, 0, i)
+            grid.setColumnStretch(i, 1)
+        return wrap
 
-    def _kpi_card(self, rotulo: str, valor: str) -> tuple[QLabel, QFrame]:
+    def _kpi_card(self, rotulo: str, valor: str, hint: str, highlight: bool = False) -> tuple[QLabel, QFrame]:
         card = QFrame()
         card.setProperty("kpi", True)
-        card.setMinimumWidth(180)
+        if highlight:
+            card.setProperty("highlight", True)
         lay = QVBoxLayout(card)
-        lay.setContentsMargins(18, 12, 18, 12)
-        lay.setSpacing(2)
+        lay.setContentsMargins(18, 14, 18, 14)
+        lay.setSpacing(4)
+
         lb_rot = QLabel(rotulo)
-        lb_rot.setProperty("muted", True)
+        lb_rot.setProperty("kpiLabel", True)
         lay.addWidget(lb_rot)
+
         lb_val = QLabel(valor)
-        lb_val.setProperty("kpiValue", True)
+        lb_val.setProperty("kpiValueOrange" if highlight else "kpiValue", True)
         lay.addWidget(lb_val)
+
+        lb_hint = QLabel(hint)
+        lb_hint.setProperty("kpiHint", True)
+        lay.addWidget(lb_hint)
         return lb_val, card
 
-    # ---------------- Toolbar parâmetros ----------------
+    # -------- Card 'Novo Lote' (form + tabela + ações) --------
 
-    def _toolbar_parametros(self) -> QFrame:
-        """Toolbar de parâmetros em 2 linhas — evita o botão 'Extrair' ser
-        cortado quando a janela fica apertada. Linha 1: campos. Linha 2:
-        arquivo + botão de ação alinhado à direita."""
-        bar = QFrame()
-        bar.setProperty("toolbar", True)
-        v = QVBoxLayout(bar)
-        v.setContentsMargins(18, 14, 18, 14)
-        v.setSpacing(12)
+    def _card_novo_lote(self) -> QFrame:
+        card = QFrame()
+        card.setProperty("card", True)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(24, 22, 24, 20)
+        v.setSpacing(18)
 
-        # ----- Linha 1: Imposto + Data
-        r1 = QHBoxLayout()
-        r1.setSpacing(14)
+        # Header interno
+        head = QHBoxLayout()
+        head.setSpacing(10)
+        h2 = QLabel("Fluxo do lote")
+        h2.setProperty("h2", True)
+        head.addWidget(h2)
 
+        self._label_status_revisao = QLabel("Aguardando documento")
+        self._label_status_revisao.setProperty("badge", "pendente")
+        head.addWidget(self._label_status_revisao)
+
+        head.addStretch(1)
+
+        self._chk_apenas_primeiro = QCheckBox("Testar só o 1º")
+        self._chk_apenas_primeiro.setChecked(True)
+        self._chk_apenas_primeiro.setToolTip(
+            "Executa só o primeiro lançamento — pra validar antes do lote inteiro."
+        )
+        head.addWidget(self._chk_apenas_primeiro)
+
+        self._chk_confirmar_auto = QCheckBox("Confirmar '+' automático")
+        confirmar_padrao = bool(self.settings.get("rpa.confirmar_automaticamente", True))
+        self._chk_confirmar_auto.setChecked(confirmar_padrao)
+        self._chk_confirmar_auto.stateChanged.connect(self._on_toggle_confirmar_auto)
+        head.addWidget(self._chk_confirmar_auto)
+
+        v.addLayout(head)
+
+        # STEP 1: Documento e parâmetros
+        v.addWidget(self._step_titulo(1, "Selecione o documento"))
+        v.addLayout(self._linha_documento())
+
+        # STEP 2: Tabela de revisão
+        v.addWidget(self._step_titulo(2, "Revise os lançamentos"))
+        self._tabela = PreviewTable()
+        self._tabela.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._tabela.setMinimumHeight(220)
+        v.addWidget(self._tabela, 1)
+
+        # STEP 3: Executar
+        v.addWidget(self._step_titulo(3, "Execute no TOTVS"))
+        rodape = QHBoxLayout()
+        rodape.setSpacing(10)
+
+        self._progress = QProgressBar()
+        self._progress.setVisible(False)
+        self._progress.setMinimumWidth(180)
+        rodape.addWidget(self._progress, 1)
+        rodape.addStretch(1)
+
+        self._btn_calibrar = QPushButton("Recalibrar")
+        self._btn_calibrar.setProperty("ghost", True)
+        self._btn_calibrar.setToolTip(
+            "Só se o auto-detect falhar (versão nova do TOTVS)."
+        )
+        self._btn_calibrar.clicked.connect(self._abrir_calibracao)
+        rodape.addWidget(self._btn_calibrar)
+
+        self._btn_cancelar = QPushButton("Cancelar")
+        self._btn_cancelar.setProperty("danger", True)
+        self._btn_cancelar.setVisible(False)
+        self._btn_cancelar.clicked.connect(self._cancelar)
+        rodape.addWidget(self._btn_cancelar)
+
+        self._btn_executar = QPushButton("▶  Executar no TOTVS")
+        self._btn_executar.setProperty("brand", True)
+        self._btn_executar.setMinimumWidth(220)
+        self._btn_executar.setEnabled(False)
+        self._btn_executar.clicked.connect(self._executar)
+        rodape.addWidget(self._btn_executar)
+
+        v.addLayout(rodape)
+        return card
+
+    def _step_titulo(self, numero: int, texto: str) -> QWidget:
+        wrap = QWidget()
+        h = QHBoxLayout(wrap)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(10)
+        num = QLabel(str(numero))
+        num.setProperty("stepNum", True)
+        num.setFixedWidth(26)
+        h.addWidget(num)
+        lb = QLabel(texto)
+        lb.setProperty("h3", True)
+        h.addWidget(lb)
+        h.addStretch(1)
+        return wrap
+
+    def _linha_documento(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(12)
+
+        # Imposto
         col_imp = QVBoxLayout()
         col_imp.setSpacing(4)
         col_imp.addWidget(self._campo_inline("Imposto"))
@@ -228,8 +373,9 @@ class MainWindow(QMainWindow):
         self._combo_imposto.addItem("IRRF")
         self._combo_imposto.setMinimumWidth(140)
         col_imp.addWidget(self._combo_imposto)
-        r1.addLayout(col_imp)
+        row.addLayout(col_imp)
 
+        # Data
         col_data = QVBoxLayout()
         col_data.setSpacing(4)
         col_data.addWidget(self._campo_inline("Data de referência"))
@@ -238,15 +384,9 @@ class MainWindow(QMainWindow):
         self._date_emissao.setCalendarPopup(True)
         self._date_emissao.setMinimumWidth(150)
         col_data.addWidget(self._date_emissao)
-        r1.addLayout(col_data)
+        row.addLayout(col_data)
 
-        r1.addStretch(1)
-        v.addLayout(r1)
-
-        # ----- Linha 2: Arquivo + botões
-        r2 = QHBoxLayout()
-        r2.setSpacing(10)
-
+        # Arquivo
         col_arq = QVBoxLayout()
         col_arq.setSpacing(4)
         col_arq.addWidget(self._campo_inline("Documento (PDF ou imagem)"))
@@ -254,7 +394,6 @@ class MainWindow(QMainWindow):
         arq_row.setSpacing(8)
         self._label_arquivo = QLabel("Nenhum arquivo selecionado")
         self._label_arquivo.setProperty("muted", True)
-        # Encolhe sem cortar botão — se apertar demais, texto some primeiro.
         self._label_arquivo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self._label_arquivo.setMinimumWidth(80)
         arq_row.addWidget(self._label_arquivo, 1)
@@ -263,147 +402,54 @@ class MainWindow(QMainWindow):
         btn_pick.clicked.connect(self._selecionar_arquivo)
         arq_row.addWidget(btn_pick)
         col_arq.addLayout(arq_row)
-        r2.addLayout(col_arq, 1)
+        row.addLayout(col_arq, 1)
 
-        # Botão Extrair alinhado embaixo, min-width garantido
+        # Extrair (primário azul)
         col_btn = QVBoxLayout()
         col_btn.setSpacing(4)
-        col_btn.addWidget(QLabel(""))  # spacer p/ alinhar com o label acima
+        col_btn.addWidget(QLabel(""))  # spacer p/ alinhar com label acima
         self._btn_extrair = QPushButton("Extrair com Gemini")
         self._btn_extrair.setProperty("primary", True)
-        self._btn_extrair.setMinimumWidth(180)
+        self._btn_extrair.setMinimumWidth(200)
         self._btn_extrair.clicked.connect(self._extrair)
         col_btn.addWidget(self._btn_extrair)
-        r2.addLayout(col_btn)
+        row.addLayout(col_btn)
 
-        v.addLayout(r2)
-        return bar
+        return row
 
     def _campo_inline(self, texto: str) -> QLabel:
         lb = QLabel(texto)
-        lb.setProperty("muted", True)
         lb.setProperty("inlineLabel", True)
         return lb
 
-    def _divisor_vertical(self) -> QFrame:
-        div = QFrame()
-        div.setObjectName("Divisor")
-        div.setFixedSize(1, 24)
-        return div
+    # -------- Card 'Atividade' (log) --------
 
-    # ---------------- Preview (a tabela) ----------------
-
-    def _card_preview(self) -> QFrame:
+    def _card_atividade(self) -> QFrame:
         card = QFrame()
         card.setProperty("card", True)
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        # cabeçalho interno
-        cab = QHBoxLayout()
-        cab.setContentsMargins(20, 14, 20, 12)
-        cab.setSpacing(10)
-        titulo = QLabel("Revisão dos lançamentos")
-        titulo.setProperty("h2", True)
-        cab.addWidget(titulo)
-
-        self._label_status_revisao = QLabel("Aguardando extração")
-        self._label_status_revisao.setProperty("badge", "pendente")
-        cab.addWidget(self._label_status_revisao)
-
-        cab.addStretch(1)
-
-        self._chk_confirmar_auto = QCheckBox(
-            "Confirmar '+' automaticamente"
-        )
-        confirmar_padrao = bool(self.settings.get("rpa.confirmar_automaticamente", True))
-        self._chk_confirmar_auto.setChecked(confirmar_padrao)
-        self._chk_confirmar_auto.stateChanged.connect(self._on_toggle_confirmar_auto)
-        cab.addWidget(self._chk_confirmar_auto)
-
-        self._chk_apenas_primeiro = QCheckBox("Testar só o 1º")
-        self._chk_apenas_primeiro.setChecked(True)
-        self._chk_apenas_primeiro.setToolTip(
-            "Executa apenas o primeiro lançamento — ideal pra validar calibração."
-        )
-        cab.addWidget(self._chk_apenas_primeiro)
-
-        layout.addLayout(cab)
-
-        # separador horizontal
-        sep = QFrame()
-        sep.setObjectName("DivisorH")
-        sep.setFixedHeight(1)
-        layout.addWidget(sep)
-
-        # tabela — coração do produto, ocupa tudo
-        self._tabela = PreviewTable()
-        self._tabela.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.addWidget(self._tabela, 1)
-
-        # rodapé de ações
-        rodape_wrap = QFrame()
-        rodape_wrap.setProperty("cardFooter", True)
-        rodape = QHBoxLayout(rodape_wrap)
-        rodape.setContentsMargins(20, 12, 20, 14)
-        rodape.setSpacing(10)
-
-        self._progress = QProgressBar()
-        self._progress.setVisible(False)
-        self._progress.setMinimumWidth(240)
-        rodape.addWidget(self._progress, 1)
-
-        rodape.addStretch(1)
-
-        self._btn_calibrar = QPushButton("Recalibrar (opcional)")
-        self._btn_calibrar.setToolTip(
-            "O app detecta as posições automaticamente por visão computacional. "
-            "Use isso só se o auto-detect falhar (versão nova do TOTVS, layout muito diferente)."
-        )
-        self._btn_calibrar.clicked.connect(self._abrir_calibracao)
-        rodape.addWidget(self._btn_calibrar)
-
-        self._btn_cancelar = QPushButton("Cancelar execução")
-        self._btn_cancelar.setProperty("danger", True)
-        self._btn_cancelar.setVisible(False)
-        self._btn_cancelar.clicked.connect(self._cancelar)
-        rodape.addWidget(self._btn_cancelar)
-
-        self._btn_executar = QPushButton("▶  Executar no TOTVS")
-        self._btn_executar.setProperty("primary", True)
-        self._btn_executar.setEnabled(False)
-        self._btn_executar.setMinimumWidth(200)
-        self._btn_executar.clicked.connect(self._executar)
-        rodape.addWidget(self._btn_executar)
-
-        layout.addWidget(rodape_wrap)
-        return card
-
-    # ---------------- Log ----------------
-
-    def _card_log(self) -> QFrame:
-        card = QFrame()
-        card.setProperty("card", True)
-        card.setFixedHeight(150)
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 10, 20, 12)
-        layout.setSpacing(6)
+        card.setMinimumWidth(280)
+        card.setMaximumWidth(360)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(20, 22, 20, 20)
+        v.setSpacing(12)
 
         cab = QHBoxLayout()
-        titulo = QLabel("Log")
-        titulo.setProperty("h2", True)
-        cab.addWidget(titulo)
+        h2 = QLabel("Atividade")
+        h2.setProperty("h2", True)
+        cab.addWidget(h2)
         cab.addStretch(1)
         btn_limpar = QPushButton("Limpar")
-        btn_limpar.clicked.connect(lambda: self._log.clear())
+        btn_limpar.setProperty("iconOnly", True)
+        btn_limpar.setText("×")
+        btn_limpar.setToolTip("Limpar log")
+        btn_limpar.clicked.connect(lambda: (self._log.clear(), self._eventos.clear()))
         cab.addWidget(btn_limpar)
-        layout.addLayout(cab)
+        v.addLayout(cab)
 
         self._log = QPlainTextEdit()
         self._log.setObjectName("LogConsole")
         self._log.setReadOnly(True)
-        layout.addWidget(self._log, 1)
+        v.addWidget(self._log, 1)
 
         return card
 
@@ -423,12 +469,14 @@ class MainWindow(QMainWindow):
             self._log_line("⚠ Sem chave configurada — extração ficará indisponível")
 
     def _atualizar_status_calibracao(self) -> None:
+        if not hasattr(self, "_lbl_status_calib_top"):
+            return
         if self._calibracao.esta_completa():
-            self._lbl_status_calib.setText("● Calibração manual salva")
-            self._lbl_status_calib.setStyleSheet("color:#22C55E; font-size:11px;")
+            self._lbl_status_calib_top.setText("● TOTVS calibração manual salva")
+            self._lbl_status_calib_top.setStyleSheet("color:#22C55E; font-size:11px;")
         else:
-            self._lbl_status_calib.setText("● Detecção automática (visão)")
-            self._lbl_status_calib.setStyleSheet("color:#3B82F6; font-size:11px;")
+            self._lbl_status_calib_top.setText("● Auto-detect visual ativo")
+            self._lbl_status_calib_top.setStyleSheet("color:#FF6900; font-size:11px;")
 
     # ---------------- Ações ----------------
 
@@ -437,6 +485,7 @@ class MainWindow(QMainWindow):
             btn.setProperty("active", k == chave)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
+        self._lb_secao.setText(NOME_SECAO.get(chave, chave))
         if chave == "configuracoes":
             self._abrir_setup()
         elif chave == "mapeamento":
@@ -512,7 +561,7 @@ class MainWindow(QMainWindow):
         self._label_status_revisao.style().polish(self._label_status_revisao)
 
     def _formatar_moeda(self, valor: float) -> str:
-        return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
     def _on_extraido(self, lancamentos: list, nao_resolvidas: list) -> None:
         self._btn_extrair.setEnabled(True)
@@ -522,9 +571,9 @@ class MainWindow(QMainWindow):
         self._kpi_qtd.setText(str(len(lancamentos)))
         self._kpi_valor.setText(self._formatar_moeda(total))
         if nao_resolvidas:
-            self._set_status_revisao("falha", f"{len(nao_resolvidas)} filial(is) não resolvida(s)")
+            self._set_status_revisao("falha", f"{len(nao_resolvidas)} filial(is) não resolvidas")
         else:
-            self._set_status_revisao("sucesso", "Pronto para executar")
+            self._set_status_revisao("sucesso", "Pronto pra executar")
         self._btn_executar.setEnabled(bool(lancamentos))
 
     def _on_erro_extracao(self, msg: str) -> None:
@@ -538,29 +587,18 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             self._calibracao = dlg.calibracao()
             calib_store.salvar(self._calibracao)
-            self._log_line(
-                f"OK Calibração salva ({len(self._calibracao.campos)} campos)"
-            )
+            self._log_line(f"OK Calibração salva ({len(self._calibracao.campos)} campos)")
             self._atualizar_status_calibracao()
-
-    def _set_topo(self, on: bool) -> None:
-        """DESABILITADO — setWindowFlags reparenta o handle nativo e quebra
-        o QThread que é iniciado logo depois."""
-        pass
 
     def _executar(self) -> None:
         if not self._lancamentos:
             return
-        # Não bloqueia mais por calibração incompleta — o worker tenta visão
-        # computacional primeiro (auto-detect). Só cai na calibração manual
-        # se a visão falhar E o operador não tiver calibrado nada antes.
         resp = QMessageBox.question(
             self, "Confirmar execução",
             f"{len(self._lancamentos)} lançamentos serão lançados no TOTVS.\n\n"
             "A tela 'Inclusão de Títulos' precisa estar aberta e em branco.\n"
-            "Não use o mouse ou teclado durante a execução.\n\n"
-            "🛑 Parada de emergência: aperte a tecla END a qualquer momento.\n"
-            "🛑 Também funciona: arrastar o mouse pro CANTO SUPERIOR ESQUERDO da tela.\n\n"
+            "Não use mouse/teclado durante a execução.\n\n"
+            "🛑 Emergência: tecla END a qualquer momento.\n\n"
             "Continuar?",
         )
         if resp != QMessageBox.Yes:
@@ -571,20 +609,19 @@ class MainWindow(QMainWindow):
         self._btn_cancelar.setVisible(True)
         self._progress.setVisible(True)
         self._set_status_revisao("andamento", "Executando…")
-        self._log_line(">> INICIANDO EXECUCAO NO TOTVS (build 35) — END = emergencia")
+        self._log_line(">> INICIANDO EXECUCAO — END = emergencia")
 
         lancamentos_exec = self._lancamentos
         if self._chk_apenas_primeiro.isChecked() and lancamentos_exec:
             lancamentos_exec = [lancamentos_exec[0]]
             self._log_line(
-                f"i Modo teste: apenas o 1o lançamento ({lancamentos_exec[0].filial_nome} / "
+                f"i Modo teste: só o 1o ({lancamentos_exec[0].filial_nome} / "
                 f"{lancamentos_exec[0].tipo_folha})"
             )
 
         self._progress.setMaximum(len(lancamentos_exec))
         self._progress.setValue(0)
 
-        log.info("_executar: criando LoteWorker")
         worker = LoteWorker(lancamentos_exec, self.settings.data, self._calibracao)
         worker.log_line.connect(self._log_line)
         worker.progresso.connect(self._on_progresso)
@@ -596,7 +633,6 @@ class MainWindow(QMainWindow):
         thread = QThread()
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
-        thread.started.connect(lambda: log.info("QThread.started fired"))
         worker.finished.connect(thread.quit)
         worker.error.connect(thread.quit)
         thread.finished.connect(worker.deleteLater)
@@ -618,11 +654,9 @@ class MainWindow(QMainWindow):
             self._set_status_revisao("sucesso", f"{sucessos} lançados")
         else:
             self._set_status_revisao("falha", f"{sucessos} ok · {falhas} falha(s)")
+        self._kpi_ultima.setText(datetime.now().strftime("%H:%M"))
         self._log_line(f"# Lote finalizado: {sucessos} sucessos, {falhas} falhas")
-        QMessageBox.information(
-            self, "Lote finalizado",
-            f"Sucessos: {sucessos}\nFalhas: {falhas}",
-        )
+        QMessageBox.information(self, "Lote finalizado", f"Sucessos: {sucessos}\nFalhas: {falhas}")
 
     def _on_erro_lote(self, msg: str) -> None:
         self._btn_executar.setEnabled(True)
@@ -641,9 +675,9 @@ class MainWindow(QMainWindow):
         ativo = bool(state)
         self.settings.set("rpa.confirmar_automaticamente", ativo)
         self._log_line(
-            "✓ Confirmação automática ativada — robô aperta + sozinho"
+            "✓ Confirmação automática ativada"
             if ativo else
-            "✎ Modo revisão manual — robô vai parar antes do + e esperar você"
+            "✎ Modo revisão manual"
         )
 
     def _on_pedir_confirmacao_manual(self, index: int, resumo: str) -> None:
@@ -658,13 +692,12 @@ class MainWindow(QMainWindow):
             "Depois escolha:"
         )
         btn_continuar = box.addButton("Próximo lançamento", QMessageBox.AcceptRole)
-        btn_parar = box.addButton("Parar lote", QMessageBox.RejectRole)
+        box.addButton("Parar lote", QMessageBox.RejectRole)
         box.setDefaultButton(btn_continuar)
         box.exec()
         prosseguir = box.clickedButton() is btn_continuar
         self._worker_lote.responder_confirmacao(prosseguir)
 
     def _log_line(self, msg: str) -> None:
-        from datetime import datetime
         self._log.appendPlainText(f"[{datetime.now():%H:%M:%S}] {msg}")
         log.info(msg)

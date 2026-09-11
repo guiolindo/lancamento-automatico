@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-47 (redesign: tema claro/escuro, toolbar responsivo, De-Para card)"
+BUILD_MARKER = "build-48 (redesign real: dashboard + identidade Economart)"
 
 
 def main() -> int:
