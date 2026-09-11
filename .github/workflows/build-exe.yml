@@ -60,7 +60,39 @@ jobs:
           path: ${{ env.ZIP_NAME }}
           retention-days: 30
 
-      - name: Publicar como Release (só em tag v*)
+      - name: Calcular SHA256 do zip
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash $env:ZIP_NAME -Algorithm SHA256).Hash.ToLower()
+          echo "ZIP_SHA256=$hash" >> $env:GITHUB_ENV
+          echo "SHA256: $hash"
+
+      - name: Extrair BUILD_MARKER
+        id: buildmark
+        shell: pwsh
+        run: |
+          $bm = (Select-String -Path "src/main.py" -Pattern 'BUILD_MARKER = "(.+)"').Matches[0].Groups[1].Value
+          echo "value=$bm" >> $env:GITHUB_OUTPUT
+          echo "Detected: $bm"
+
+      - name: Publicar rolling release (a cada push em main)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: ${{ steps.buildmark.outputs.value }}
+          prerelease: true
+          files: ${{ env.ZIP_NAME }}
+          body: |
+            Build automático da branch main.
+
+            BUILD_MARKER=${{ steps.buildmark.outputs.value }}
+            SHA256=${{ env.ZIP_SHA256 }}
+            COMMIT=${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publicar release oficial (só em tag v*)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
