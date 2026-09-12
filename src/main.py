@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-56 (updater — retry no check, esperar mais no boot, indicador visual)"
+BUILD_MARKER = "build-57 (single instance + splash informativo durante apply do update)"
 
 
 def main() -> int:

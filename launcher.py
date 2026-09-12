@@ -102,6 +102,97 @@ def _show_error_dialog(msg: str) -> None:
         pass
 
 
+# ---------- Single instance (mutex Windows) ----------
+_MUTEX_NAME = r"Local\LancamentoAutomatico_SingleInstance_v1"
+_JANELA_PREFIXO = "Lançamento Automático"
+
+
+def _lock_instancia_unica():
+    """Cria mutex nomeado. Devolve handle se somos a 1ª instância, None se
+    outra já tá rodando, -1 se algo deu errado (segue normalmente)."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        k = ctypes.windll.kernel32
+        k.CreateMutexW.restype = wintypes.HANDLE
+        k.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
+        handle = k.CreateMutexW(None, True, _MUTEX_NAME)
+        ERROR_ALREADY_EXISTS = 183
+        if ctypes.GetLastError() == ERROR_ALREADY_EXISTS:
+            if handle:
+                k.CloseHandle(handle)
+            return None
+        return handle
+    except Exception:  # noqa: BLE001
+        return -1
+
+
+def _trazer_janela_existente_ao_topo() -> bool:
+    """Encontra a janela do app já aberto e traz pra frente. Best effort."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        achado = [0]
+
+        @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+        def _callback(hwnd, _lparam):
+            buf = ctypes.create_unicode_buffer(256)
+            user32.GetWindowTextW(hwnd, buf, 256)
+            if buf.value and buf.value.startswith(_JANELA_PREFIXO):
+                achado[0] = hwnd
+                return False
+            return True
+
+        user32.EnumWindows(_callback, 0)
+        hwnd = achado[0]
+        if hwnd:
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            user32.SetForegroundWindow(hwnd)
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
+def _aviso_ja_aberto() -> None:
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            "O Lançamento Automático já está aberto.\n\n"
+            "Verifique a barra de tarefas ou os cantos da tela.",
+            "Aplicativo já aberto",
+            0x40 | 0x1000,  # MB_ICONINFORMATION | MB_SYSTEMMODAL
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# ---------- Splash durante aplicação de update ----------
+def _splash_aplicando_update():
+    """Mostra MessageBox 'Aplicando atualização' em thread daemon. Como a
+    thread é daemon, ela morre junto com o processo no os._exit(0) do
+    reinício — não precisa fechar manualmente."""
+    import threading
+    def worker():
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(
+                None,
+                "Aplicando atualização do aplicativo...\n\n"
+                "Isso leva alguns segundos. O app vai reiniciar sozinho quando terminar.\n\n"
+                "(Você pode fechar essa janela e continuar aguardando.)",
+                "Lançamento Automático - Atualizando",
+                0x40 | 0x1000,  # MB_ICONINFORMATION | MB_SYSTEMMODAL (sempre no topo)
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+    return t
+
+
 # ---------- 4. Aplicar update pendente (Opção D) ----------
 def _aplicar_pendente() -> bool:
     """Se existe <install>/_next/READY, copia arquivos por cima do install
@@ -217,9 +308,29 @@ def _reiniciar_como_novo_exe() -> None:
 # ---------- 5. Boot com tracing ----------
 def main() -> int:
     _boot_trace("launcher: início")
+
+    # Single-instance: se o app já tá aberto, traz a janela pra frente
+    # e sai. Evita usuário abrir 5 vezes por engano.
+    lock_handle = _lock_instancia_unica()
+    if lock_handle is None:
+        _boot_trace("outra instância detectada — trazendo pra frente e saindo")
+        if not _trazer_janela_existente_ao_topo():
+            _aviso_ja_aberto()
+        return 0
+
     try:
         _boot_trace("verificando update pendente")
         try:
+            # Se tem update pendente, mostra splash ANTES de aplicar. A
+            # aplicação copia ~130MB de arquivos e leva alguns segundos —
+            # sem feedback o usuário acha que travou.
+            install = _exe_dir()
+            if (install / "_next" / "READY").exists():
+                _boot_trace("update pendente — mostrando splash informativo")
+                _splash_aplicando_update()
+                import time as _time
+                _time.sleep(0.3)  # dá tempo do MessageBox aparecer
+
             aplicou = _aplicar_pendente()
             if aplicou:
                 _boot_trace("update pendente aplicado — reiniciando pra pegar código novo")
