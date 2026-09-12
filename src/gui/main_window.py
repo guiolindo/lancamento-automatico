@@ -390,9 +390,14 @@ class MainWindow(QMainWindow):
 
         h.addStretch(1)
 
-        self._btn_calibrar = QPushButton("Recalibrar")
+        self._btn_calibrar = QPushButton("Recalibrar (backup)")
         self._btn_calibrar.setProperty("ghost", True)
-        self._btn_calibrar.setToolTip("Só se o auto-detect falhar (versão nova do TOTVS).")
+        self._btn_calibrar.setToolTip(
+            "Auto-detect via visão computacional roda automaticamente a "
+            "cada lote. Use este botão só se o auto-detect falhar por "
+            "mudança de tema/DPI/versão do TOTVS — a calibração salva "
+            "aqui serve de fallback."
+        )
         self._btn_calibrar.clicked.connect(self._abrir_calibracao)
         h.addWidget(self._btn_calibrar)
 
@@ -578,14 +583,31 @@ class MainWindow(QMainWindow):
             self._log_line("⚠ Sem chave configurada — extração ficará indisponível")
 
     def _atualizar_status_calibracao(self) -> None:
+        # Auto-detect (visão computacional em src/core/visao_totvs.py) é
+        # SEMPRE tentado no início do lote, independente de calibração
+        # manual. A calibração manual serve só de fallback quando a
+        # visão não consegue localizar os campos.
         if not hasattr(self, "_lbl_status_calib_top"):
             return
         if self._calibracao.esta_completa():
-            self._lbl_status_calib_top.setText("● TOTVS calibração manual salva")
+            self._lbl_status_calib_top.setText(
+                "● Auto-detect visual ativo · calibração manual como backup"
+            )
             self._lbl_status_calib_top.setStyleSheet("color:#22C55E; font-size:11px;")
+            self._lbl_status_calib_top.setToolTip(
+                "A cada lote o app tenta detectar os campos do TOTVS "
+                "automaticamente via visão computacional. Se falhar, usa "
+                "a calibração manual que você já salvou."
+            )
         else:
             self._lbl_status_calib_top.setText("● Auto-detect visual ativo")
             self._lbl_status_calib_top.setStyleSheet("color:#14B8A6; font-size:11px;")
+            self._lbl_status_calib_top.setToolTip(
+                "A cada lote o app tenta detectar os campos do TOTVS "
+                "automaticamente via visão computacional. Sem calibração "
+                "manual salva ainda — clique em 'Recalibrar' se o "
+                "auto-detect falhar."
+            )
 
     # ---------------- Ações ----------------
 

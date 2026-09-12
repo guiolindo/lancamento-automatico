@@ -30,18 +30,25 @@ dentro de VM via RemoteApp (Auto Sky), onde a janela aparece com sufixo
 2. Na primeira execução, o app pede a **chave da API do Gemini** e salva
    em `~/.lancamento-automatico/settings.json`.
 3. Abrir o TOTVS na tela **Inclusão de Títulos** (em branco).
-4. Clicar em **Calibrar campos do TOTVS** — para cada campo o app mostra
-   um countdown de 3s, o usuário passa o mouse por cima do campo real no
-   TOTVS, e a posição é gravada em `~/.lancamento-automatico/calibracao.json`.
-   A janela é detectada automaticamente por substring `Operador Financeiro`
-   (casa também `Operador Financeiro (Remoto)`).
-5. Selecionar o PDF/imagem do relatório e o Imposto → **Extrair**.
+4. Selecionar o PDF/imagem do relatório e o Imposto → **Extrair**.
    - Também é possível **arrastar o arquivo** (`.pdf/.png/.jpg/.jpeg/.webp`)
      para dentro da janela (drag-and-drop).
-6. Revisar a tabela — corrigir filial, valor ou data se necessário.
-7. Opcional: marcar **Não apertar '+' automaticamente** (revisão manual
+5. Revisar a tabela — corrigir filial, valor ou data se necessário.
+6. Opcional: marcar **Não apertar '+' automaticamente** (revisão manual
    entre lançamentos) ou **Testar só o primeiro** (dry-run).
-8. **Executar** — o app cria cada título no TOTVS.
+7. **Executar** — o app cria cada título no TOTVS.
+
+> **Não precisa calibrar antes.** Todo lote começa com uma **detecção
+> automática dos campos por visão computacional** (`src/core/visao_totvs.py`),
+> que localiza cada campo pixel-perfect na janela do TOTVS. A janela é
+> detectada por substring `Operador Financeiro` (casa também
+> `Operador Financeiro (Remoto)` do RemoteApp).
+>
+> O botão **"Recalibrar (backup)"** existe só como rede de segurança:
+> se o auto-detect falhar por causa de mudança de tema/DPI/versão do
+> TOTVS, você calibra manualmente uma vez e o resultado fica salvo em
+> `~/.lancamento-automatico/calibracao.json` como fallback pros próximos
+> lotes. Em máquina padrão, nunca precisa apertar esse botão.
 
 ### Parada de emergência
 
@@ -154,7 +161,9 @@ nenhuma modificação em pastas protegidas.
 | `startup_error.log` | Stacktrace se o boot morrer com exceção não tratada |
 
 Se a automação começar a errar depois de uma atualização do TOTVS,
-apagar `calibracao.json` e recalibrar. Se algum delay estiver curto d+
+apagar `calibracao.json` e recalibrar (mas antes disso, tenta rodar um
+lote — o auto-detect visual pode absorver a mudança sozinho). Se algum
+delay estiver curto d+
 para o PC alvo (o robô "furando" antes do campo focar), editar
 `settings.json` na seção `delays`.
 
