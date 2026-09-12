@@ -472,6 +472,7 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 74 | Fix crítico: calendário do QDateEdit cortava datas 10+ (regra global `QTableView::item` do build-72 vazando pro popup interno). Adiciona overrides `QCalendarWidget QTableView::item` compactos. Além disso, expõe 3 datas separadas na UI (emissão/contábil/vencimento) — o modelo e `montar_lancamentos` já suportavam. **QUEBROU BOOT** (ver 75). | `theme.py`, `main_window.py`, `workers.py` |
 | 75 | Hotfix build-74: chaves não escapadas dentro de comentário CSS do f-string quebraram `qss()` em runtime (`NameError: name 'padding' is not defined`). `ast.parse` não pega — só executar `qss()` pega. Nova gotcha #9 nesse doc. | `theme.py` |
 | 76 | Auto-recovery de boot: `launcher.py` detecta boot anterior que nunca chegou até a UI (marker `boot_ok.marker` mais velho que o .exe) e baixa+aplica update remoto sozinho, antes de tentar importar `src.main`. Fecha o gap do build-74/75, onde um build quebrado deixava o usuário sem forma de auto-fix. Nova seção 2b nesse doc. | `launcher.py`, `main.py`, `build/build.py` |
+| 77 | Fix data cortando ano (120→145) + regra `emissão ≤ contábil ≤ vencimento` enforcada via `setMinimumDate` + auto-bump em cascata (TOTVS recusa se violar). | `main_window.py` |
 
 ---
 

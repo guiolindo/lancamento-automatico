@@ -337,29 +337,54 @@ class MainWindow(QMainWindow):
         # Preenchem os 3 campos correspondentes no TOTVS (Inclusão de
         # Títulos). Default todas = hoje; usuário edita cada uma
         # independentemente conforme a nota fiscal.
+        # REGRAS DE ORDEM (TOTVS recusa se violadas — enforçadas via
+        # setMinimumDate abaixo, usuário não consegue selecionar inválido):
+        #   contábil >= emissão
+        #   vencimento >= contábil
+        # Width 145 pra dd/MM/aaaa + botão popup caberem sem cortar o ano
+        # (120 estava cortando o último dígito).
+        LARG_DATA = 145
+        hoje = QDate.currentDate()
+
         h.addWidget(self._campo_inline("EMISS"))
-        self._date_emissao = QDateEdit(QDate.currentDate())
+        self._date_emissao = QDateEdit(hoje)
         self._date_emissao.setDisplayFormat("dd/MM/yyyy")
         self._date_emissao.setCalendarPopup(True)
-        self._date_emissao.setFixedWidth(120)
+        self._date_emissao.setFixedWidth(LARG_DATA)
         self._date_emissao.setToolTip("Data de emissão do documento")
         h.addWidget(self._date_emissao)
 
         h.addWidget(self._campo_inline("CONTÁB"))
-        self._date_contabil = QDateEdit(QDate.currentDate())
+        self._date_contabil = QDateEdit(hoje)
         self._date_contabil.setDisplayFormat("dd/MM/yyyy")
         self._date_contabil.setCalendarPopup(True)
-        self._date_contabil.setFixedWidth(120)
-        self._date_contabil.setToolTip("Data contábil (Inclusão no TOTVS)")
+        self._date_contabil.setFixedWidth(LARG_DATA)
+        self._date_contabil.setMinimumDate(hoje)  # nunca antes da emissão
+        self._date_contabil.setToolTip(
+            "Data contábil (Inclusão no TOTVS). Nunca pode ser antes da "
+            "emissão — o TOTVS recusa."
+        )
         h.addWidget(self._date_contabil)
 
         h.addWidget(self._campo_inline("VENC"))
-        self._date_vencimento = QDateEdit(QDate.currentDate())
+        self._date_vencimento = QDateEdit(hoje)
         self._date_vencimento.setDisplayFormat("dd/MM/yyyy")
         self._date_vencimento.setCalendarPopup(True)
-        self._date_vencimento.setFixedWidth(120)
-        self._date_vencimento.setToolTip("Data de vencimento")
+        self._date_vencimento.setFixedWidth(LARG_DATA)
+        self._date_vencimento.setMinimumDate(hoje)  # nunca antes da contábil
+        self._date_vencimento.setToolTip(
+            "Data de vencimento. Nunca pode ser antes da contábil — o "
+            "TOTVS recusa."
+        )
         h.addWidget(self._date_vencimento)
+
+        # Enforcement das regras: quando emissão muda, contábil não pode
+        # ser antes dela; quando contábil muda, vencimento não pode ser
+        # antes dela. setMinimumDate impede seleção manual E o auto-bump
+        # se o valor atual ficou inválido garante que os campos abaixo
+        # acompanham quando o usuário anda pra frente na emissão.
+        self._date_emissao.dateChanged.connect(self._on_emissao_mudou)
+        self._date_contabil.dateChanged.connect(self._on_contabil_mudou)
 
         # Separador visual
         sep = QFrame()
@@ -941,6 +966,22 @@ class MainWindow(QMainWindow):
         if self._worker_lote:
             self._worker_lote.cancelar()
             self._log_line("⏹ Cancelamento solicitado…")
+
+    def _on_emissao_mudou(self, nova: QDate) -> None:
+        """Emissão mudou → contábil não pode mais ser antes dela.
+        setMinimumDate impede seleção nova antes; se o valor atual do
+        contábil ficou inválido (antes da nova emissão), pula pra ela."""
+        self._date_contabil.setMinimumDate(nova)
+        if self._date_contabil.date() < nova:
+            self._date_contabil.setDate(nova)
+            # dateChanged do contábil vai disparar em cascata e ajustar
+            # o vencimento também
+
+    def _on_contabil_mudou(self, nova: QDate) -> None:
+        """Contábil mudou → vencimento não pode mais ser antes dela."""
+        self._date_vencimento.setMinimumDate(nova)
+        if self._date_vencimento.date() < nova:
+            self._date_vencimento.setDate(nova)
 
     def _on_toggle_confirmar_auto(self, state: int) -> None:
         ativo = bool(state)
