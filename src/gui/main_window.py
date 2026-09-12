@@ -479,43 +479,27 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(4000, self._check_atualizacao_boot)
 
     def _check_atualizacao_boot(self) -> None:
-        """Verifica update no boot em background. Se tem, dispara modal
-        obrigatório (só botão Sim — sem escapatória).
-        Se a consulta falhar, mostra indicador discreto no topbar em vez
-        de dispensar em silêncio."""
-        import threading
-        from ..core import updater
-        from ..main import BUILD_MARKER
-
-        # Mostra status "verificando" no topbar
-        from PySide6.QtCore import QTimer as _QT
+        """Boot check — usa o mesmo helper thread + watchdog."""
         self._btn_atualizar.setText("Verificando…")
         self._btn_atualizar.setEnabled(False)
 
-        def worker():
-            info = updater.check(BUILD_MARKER)
+        def on_done(info):
+            self._btn_atualizar.setEnabled(True)
+            if info is None:
+                self._btn_atualizar.setText("⚠ Atualizar")
+                self._btn_atualizar.setToolTip(
+                    "Não consegui consultar o GitHub agora. "
+                    "Clique pra tentar de novo."
+                )
+                self._log_line("⚠ Falha ao verificar atualização (veja lancamento.log)")
+                return
+            self._btn_atualizar.setText("Atualizar")
+            if info.tem_atualizacao:
+                self._modal_obrigatorio(info)
+            else:
+                self._log_line(f"i Versão local já é a mais recente")
 
-            def _voltar():
-                self._btn_atualizar.setEnabled(True)
-                if info is None:
-                    # Consulta falhou — mostra visualmente pra usuário saber
-                    self._btn_atualizar.setText("⚠ Atualizar")
-                    self._btn_atualizar.setToolTip(
-                        "Não consegui consultar o GitHub agora. "
-                        "Clique pra tentar de novo — pode ser conexão lenta "
-                        "ou API do GitHub temporariamente indisponível."
-                    )
-                    self._log_line("⚠ Falha ao verificar atualização (veja lancamento.log)")
-                    return
-                self._btn_atualizar.setText("Atualizar")
-                if info.tem_atualizacao:
-                    self._modal_obrigatorio(info)
-                else:
-                    self._log_line(f"i Versão local ({info.build_marker_local}) já é a mais recente")
-
-            _QT.singleShot(0, _voltar)
-
-        threading.Thread(target=worker, daemon=True).start()
+        self._rodar_check_em_thread(on_done)
 
     def _modal_obrigatorio(self, info) -> None:
         """Mostra modal 'Nova versão disponível — Sim, atualizar' sem
@@ -826,46 +810,81 @@ class MainWindow(QMainWindow):
 
     # ---------------- Atualizador ----------------
 
-    def _verificar_atualizacao(self) -> None:
-        """Consulta GitHub e oferece baixar se tem versão nova."""
+    def _rodar_check_em_thread(self, on_done) -> None:
+        """Roda updater.check() em background e chama on_done(info) no main
+        thread. Guarda contra checks concorrentes — se já tem um rodando,
+        ignora chamada nova. Watchdog de 20s pra prevenir travar."""
+        import threading
         from ..core import updater
         from ..main import BUILD_MARKER
+        from PySide6.QtCore import QTimer
+
+        if getattr(self, "_check_em_curso", False):
+            return
+        self._check_em_curso = True
+
+        resultado: dict = {}
+
+        def worker():
+            try:
+                resultado["info"] = updater.check(BUILD_MARKER)
+            except Exception as e:  # noqa: BLE001
+                log.exception("check inesperado")
+                resultado["info"] = None
+                resultado["erro"] = str(e)
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
+        # Watchdog: se não terminar em 20s, assume falha
+        def _finalizar():
+            self._check_em_curso = False
+            info = resultado.get("info")
+            try:
+                on_done(info)
+            except Exception:  # noqa: BLE001
+                log.exception("on_done falhou")
+
+        def _tentar_finalizar():
+            if not t.is_alive():
+                _finalizar()
+            else:
+                # Ainda rodando — tenta de novo em 500ms, até watchdog
+                QTimer.singleShot(500, _tentar_finalizar)
+
+        # Watchdog absoluto: 22s max, força cleanup
+        def _timeout_forcado():
+            if getattr(self, "_check_em_curso", False):
+                log.warning("[updater] watchdog: check demorou > 22s, dando timeout forçado")
+                resultado.setdefault("info", None)
+                _finalizar()
+
+        QTimer.singleShot(500, _tentar_finalizar)
+        QTimer.singleShot(22000, _timeout_forcado)
+
+    def _verificar_atualizacao(self) -> None:
+        """Botão manual 'Atualizar' no topbar."""
+        if getattr(self, "_check_em_curso", False):
+            return
         self._btn_atualizar.setEnabled(False)
         self._btn_atualizar.setText("Verificando…")
-        # Feito no main thread mesmo — request rápido (15s timeout)
-        try:
-            info = updater.check(BUILD_MARKER)
-        finally:
+
+        def on_done(info):
             self._btn_atualizar.setEnabled(True)
             self._btn_atualizar.setText("Atualizar")
+            if info is None:
+                QMessageBox.information(
+                    self, "Atualização",
+                    "Não consegui consultar o GitHub agora. Pode ser conexão "
+                    "lenta ou API temporariamente indisponível. Veja o log."
+                )
+                return
+            if not info.tem_atualizacao:
+                QMessageBox.information(
+                    self, "Atualização",
+                    f"Você já tá na versão mais recente.\n\nLocal: {info.build_marker_local}",
+                )
+                return
+            self._modal_obrigatorio(info)
 
-        if info is None:
-            QMessageBox.information(
-                self, "Atualização",
-                "Não consegui consultar o GitHub agora — pode ser conexão ou "
-                "ainda não tem release publicada.",
-            )
-            return
-        if not info.tem_atualizacao:
-            QMessageBox.information(
-                self, "Atualização",
-                f"Você já tá na versão mais recente.\n\nLocal: {info.build_marker_local}",
-            )
-            return
-
-        # Tem update
-        tam_mb = info.asset_tamanho / (1024 * 1024)
-        resp = QMessageBox.question(
-            self, "Nova versão disponível",
-            f"Versão nova encontrada:\n\n"
-            f"Atual:  {info.build_marker_local}\n"
-            f"Nova:   {info.build_marker_remoto}\n\n"
-            f"Tamanho do download: {tam_mb:.1f} MB\n\n"
-            "O app vai baixar em segundo plano e aplicar na PRÓXIMA vez que "
-            "você abrir. Você pode continuar usando normalmente.\n\n"
-            "Baixar agora?",
-        )
-        if resp != QMessageBox.Yes:
-            return
-        self._log_line(f"→ Baixando atualização {info.build_marker_remoto}…")
-        self._updater_bar.iniciar(info)
+        self._rodar_check_em_thread(on_done)
