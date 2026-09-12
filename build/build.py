@@ -86,12 +86,14 @@ def run() -> int:
         "--nofollow-import-to=unittest",
         "--nofollow-import-to=pydoc",
         "--nofollow-import-to=doctest",
-        "--company-name=Multicom",
-        "--product-name=Lancamento Automatico TOTVS",
-        "--file-version=0.1.0.0",
-        "--product-version=0.1.0.0",
-        "--file-description=Automacao de lancamento de impostos TOTVS + Gemini",
-        "--copyright=Multicom",
+        "--company-name=Auto Conferi",
+        "--product-name=Auto Conferi",
+        # Bumpa a cada rebrand pra forçar o cache de ícones do Windows a
+        # atualizar (Explorer segura ícone antigo com muita força).
+        "--file-version=0.2.0.0",
+        "--product-version=0.2.0.0",
+        "--file-description=Auto Conferi - automacao fiscal para TOTVS/Consinco",
+        "--copyright=Guilherme Junio",
         f"--output-dir={DIST}",
         f"--output-filename={NOME}.exe",
         # Empacota o mapeamento.json dentro da pasta standalone.

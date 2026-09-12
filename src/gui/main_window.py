@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
         self.mapping = mapping
         self.mapping_path = mapping_path
         self.setWindowTitle("Auto Conferi — Automação Fiscal TOTVS")
+        self.setAcceptDrops(True)  # aceita drag-and-drop de arquivos
         self.resize(1320, 840)
         self.setMinimumSize(1040, 680)
         self._tema = self.settings.get("tema", "escuro") or "escuro"
@@ -328,7 +329,8 @@ class MainWindow(QMainWindow):
         self._date_emissao = QDateEdit(QDate.currentDate())
         self._date_emissao.setDisplayFormat("dd/MM/yyyy")
         self._date_emissao.setCalendarPopup(True)
-        self._date_emissao.setFixedWidth(120)
+        # 120px cortava o ano (dd/MM/yyyy + botão calendário precisam ~145)
+        self._date_emissao.setFixedWidth(150)
         h.addWidget(self._date_emissao)
 
         # Separador visual
@@ -345,8 +347,9 @@ class MainWindow(QMainWindow):
         btn_pick.clicked.connect(self._selecionar_arquivo)
         h.addWidget(btn_pick)
 
-        self._label_arquivo = QLabel("Nenhum arquivo")
+        self._label_arquivo = QLabel("Nenhum arquivo · arraste um aqui")
         self._label_arquivo.setStyleSheet("color: #B7C2CF; font-size: 12px;")
+        self._label_arquivo.setToolTip("Você pode arrastar o arquivo direto pra janela do app.")
         self._label_arquivo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self._label_arquivo.setMinimumWidth(80)
         h.addWidget(self._label_arquivo, 1)
@@ -638,28 +641,59 @@ class MainWindow(QMainWindow):
         box.exec()
 
     def _selecionar_arquivo(self) -> None:
+        # Volta ao dialog NATIVO do Windows: tem PT-BR automaticamente,
+        # pré-visualização de imagens, ordenação por data, atalhos do
+        # Explorer. O dialog Qt próprio (DontUseNativeDialog) que a gente
+        # tinha usando pra fugir do freeze de 15s no OneDrive/AV acabou
+        # travando muito mais (50s+) e ficando em inglês.
+        # Se o nativo ainda travar em algum PC específico, o usuário pode
+        # arrastar o arquivo direto pra janela do app (drop event).
         ultimo = self.settings.get("ultima_pasta_upload", "") or str(Path.home())
-        # Usa o dialog PRÓPRIO do Qt (não o nativo do Windows). O nativo
-        # trava 5-30s em cenários comuns: OneDrive/Dropbox hidratando o
-        # arquivo, antivírus escaneando ao abrir preview, shell extensions
-        # corporativas checando policies, network share lento. O Qt não
-        # depende do explorer.exe e abre instantâneo.
         arquivo, _ = QFileDialog.getOpenFileName(
             self, "Selecionar documento",
             ultimo,
-            "Documentos (*.pdf *.png *.jpg *.jpeg *.webp)",
-            options=QFileDialog.DontUseNativeDialog | QFileDialog.ReadOnly,
+            "Documentos (*.pdf *.png *.jpg *.jpeg *.webp);;Todos os arquivos (*.*)",
         )
         if not arquivo:
             return
-        p = Path(arquivo)
+        self._aceitar_arquivo(Path(arquivo))
+        return
+
+    def _aceitar_arquivo(self, p: Path) -> None:
+        """Registra o arquivo escolhido (via dialog OU drop). Único lugar
+        que faz o setup do label + settings + log."""
         self._arquivo_selecionado = p
         self.settings.set("ultima_pasta_upload", str(p.parent))
         self._label_arquivo.setText(p.name)
-        self._label_arquivo.setProperty("muted", False)
-        self._label_arquivo.style().unpolish(self._label_arquivo)
-        self._label_arquivo.style().polish(self._label_arquivo)
+        self._label_arquivo.setStyleSheet("color: #F5F7FA; font-size: 12px;")
         self._log_line(f"→ Arquivo selecionado: {p.name}")
+
+    # ---------------- Drag & Drop ----------------
+    # Suporte a arrastar arquivo pra dentro da janela. Extensões aceitas
+    # são as mesmas do dialog (.pdf, .png, .jpg, .jpeg, .webp).
+    _EXTS_ACEITAS = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802 (Qt convention)
+        md = event.mimeData()
+        if md.hasUrls():
+            for url in md.urls():
+                if url.isLocalFile():
+                    ext = Path(url.toLocalFile()).suffix.lower()
+                    if ext in self._EXTS_ACEITAS:
+                        event.acceptProposedAction()
+                        return
+        event.ignore()
+
+    def dropEvent(self, event) -> None:  # noqa: N802
+        for url in event.mimeData().urls():
+            if not url.isLocalFile():
+                continue
+            p = Path(url.toLocalFile())
+            if p.suffix.lower() in self._EXTS_ACEITAS and p.exists():
+                self._aceitar_arquivo(p)
+                event.acceptProposedAction()
+                return
+        event.ignore()
 
     def _imposto_atual(self) -> Imposto:
         return self.mapping.imposto(self._combo_imposto.currentText())
