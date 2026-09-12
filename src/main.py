@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-58 (fim do 'Verificando…' travado: thread + watchdog 22s)"
+BUILD_MARKER = "build-59 (fix visual: separador entre tabela e step 3 + teste de auto-update)"
 
 
 def main() -> int:
