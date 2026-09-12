@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-74 (fix calendário cortando 10+ + 3 datas separadas: emissão/contábil/vencimento)"
+BUILD_MARKER = "build-75 (hotfix: chaves não escapadas no comentário do QSS quebravam boot)"
 
 
 def main() -> int:

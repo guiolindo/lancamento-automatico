@@ -431,10 +431,12 @@ QTableView::item, QTableWidget::item {{
 
 /* ---------- Calendar popup (QDateEdit) ----------
  * QCalendarWidget usa um QTableView interno. Sem overrides explícitos,
- * a regra global QTableView::item{padding:9px 12px} acima empurrava
- * datas de 2 dígitos (10+) pra fora da célula — o popup mostrava só
- * dias 1-9. Aqui damos padding compacto e cell width justo pro
- * calendário, sem afetar a PreviewTable. */
+ * a regra global QTableView::item da PreviewTable (padding 9px 12px)
+ * vazava pro popup interno, empurrando datas de 2 dígitos (10+) pra
+ * fora da célula — o popup mostrava só dias 1-9. Aqui damos padding
+ * compacto e cell width justo pro calendário. NUNCA use chaves
+ * literais nesse comentário: o QSS está dentro de f-string Python e
+ * chaves não escapadas quebram o parser (build-74 explodiu por isso). */
 QCalendarWidget QAbstractItemView {{
     background: {p["bg_1"]};
     selection-background-color: {p["accent"]};
