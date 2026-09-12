@@ -119,6 +119,27 @@ QPushButton[navIcon="true"][active="true"] {{
     color: {p["brand_orange"]};
     border-left: 3px solid {p["brand_orange"]};
 }}
+QPushButton[navItem="true"] {{
+    background: transparent;
+    color: {p["text_muted"]};
+    border: none;
+    border-left: 2px solid transparent;
+    text-align: left;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    min-height: 32px;
+}}
+QPushButton[navItem="true"]:hover {{
+    background: {p["bg_2"]};
+    color: {p["text"]};
+}}
+QPushButton[navItem="true"][active="true"] {{
+    background: {p["bg_2"]};
+    color: {p["accent"]};
+    border-left: 2px solid {p["accent"]};
+    font-weight: 600;
+}}
 QPushButton[iconOnly="true"] {{
     background: transparent;
     border: 1px solid transparent;
