@@ -38,43 +38,32 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-65 (logo próprio + sidebar 184 SVG + layout single-screen + splash)"
+BUILD_MARKER = "build-66 (splash de boot aparece IMEDIATO — sem gap escuro pós-update)"
 
 
 def main() -> int:
     _boot_trace("src.main.main() entrada")
     _boot_trace(f"BUILD: {BUILD_MARKER}")
 
-    _boot_trace("importando PySide6")
+    # -------- IMPORTS MÍNIMOS PRIMEIRO: só o essencial pra ter QApplication + Splash na tela.
+    # Qt é o que mais demora pra importar (~2-4s em Nuitka bundle). Fazendo
+    # isso aqui e mostrando o splash ANTES dos outros imports, o usuário
+    # vê algo na tela em ~2s em vez dos ~10s antigos.
+    _boot_trace("importando PySide6 (mínimo)")
+    from PySide6.QtCore import QTimer
+    from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication, QMessageBox
-
-    _boot_trace("importando core.logger")
-    from .core.logger import log
-    # loga o build também no arquivo principal (não só no boot_trace)
-    log.info("=" * 60)
-    log.info("APP INICIADO — %s", BUILD_MARKER)
-    log.info("=" * 60)
-
-    _boot_trace("importando core.mapping")
-    from .core.mapping import MappingRepository
-
-    _boot_trace("importando core.settings_store")
-    from .core.settings_store import SettingsStore
-
-    _boot_trace("importando gui.main_window")
-    from .gui.main_window import MainWindow
 
     _boot_trace("criando QApplication")
     app = QApplication(sys.argv)
     app.setApplicationName("Auto Conferi")
     app.setOrganizationName("Auto Conferi")
-    # Ícone: barra de título, taskbar, alt-tab
+
+    # Ícone do app (barra de título, taskbar)
     try:
-        from PySide6.QtGui import QIcon
         for cand in (
-            Path(__file__).resolve().parent / "assets" / "branding" / "logo_simbolo.png",
-            Path(sys.executable).resolve().parent / "src" / "assets" / "branding" / "logo_simbolo.png",
-            Path(sys.executable).resolve().parent / "assets" / "branding" / "logo_simbolo.png",
+            Path(__file__).resolve().parent / "assets" / "branding" / "logo_autoconferi_256.png",
+            Path(sys.executable).resolve().parent / "src" / "assets" / "branding" / "logo_autoconferi_256.png",
         ):
             if cand.exists():
                 app.setWindowIcon(QIcon(str(cand)))
@@ -82,36 +71,55 @@ def main() -> int:
     except Exception:  # noqa: BLE001
         pass
 
+    # SPLASH IMEDIATO — antes dos imports pesados. Assim o usuário vê
+    # 'Auto Conferi' na tela em ~2s de boot em vez de esperar 8-10s
+    # de tela preta.
+    _boot_trace("criando splash imediato")
+    from .gui.splash import AutoConferiSplash
+    splash = AutoConferiSplash()
+    splash.show()
+    splash.start_animation()
+    app.processEvents()
+
+    # -------- IMPORTS PESADOS: agora que o splash está visível, o resto
+    # dos módulos pode importar sem o usuário achar que travou.
+    splash.set_etapa("Carregando módulos…")
+    app.processEvents()
+
+    _boot_trace("importando core.logger")
+    from .core.logger import log
+    log.info("=" * 60)
+    log.info("APP INICIADO — %s", BUILD_MARKER)
+    log.info("=" * 60)
+
+    _boot_trace("importando core.mapping/settings")
+    from .core.mapping import MappingRepository
+    from .core.settings_store import SettingsStore
+
+    splash.set_etapa("Lendo configurações…")
+    app.processEvents()
+
     try:
         _boot_trace("carregando SettingsStore")
         settings = SettingsStore()
-
         _boot_trace("carregando mapeamento.json")
         mp = _mapping_path()
         mapping = MappingRepository(mp)
     except Exception as e:  # noqa: BLE001
         _boot_trace(f"falha na inicialização: {type(e).__name__}: {e}")
         log.exception("Falha na inicialização")
+        splash.close()
         QMessageBox.critical(None, "Erro na inicialização", str(e))
         return 1
 
-    _boot_trace("criando splash")
-    from .gui.splash import AutoConferiSplash
-    splash = AutoConferiSplash()
-    splash.show()
-    splash.start_animation()
-    app.processEvents()
-    splash.set_etapa("Carregando módulos…")
-    app.processEvents()
-
-    _boot_trace("criando MainWindow")
     splash.set_etapa("Preparando interface…")
     app.processEvents()
-    win = MainWindow(settings, mapping, mp)
 
-    # Garante que qualquer worker rodando é encerrado antes do app fechar —
-    # evita 'QThread: Destroyed while thread is still running' e segurar
-    # shutdown do Windows.
+    _boot_trace("importando gui.main_window")
+    from .gui.main_window import MainWindow
+
+    _boot_trace("criando MainWindow")
+    win = MainWindow(settings, mapping, mp)
     app.aboutToQuit.connect(win._encerrar_threads)
 
     _boot_trace("MainWindow.show()")
@@ -119,8 +127,7 @@ def main() -> int:
     app.processEvents()
     win.show()
     # Fecha splash com pequeno delay pra dar sensação de transição
-    from PySide6.QtCore import QTimer as _QT
-    _QT.singleShot(200, splash.close)
+    QTimer.singleShot(200, splash.close)
     _boot_trace("app.exec()")
     return app.exec()
 
