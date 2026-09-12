@@ -161,7 +161,7 @@ class HudExecucao(QWidget):
         # Estilo do próprio HUD
         self.setStyleSheet(
             "HudExecucao { background: #0F141A; border: 1px solid #334155; "
-            "border-radius: 10px; }"
+            "border-radius: 4px; }"
         )
 
         # Timer pra atualizar o "tempo decorrido"
