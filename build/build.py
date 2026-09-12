@@ -156,6 +156,23 @@ def run() -> int:
         shutil.copy2(mapeamento_int, mapeamento_ext)
         print(f"Copiado: {mapeamento_ext}")
 
+    # Extrai BUILD_MARKER do src/main.py e escreve build_marker.txt ao
+    # lado do exe. O launcher lê esse arquivo pra saber qual versão está
+    # instalada SEM precisar importar src.main (que pode estar quebrado
+    # num build ruim). Usado pelo auto-recovery de boot em launcher.py.
+    import re as _re
+    try:
+        main_src = (SRC / "main.py").read_text(encoding="utf-8")
+        m = _re.search(r'BUILD_MARKER\s*=\s*"([^"]+)"', main_src)
+        if m:
+            bm = m.group(1)
+            (destino_pasta / "build_marker.txt").write_text(bm, encoding="utf-8")
+            print(f"build_marker.txt: {bm}")
+        else:
+            print("AVISO: BUILD_MARKER não encontrado em src/main.py")
+    except Exception as e:
+        print(f"AVISO: falha escrevendo build_marker.txt: {e}")
+
     print()
     print("=" * 60)
     print(f"Pronto: {destino_pasta}")

@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-75 (hotfix: chaves não escapadas no comentário do QSS quebravam boot)"
+BUILD_MARKER = "build-76 (auto-recovery: launcher baixa update sozinho se boot anterior crashou)"
 
 
 def main() -> int:
@@ -129,6 +129,23 @@ def main() -> int:
     # mono-monitor, no início do lote a janela se minimiza e um HUD
     # compacto aparece no canto (ver MainWindow._preparar_janela_para_execucao).
     win.showMaximized()
+
+    # Marca boot bem-sucedido: chegamos até a UI. O launcher lê esse
+    # marker no próximo boot pra decidir se precisa fazer auto-recovery
+    # (baixar update remoto se o exe atual crashou no boot). Ver
+    # launcher._boot_anterior_falhou / _auto_recovery_boot.
+    try:
+        from datetime import datetime as _dt
+        exe_dir = Path(sys.argv[0]).resolve().parent if (
+            getattr(sys, "frozen", False) or "__compiled__" in globals()
+        ) else Path(__file__).resolve().parent.parent
+        (exe_dir / "boot_ok.marker").write_text(
+            f"{BUILD_MARKER}\n{_dt.now().isoformat()}\n",
+            encoding="utf-8",
+        )
+        _boot_trace("boot_ok.marker escrito")
+    except Exception as e:  # noqa: BLE001
+        _boot_trace(f"boot_ok.marker falhou: {e}")
     # Fecha splash com pequeno delay pra dar sensação de transição
     QTimer.singleShot(200, splash.close)
     _boot_trace("app.exec()")
