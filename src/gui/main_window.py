@@ -324,6 +324,15 @@ class MainWindow(QMainWindow):
         self._tabela.setMinimumHeight(220)
         v.addWidget(self._tabela, 1)
 
+        # Separador fino entre a tabela e o step 3 — evita o texto do
+        # step 3 parecer colado/sobreposto à tabela (bug visual relatado)
+        sep = QFrame()
+        sep.setObjectName("DivisorH")
+        sep.setFixedHeight(1)
+        v.addSpacing(4)
+        v.addWidget(sep)
+        v.addSpacing(4)
+
         # STEP 3: Executar
         v.addWidget(self._step_titulo(3, "Execute no TOTVS"))
         rodape = QHBoxLayout()
