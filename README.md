@@ -1,12 +1,21 @@
-# Lançamento Automático — TOTVS + Gemini
+# Auto Conferi
 
-Automação de lançamento de guias/resumos de impostos no TOTVS/Consinco a
-partir de PDF ou imagem do relatório. O documento é enviado ao Gemini, que
-extrai as linhas estruturadas; o app monta os lançamentos usando o de-para
-de filiais e executa cada um na tela **Inclusão de Títulos** (janela
-"Operador Financeiro") via automação de teclado/mouse — funciona com o
-TOTVS aberto no PC local **ou** rodando dentro da VM via RemoteApp
-(Auto Sky), onde a janela aparece com sufixo "(Remoto)".
+> Automação de lançamento de guias/resumos de impostos no **TOTVS/Consinco**
+> a partir de PDF ou imagem do relatório.
+
+O documento é enviado ao Gemini, que extrai as linhas estruturadas; o app
+monta os lançamentos usando o de-para de filiais e executa cada um na
+tela **Inclusão de Títulos** (janela "Operador Financeiro") via automação
+de teclado/mouse — funciona com o TOTVS aberto no PC local **ou** rodando
+dentro de VM via RemoteApp (Auto Sky), onde a janela aparece com sufixo
+"(Remoto)".
+
+> **Nome interno / repositório**: `lancamento-automatico` (histórico).
+> **Nome comercial exibido ao usuário e no `.exe`**: **Auto Conferi**.
+> Todo texto voltado ao usuário — janela, splash, dialogs, updater — usa
+> "Auto Conferi". Só o repo Git e o nome do zip publicado
+> (`LancamentoAutomatico-portatil.zip`) mantêm o nome antigo por
+> compatibilidade com o updater embarcado em builds já distribuídos.
 
 ## Impostos suportados
 
@@ -27,23 +36,32 @@ TOTVS aberto no PC local **ou** rodando dentro da VM via RemoteApp
    A janela é detectada automaticamente por substring `Operador Financeiro`
    (casa também `Operador Financeiro (Remoto)`).
 5. Selecionar o PDF/imagem do relatório e o Imposto → **Extrair**.
+   - Também é possível **arrastar o arquivo** (`.pdf/.png/.jpg/.jpeg/.webp`)
+     para dentro da janela (drag-and-drop).
 6. Revisar a tabela — corrigir filial, valor ou data se necessário.
 7. Opcional: marcar **Não apertar '+' automaticamente** (revisão manual
-   entre lançamentos), ou **Testar só o primeiro** (dry-run).
+   entre lançamentos) ou **Testar só o primeiro** (dry-run).
 8. **Executar** — o app cria cada título no TOTVS.
 
 ### Parada de emergência
 
 Pressione **END** a qualquer momento durante a execução do lote. O robô
-aborta imediatamente (leitura via `GetAsyncKeyState`, funciona mesmo se a
-janela do app não estiver em foco).
+aborta imediatamente (leitura via `GetAsyncKeyState` com `restype=c_short`
++ confirmação de 2 amostras, corrige o falso positivo do build 49;
+funciona mesmo se a janela do app não estiver em foco).
 
 ### Popup de duplicidade
 
 Se o TOTVS reclamar que o `Nro. Documento` já existe, o app detecta o
-popup (via snapshot-diff dos títulos de janela — sem falsos positivos com
-"aviso" no browser) e tenta novamente com um número aleatório novo, até
-`max_tentativas_duplicidade` vezes (padrão 10, ajustável no settings).
+popup (via snapshot-diff dos títulos de janela — sem falsos positivos
+com "aviso" no browser) e tenta novamente com um número aleatório novo,
+até `max_tentativas_duplicidade` vezes (padrão 10, ajustável no settings).
+
+### Instância única
+
+Uma segunda tentativa de abrir o `.exe` **não abre outra janela** — traz
+a janela existente pra frente (via `EnumWindows` + `SetForegroundWindow`).
+Mutex nomeado `Local\LancamentoAutomatico_SingleInstance_v1`.
 
 ## Rodando em desenvolvimento
 
@@ -54,36 +72,39 @@ pip install -r requirements.txt
 python -m src.main
 ```
 
-## Baixando o executável pronto (mais rápido)
+## Baixando o executável pronto
 
-Todo commit em `main` dispara o workflow `.github/workflows/build-exe.yml`
-no GitHub Actions, que compila com Nuitka num runner Windows e publica o
-zip portátil como artefato.
+**Todo commit em `main` publica automaticamente uma versão nova** — o
+próprio app se atualiza sozinho na próxima abertura (ver
+[ARCHITECTURE.md](ARCHITECTURE.md) → "Auto-update diferido"). Para
+instalar do zero:
 
-- **Aba Actions** → última execução verde de "Build .exe portátil" → baixe
-  `LancamentoAutomatico-portatil.zip`.
-- Ou crie uma tag `v0.1.0` e o mesmo zip vira uma **Release** oficial.
+1. Baixe `LancamentoAutomatico-portatil.zip` de
+   https://github.com/guiolindo/lancamento-automatico/releases/tag/latest
+2. Descompacte em qualquer pasta (Desktop, Documentos — sem admin).
+3. Clique em `LancamentoAutomatico.exe`.
 
-Descompacte em qualquer pasta do PC alvo (Desktop, Documentos — sem admin)
-e clique em `LancamentoAutomatico.exe`.
+A partir daí o updater cuida das próximas versões.
 
 ## Empacotando um executável portátil (sem admin, sem antivírus dando ruim)
 
-O alvo é um PC corporativo trancado: sem admin, sem instalador, e antivírus
+O alvo é um PC corporativo trancado: sem admin, sem instalador, e AV
 que barra qualquer executável Python "empacotado". Por isso **não usamos
 PyInstaller** — ele descompacta Python em `%TEMP%` em runtime, exatamente
 o comportamento que AVs marcam como malware.
 
-Em vez disso, **compilamos com Nuitka em modo `--standalone`**: gera código
-C→binário nativo real, com taxa muito menor de falso-positivo. A saída é
-uma **pasta portátil** que roda em qualquer Windows sem instalação.
+Em vez disso, **compilamos com Nuitka em modo `--standalone`**: gera
+código C→binário nativo real, com taxa muito menor de falso-positivo.
+A saída é uma **pasta portátil** que roda em qualquer Windows sem
+instalação.
 
-### Build (na máquina de desenvolvimento, não na do TOTVS)
+### Build local (na máquina de desenvolvimento)
 
 Requisitos: Windows x64, Python 3.11 ou 3.12.
 
 ```bash
 pip install -r requirements.txt
+pip install nuitka zstandard ordered-set
 python build/build.py
 ```
 
@@ -98,12 +119,25 @@ dist/LancamentoAutomatico.dist/
 └── ... (DLLs e recursos)
 ```
 
+### Build no CI (recomendado)
+
+Todo push em `main` dispara `.github/workflows/build-exe.yml`:
+
+1. Roda Nuitka num runner Windows.
+2. Compacta como `LancamentoAutomatico-portatil.zip` (**nome fixo**).
+3. Publica na rolling release `latest` do repositório — `softprops`
+   sobrescreve o asset in-place, sem janela vazia (fix do build-68).
+4. Limpa assets antigos DEPOIS do upload, preservando o atual.
+
+Body da release inclui `BUILD_MARKER=...` e `SHA256=...` — o updater
+usa ambos pra detectar versão nova e validar integridade.
+
 ### Levando para o PC do TOTVS
 
-1. Zipe a pasta `LancamentoAutomatico.dist/` inteira.
+1. Zipe a pasta `LancamentoAutomatico.dist/` inteira (ou baixe o zip do
+   release).
 2. Copie o `.zip` via USB / rede / e-mail.
-3. Descompacte para qualquer pasta (Documentos, Desktop, etc — não precisa
-   `Program Files`, não precisa admin).
+3. Descompacte para qualquer pasta.
 4. Clique em `LancamentoAutomatico.exe`.
 
 ## Arquivos de configuração
@@ -117,11 +151,21 @@ nenhuma modificação em pastas protegidas.
 | `calibracao.json` | Posições dos 11 campos do TOTVS (relativas à janela) e cor RGB do popup |
 | `lancamento.log` | Log da execução |
 | `boot_trace.log` | Trace de inicialização (para depurar crash em startup) |
+| `startup_error.log` | Stacktrace se o boot morrer com exceção não tratada |
 
-Se a automação começar a errar depois de uma atualização do TOTVS, apagar
-`calibracao.json` e recalibrar. Se algum delay estiver curto d+ para o PC
-alvo (o robô "furando" antes do campo focar), editar `settings.json` na
-seção `delays`.
+Se a automação começar a errar depois de uma atualização do TOTVS,
+apagar `calibracao.json` e recalibrar. Se algum delay estiver curto d+
+para o PC alvo (o robô "furando" antes do campo focar), editar
+`settings.json` na seção `delays`.
+
+Ao lado do `.exe` (pasta portátil):
+
+| Arquivo | Papel |
+| ------- | ----- |
+| `mapeamento.json` | De-para de filiais e configurações por imposto — **editável pelo usuário final sem recompilar** |
+| `_next/` | Pasta temporária do updater. Só existe entre "download pronto" e "próximo boot aplica". |
+| `_next/READY` | Marker JSON que sinaliza pro launcher aplicar o update no próximo boot |
+| `*.exe.old` | Cópia do .exe antigo, deixada pra trás após swap. Removida no boot seguinte. |
 
 ### Modelo do Gemini
 
@@ -131,17 +175,23 @@ migrados automaticamente ao subir uma versão nova do app.
 
 ## Editando o de-para de filiais
 
-`mapeamento.json` (ao lado do `.exe` na pasta portátil, ou em `src/config/`
-em dev) contém o cadastro de filiais, aliases e configurações por imposto.
-Adicione novas filiais/lojas editando esse JSON — sem recompilar.
+`mapeamento.json` (ao lado do `.exe` na pasta portátil, ou em
+`src/config/` em dev) contém o cadastro de filiais, aliases e
+configurações por imposto. Adicione novas filiais/lojas editando esse
+JSON — sem recompilar.
 
-## Estrutura
+Na UI existe também um dialog "De-Para" (menu lateral) que edita o mesmo
+arquivo com validação.
+
+## Estrutura do repositório
 
 ```
-launcher.py               entrypoint Nuitka (fix stdio, error dialog)
+launcher.py               entrypoint Nuitka (single-instance, apply update, error dialog)
 src/
-  main.py                 boot do app (PySide6)
-  config/mapeamento.json  de-para editável
+  main.py                 boot do app PySide6 (splash IMEDIATO, depois imports pesados)
+                          contém BUILD_MARKER — string que identifica a versão
+  config/mapeamento.json  de-para de filiais (embutido no build)
+  assets/branding/        logos do Auto Conferi em 8 tamanhos (16..512 px)
   core/
     models.py             dataclasses (Lancamento, Filial, Imposto)
     logger.py             log com UTF-8 seguro
@@ -150,24 +200,40 @@ src/
     calibracao.py         calibracao.json (11 pontos + cor popup)
     gemini_client.py      chamada REST v1beta + parser
     rpa_totvs.py          automação da janela Operador Financeiro
+    visao_totvs.py        detecção pixel-perfect de campos
+    updater.py            check GitHub Releases + download + SHA256 + extract p/ _next/
   gui/
-    theme.py              QSS dark
+    theme.py              QSS + PALETTE_DARK/PALETTE_LIGHT (índigo #3B82F6 + teal #14B8A6)
+    icons.py              ícones vetoriais QPainter (não depende de font emoji)
+    splash.py             AutoConferiSplash — splash inicial com logo animada
+    updater_bar.py        barra laranja no topo com estado do updater
     setup_dialog.py       primeiro uso (API key)
     calibracao_dialog.py  captura das posições no TOTVS
+    depara_dialog.py      editor do mapeamento.json
     workers.py            QThread p/ extração e p/ execução do lote
     preview_table.py      tabela de revisão
-    main_window.py        janela principal
+    main_window.py        janela principal (single-screen operacional)
 build/
   build.py                script Nuitka (portátil, anti-AV)
-  app.ico                 (opcional) ícone do executável
+  app.ico                 ícone do .exe (bump de file-version força cache do Explorer a atualizar)
 .github/workflows/
-  build-exe.yml           CI Windows → artefato .zip / Release em tag v*
+  build-exe.yml           CI Windows → rolling release 'latest' + tag v* p/ release oficial
+ARCHITECTURE.md           contrato interno (updater ↔ launcher, workflow, race conditions, changelog)
+DECISIONS.md              log de decisões (histórico do que foi discutido e implementado)
 ```
 
 ## Se ainda assim o antivírus reclamar
 
 Ordem de recurso:
-1. **Ícone customizado**: coloque um `build/app.ico`; o script já usa.
+1. **Ícone customizado**: `build/app.ico` já está no script.
 2. **Assinatura digital**: um certificado code-signing (mesmo self-signed
    confiado no domínio) faz o SmartScreen parar. Falar com TI.
 3. **Whitelist por hash**: TI adiciona o hash do `.exe` ao AV corporativo.
+
+## Documentação adicional
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — contratos internos, mecânica
+  do auto-update, changelog de builds, gotchas conhecidos. **Leia antes
+  de mexer em `updater.py`, `launcher.py` ou no workflow.**
+- **[DECISIONS.md](DECISIONS.md)** — log das decisões tomadas ao longo
+  do projeto.

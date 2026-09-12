@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-68 (fix race condition HTTP 404 no auto-update)"
+BUILD_MARKER = "build-69 (docs completas: README + ARCHITECTURE + DECISIONS)"
 
 
 def main() -> int:
