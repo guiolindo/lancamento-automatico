@@ -169,35 +169,102 @@ def _aviso_ja_aberto() -> None:
         pass
 
 
-# ---------- Splash durante aplicação de update ----------
-def _splash_aplicando_update():
-    """Mostra MessageBox 'Aplicando atualização' em thread daemon. Como a
-    thread é daemon, ela morre junto com o processo no os._exit(0) do
-    reinício — não precisa fechar manualmente."""
-    import threading
-    def worker():
+# ---------- Splash Qt com progresso durante aplicação de update ----------
+def _criar_splash_update():
+    """Cria e mostra uma janelinha Qt com progress bar + ETA. Devolve
+    (app, splash, cb) onde cb(feito, total, msg) atualiza. splash.close()
+    fecha; se relaunch com os._exit(0), morre junto sem drama."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import (
+        QApplication, QLabel, QProgressBar, QVBoxLayout, QWidget
+    )
+    import time as _time
+
+    app = QApplication.instance() or QApplication(sys.argv)
+
+    splash = QWidget()
+    splash.setWindowFlag(Qt.SplashScreen)
+    splash.setWindowFlag(Qt.WindowStaysOnTopHint)
+    splash.setFixedSize(440, 150)
+    # Centraliza na tela primária
+    try:
+        from PySide6.QtGui import QGuiApplication
+        tela = QGuiApplication.primaryScreen().availableGeometry()
+        splash.move(
+            tela.center().x() - splash.width() // 2,
+            tela.center().y() - splash.height() // 2,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    v = QVBoxLayout(splash)
+    v.setContentsMargins(24, 20, 24, 20)
+    v.setSpacing(10)
+
+    titulo = QLabel("Aplicando atualização…")
+    titulo.setStyleSheet(
+        "font-size: 15px; font-weight: 700; color: #0F172A;"
+    )
+    v.addWidget(titulo)
+
+    bar = QProgressBar()
+    bar.setRange(0, 100)
+    bar.setValue(0)
+    bar.setTextVisible(False)
+    bar.setFixedHeight(10)
+    bar.setStyleSheet(
+        "QProgressBar { background: #E7EBF2; border: none; border-radius: 5px; }"
+        "QProgressBar::chunk { background: qlineargradient("
+        "x1:0, y1:0, x2:1, y2:0, stop:0 #FF6900, stop:1 #FF7A1A);"
+        " border-radius: 5px; }"
+    )
+    v.addWidget(bar)
+
+    detalhe = QLabel("Preparando…")
+    detalhe.setStyleSheet("font-size: 12px; color: #64748B;")
+    v.addWidget(detalhe)
+
+    splash.setStyleSheet(
+        "QWidget { background: #FFFFFF; border: 1px solid #D5DBE5; "
+        "border-radius: 10px; }"
+    )
+    splash.show()
+    app.processEvents()
+
+    inicio = _time.monotonic()
+
+    def cb(feito, total, msg=""):
         try:
-            import ctypes
-            ctypes.windll.user32.MessageBoxW(
-                None,
-                "Aplicando atualização do aplicativo...\n\n"
-                "Isso leva alguns segundos. O app vai reiniciar sozinho quando terminar.\n\n"
-                "(Você pode fechar essa janela e continuar aguardando.)",
-                "Lançamento Automático - Atualizando",
-                0x40 | 0x1000,  # MB_ICONINFORMATION | MB_SYSTEMMODAL (sempre no topo)
-            )
+            if total <= 0:
+                total = 1
+            pct = int(feito * 100 / total)
+            bar.setValue(pct)
+            elapsed = _time.monotonic() - inicio
+            if feito > 0 and feito < total:
+                restante = elapsed * (total - feito) / feito
+                if restante < 1:
+                    txt = f"{pct}% · {msg}  ·  quase pronto"
+                else:
+                    txt = f"{pct}% · {msg}  ·  faltam ~{int(restante)}s"
+            elif feito >= total:
+                txt = "100% · Concluído · reiniciando…"
+            else:
+                txt = msg or "Iniciando…"
+            detalhe.setText(txt)
+            app.processEvents()
         except Exception:  # noqa: BLE001
             pass
-    t = threading.Thread(target=worker, daemon=True)
-    t.start()
-    return t
+
+    return app, splash, cb
 
 
 # ---------- 4. Aplicar update pendente (Opção D) ----------
-def _aplicar_pendente() -> bool:
+def _aplicar_pendente(progress_cb=None) -> bool:
     """Se existe <install>/_next/READY, copia arquivos por cima do install
     atual. Chamado ANTES de importar src.main — assim o próximo boot já
-    roda a versão nova. Devolve True se aplicou algo."""
+    roda a versão nova. Devolve True se aplicou algo.
+
+    progress_cb(feito, total, msg): callback opcional pra feedback."""
     import shutil
     import json as _json
     install = _exe_dir()
@@ -229,6 +296,19 @@ def _aplicar_pendente() -> bool:
         except OSError:
             pass  # ainda locked, tenta no próximo boot
 
+    # Conta arquivos pra progress
+    todos_arquivos = [
+        f for f in next_dir.rglob("*")
+        if f.is_file() and f.name != "READY"
+    ]
+    total = len(todos_arquivos)
+    _boot_trace(f"update: {total} arquivos pra copiar")
+
+    if progress_cb:
+        progress_cb(0, total, "Preparando…")
+
+    feito = 0
+
     if exe_novo.exists() and exe_novo.stat().st_size > 0:
         try:
             # Renomeia self, sem problema no Windows
@@ -241,6 +321,9 @@ def _aplicar_pendente() -> bool:
             exe_atual.rename(old_path)
             shutil.copy2(exe_novo, exe_atual)
             _boot_trace(f"exe substituído: {exe_atual}")
+            feito += 1
+            if progress_cb:
+                progress_cb(feito, total, exe_nome)
         except OSError as e:
             _boot_trace(f"FALHA ao swap exe: {e}")
             # Não bloqueia — segue e tenta copiar os outros arquivos
@@ -248,11 +331,7 @@ def _aplicar_pendente() -> bool:
     # Copia todos os outros arquivos por cima
     aplicados = 0
     falhas = 0
-    for src in next_dir.rglob("*"):
-        if src.is_dir():
-            continue
-        if src.name == "READY":
-            continue
+    for src in todos_arquivos:
         rel = src.relative_to(next_dir)
         if rel.name == exe_nome:
             continue  # já foi feito acima
@@ -261,8 +340,14 @@ def _aplicar_pendente() -> bool:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
             aplicados += 1
+            feito += 1
+            if progress_cb and feito % 5 == 0:  # não atualiza a cada file (custa)
+                progress_cb(feito, total, rel.name)
         except OSError:
             falhas += 1
+
+    if progress_cb:
+        progress_cb(total, total, "Concluído")
 
     _boot_trace(f"update aplicado: {aplicados} arquivos, {falhas} falhas")
 
@@ -321,19 +406,25 @@ def main() -> int:
     try:
         _boot_trace("verificando update pendente")
         try:
-            # Se tem update pendente, mostra splash ANTES de aplicar. A
-            # aplicação copia ~130MB de arquivos e leva alguns segundos —
-            # sem feedback o usuário acha que travou.
             install = _exe_dir()
+            splash_cb = None
+            splash_widget = None
             if (install / "_next" / "READY").exists():
-                _boot_trace("update pendente — mostrando splash informativo")
-                _splash_aplicando_update()
-                import time as _time
-                _time.sleep(0.3)  # dá tempo do MessageBox aparecer
+                _boot_trace("update pendente — abrindo splash com progresso")
+                try:
+                    _, splash_widget, splash_cb = _criar_splash_update()
+                except Exception as e:  # noqa: BLE001
+                    _boot_trace(f"splash Qt falhou ({e}) — segue sem feedback visual")
 
-            aplicou = _aplicar_pendente()
+            aplicou = _aplicar_pendente(progress_cb=splash_cb)
             if aplicou:
                 _boot_trace("update pendente aplicado — reiniciando pra pegar código novo")
+                # Fecha splash antes de sair do processo
+                if splash_widget is not None:
+                    try:
+                        splash_widget.close()
+                    except Exception:  # noqa: BLE001
+                        pass
                 _reiniciar_como_novo_exe()
                 # Se _reiniciar falhou (não deveria), segue com o código velho
                 # e loga aviso. Usuário terá que abrir manualmente pra pegar

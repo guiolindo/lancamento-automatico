@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-61 (build de teste — validando retry do auto-check)"
+BUILD_MARKER = "build-62 (fix layout step 3 + splash de update com %/ETA)"
 
 
 def main() -> int:
