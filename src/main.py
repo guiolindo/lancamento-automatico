@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-54 (shutdown limpo — não segura desligamento do Windows)"
+BUILD_MARKER = "build-55 (updater — asset fixo + log de erro + escolha do mais novo)"
 
 
 def main() -> int:

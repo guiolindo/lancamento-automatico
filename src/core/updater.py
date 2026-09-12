@@ -33,6 +33,8 @@ from typing import Callable, Optional
 
 import requests
 
+from .logger import log
+
 
 REPO = "guiolindo/lancamento-automatico"
 TAG_ROLLING = "latest"
@@ -100,42 +102,58 @@ def limpar_download_parcial() -> None:
 
 def check(build_marker_local: str, timeout: int = 15) -> Optional[InfoAtualizacao]:
     """Consulta a release 'latest' e devolve info comparando com local.
-    Devolve None se não conseguir conectar (não é erro fatal)."""
+    Devolve None se não conseguir conectar (não é erro fatal).
+    Loga a razão exata da falha em lancamento.log."""
     url = f"https://api.github.com/repos/{REPO}/releases/tags/{TAG_ROLLING}"
+    log.info("[updater] check: GET %s", url)
     try:
         r = requests.get(url, timeout=timeout,
                          headers={"Accept": "application/vnd.github+json"})
-    except requests.RequestException:
+    except requests.RequestException as e:
+        log.warning("[updater] check falhou (rede): %s: %s", type(e).__name__, e)
         return None
+    log.info("[updater] check: HTTP %d", r.status_code)
     if r.status_code == 404:
-        # Ainda não tem release publicada
+        log.info("[updater] release 'latest' ainda não publicada")
+        return None
+    if r.status_code == 403:
+        log.warning("[updater] 403 — possível rate limit da API (60 req/h sem token) OU firewall bloqueando api.github.com")
         return None
     if r.status_code != 200:
+        log.warning("[updater] resposta inesperada da API: %d — %s",
+                    r.status_code, r.text[:200])
         return None
 
     dados = r.json()
     body = dados.get("body") or ""
     nome_release = dados.get("name") or ""
 
-    # BUILD_MARKER remoto: primeiro tenta linha `BUILD_MARKER=...` do body,
-    # fallback pro name da release.
     m = re.search(r"BUILD_MARKER=(.+)", body)
     build_marker_remoto = m.group(1).strip() if m else nome_release.strip()
 
-    # SHA256 esperado
     m = re.search(r"SHA256=([A-Fa-f0-9]{64})", body)
     sha256_esperado = m.group(1).lower() if m else None
 
-    # Pega o primeiro asset zip que começa com o prefixo
     assets = dados.get("assets") or []
-    asset = None
-    for a in assets:
-        nome = a.get("name") or ""
-        if nome.startswith(ASSET_PREFIX) and nome.endswith(".zip"):
-            asset = a
-            break
-    if not asset:
+    log.info("[updater] release %r, %d assets, SHA256=%s",
+             build_marker_remoto, len(assets),
+             (sha256_esperado[:12] + "…") if sha256_esperado else "sem")
+
+    # Escolha do asset: pega o MAIS NOVO (por updated_at) que casa com o
+    # prefixo. Antes pegava o primeiro da lista, o que causava problema
+    # quando assets antigos ficavam acumulados no release.
+    candidatos = [a for a in assets
+                  if (a.get("name") or "").startswith(ASSET_PREFIX)
+                  and (a.get("name") or "").endswith(".zip")]
+    if not candidatos:
+        log.warning("[updater] nenhum asset .zip com prefixo %r no release", ASSET_PREFIX)
         return None
+    # Ordena por updated_at desc — o mais recente é o certo (é o que o
+    # workflow acabou de publicar com SHA256 que bate com o body)
+    candidatos.sort(key=lambda a: a.get("updated_at") or "", reverse=True)
+    asset = candidatos[0]
+    log.info("[updater] asset escolhido: %s (%d bytes, updated %s)",
+             asset.get("name"), asset.get("size"), asset.get("updated_at"))
 
     return InfoAtualizacao(
         build_marker_remoto=build_marker_remoto,
