@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-66 (splash de boot aparece IMEDIATO — sem gap escuro pós-update)"
+BUILD_MARKER = "build-67 (file dialog nativo + drag-drop + fix data cortando + ícone .exe)"
 
 
 def main() -> int:
