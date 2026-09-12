@@ -85,27 +85,6 @@ jobs:
           echo "value=$bm" >> $env:GITHUB_OUTPUT
           echo "Detected: $bm"
 
-      - name: Limpar assets antigos da rolling release
-        if: github.ref == 'refs/heads/main'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Assets antigos ficavam empilhando em cada push — o updater não
-          # sabia qual pegar e às vezes escolhia um com SHA256 desatualizado.
-          # Aqui deletamos TODOS antes de publicar o novo com nome fixo.
-          $existentes = gh release view latest --repo ${{ github.repository }} --json assets --jq '.assets[].name' 2>$null
-          if ($LASTEXITCODE -eq 0 -and $existentes) {
-            foreach ($nome in $existentes -split "`n") {
-              if ($nome.Trim()) {
-                Write-Host "Deletando asset antigo: $nome"
-                gh release delete-asset latest "$nome" --repo ${{ github.repository }} --yes 2>$null
-              }
-            }
-          } else {
-            Write-Host "Release 'latest' ainda não existe — nada pra limpar"
-          }
-
       - name: Publicar rolling release (a cada push em main)
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -122,6 +101,28 @@ jobs:
             COMMIT=${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Limpar assets antigos da rolling release
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Roda DEPOIS do upload — preserva o asset que acabou de ser
+          # publicado ($env:ZIP_NAME). Antes deletávamos TUDO antes do upload,
+          # o que abria uma janela de ~10s onde clientes que já tinham feito
+          # check() (com URL do asset velho) recebiam HTTP 404 no download.
+          $atual = $env:ZIP_NAME
+          $existentes = gh release view latest --repo ${{ github.repository }} --json assets --jq '.assets[].name' 2>$null
+          if ($LASTEXITCODE -eq 0 -and $existentes) {
+            foreach ($nome in $existentes -split "`n") {
+              $n = $nome.Trim()
+              if ($n -and $n -ne $atual) {
+                Write-Host "Deletando asset antigo: $n"
+                gh release delete-asset latest "$n" --repo ${{ github.repository }} --yes 2>$null
+              }
+            }
+          }
 
       - name: Publicar release oficial (só em tag v*)
         if: startsWith(github.ref, 'refs/tags/v')

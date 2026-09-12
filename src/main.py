@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-67 (file dialog nativo + drag-drop + fix data cortando + ícone .exe)"
+BUILD_MARKER = "build-68 (fix race condition HTTP 404 no auto-update)"
 
 
 def main() -> int:
