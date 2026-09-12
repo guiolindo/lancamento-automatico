@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-69 (docs completas: README + ARCHITECTURE + DECISIONS)"
+BUILD_MARKER = "build-70 (auto-detect visual em destaque: botão, status, docs)"
 
 
 def main() -> int:

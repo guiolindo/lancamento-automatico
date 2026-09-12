@@ -218,6 +218,59 @@ entre DPIs.
 
 ---
 
+## 4b. Auto-detect visual de campos do TOTVS (builds 36-39)
+
+Complementa (e na prática substitui) a calibração manual antiga.
+
+### O que faz
+
+`src/core/visao_totvs.py` expõe
+`preencher_calibracao_automatica(calibracao) -> (ok: bool, msg: str)`.
+Ele:
+
+1. Detecta a janela `Operador Financeiro` (substring, case-insensitive
+   — casa `Operador Financeiro (Remoto)` do RemoteApp/Auto Sky).
+2. Captura a região da janela via `mss` (screenshot rápido).
+3. Roda OpenCV / template matching contra os elementos conhecidos da
+   tela **Inclusão de Títulos** pra localizar cada campo pixel-perfect.
+4. Sobrescreve `calibracao.campos` com as coordenadas detectadas
+   **em memória** — não persiste em disco. Isso é chave: a calibração
+   manual salva em `calibracao.json` fica intacta como fallback.
+
+### Quando é chamado
+
+Uma vez por lote, dentro de `LoteWorker.run()` em `src/gui/workers.py:135`,
+**antes** de instanciar `RpaTotvs`. Se falhar (`ok=False`), o worker
+loga `[visão] fallback pra calibração manual salva` e segue usando o
+que estiver em `calibracao.campos` — vindo de `calibracao.json`.
+
+### Papel do dialog "Recalibrar (backup)"
+
+O botão em `MainWindow._toolbar_acoes` (label "Recalibrar (backup)"
+desde build-70) abre `CalibracaoDialog` só como rede de segurança. Em
+máquina padrão o usuário nunca precisa apertar — o auto-detect resolve.
+Serve pra:
+
+- Versão do TOTVS com layout customizado que o template matching não
+  reconhece.
+- DPI/tema exótico que muda proporções da janela.
+- Debug: forçar posições conhecidas quando o auto-detect está errando
+  silenciosamente.
+
+### Contrato importante
+
+- **Auto-detect nunca falha silenciosamente pro usuário**: sempre loga
+  `[visão] <mensagem>` no console/log_file. Se você mexer em
+  `visao_totvs.py`, preserve essa contract.
+- **`calibracao.campos` é escrito em memória, não em disco** pelo
+  auto-detect. Nunca chame `calib_store.salvar(calibracao)` a partir
+  do `visao_totvs.py` — ia sobrescrever o fallback do usuário.
+- **`CAMPOS_OPCIONAIS`** em `src/core/calibracao.py` define quais campos
+  podem faltar sem o lote quebrar. Auto-detect que só acha campos
+  obrigatórios ainda é `ok=True`.
+
+---
+
 ## 5. Empacotamento Nuitka
 
 Ver comentários em `build/build.py` — mas o essencial:
@@ -270,6 +323,8 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 66 | Splash de boot IMEDIATO (reordena imports em main.py) | `main.py` |
 | 67 | File dialog nativo + drag-and-drop + fix data cortando + bump ícone | `main_window.py`, `build.py` |
 | 68 | **Fix race condition HTTP 404 no auto-update** (workflow + updater) | workflow, `updater.py` |
+| 69 | Docs completas: README + ARCHITECTURE + DECISIONS | `*.md` |
+| 70 | UX + docs: deixa claro que auto-detect visual é padrão (botão "Recalibrar (backup)", status label, seção 4b) | `main_window.py`, `README.md`, `ARCHITECTURE.md` |
 
 ---
 
