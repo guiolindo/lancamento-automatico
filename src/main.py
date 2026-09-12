@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-72 (paleta petróleo + radius reduzido — menos cara de template)"
+BUILD_MARKER = "build-73 (verde-fisco no dark + azul-marinho no light — fora do azul-índigo genérico)"
 
 
 def main() -> int:

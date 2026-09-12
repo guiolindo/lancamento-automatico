@@ -84,7 +84,7 @@ class AutoConferiSplash(QWidget):
         self._bar.setTextVisible(False)
         self._bar.setStyleSheet(
             "QProgressBar { border: none; background: #202A35; border-radius: 2px; }"
-            "QProgressBar::chunk { background: #3B82F6; border-radius: 2px; }"
+            "QProgressBar::chunk { background: #15803D; border-radius: 2px; }"
         )
         v.addWidget(self._bar, alignment=Qt.AlignCenter)
         v.addSpacing(6)

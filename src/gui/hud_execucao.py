@@ -95,7 +95,7 @@ class HudExecucao(QWidget):
         self._bar.setStyleSheet(
             "QProgressBar { background: #1F2937; border: none; border-radius: 3px; }"
             "QProgressBar::chunk { background: qlineargradient("
-            "x1:0, y1:0, x2:1, y2:0, stop:0 #14B8A6, stop:1 #3B82F6);"
+            "x1:0, y1:0, x2:1, y2:0, stop:0 #B45309, stop:1 #15803D);"
             " border-radius: 3px; }"
         )
         v.addWidget(self._bar)
@@ -137,9 +137,9 @@ class HudExecucao(QWidget):
         self._btn_prosseguir = QPushButton("✓ Próximo")
         self._btn_prosseguir.setCursor(Qt.PointingHandCursor)
         self._btn_prosseguir.setStyleSheet(
-            "QPushButton { background: #14B8A6; color: #FFF; border: none; "
-            "border-radius: 5px; padding: 6px 10px; font-size: 11px; font-weight: 600; }"
-            "QPushButton:hover { background: #2DD4BF; }"
+            "QPushButton { background: #15803D; color: #FFF; border: none; "
+            "border-radius: 4px; padding: 6px 10px; font-size: 11px; font-weight: 600; }"
+            "QPushButton:hover { background: #16A34A; }"
         )
         self._btn_prosseguir.clicked.connect(self._on_prosseguir)
         ph.addWidget(self._btn_prosseguir, 1)
