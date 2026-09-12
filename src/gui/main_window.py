@@ -324,17 +324,17 @@ class MainWindow(QMainWindow):
         self._tabela.setMinimumHeight(220)
         v.addWidget(self._tabela, 1)
 
-        # Separador fino entre a tabela e o step 3 — evita o texto do
-        # step 3 parecer colado/sobreposto à tabela (bug visual relatado)
-        sep = QFrame()
-        sep.setObjectName("DivisorH")
-        sep.setFixedHeight(1)
-        v.addSpacing(4)
-        v.addWidget(sep)
-        v.addSpacing(4)
-
         # STEP 3: Executar
-        v.addWidget(self._step_titulo(3, "Execute no TOTVS"))
+        # Wrap num container próprio com margem top pra garantir separação
+        # visual da tabela — sem inserir separador extra no layout que
+        # brigou com o stretch da tabela (bug reportado no build 59).
+        step3_wrap = QWidget()
+        step3_lay = QVBoxLayout(step3_wrap)
+        step3_lay.setContentsMargins(0, 14, 0, 0)  # 14px de respiro
+        step3_lay.setSpacing(10)
+
+        step3_lay.addWidget(self._step_titulo(3, "Execute no TOTVS"))
+
         rodape = QHBoxLayout()
         rodape.setSpacing(10)
 
@@ -365,7 +365,8 @@ class MainWindow(QMainWindow):
         self._btn_executar.clicked.connect(self._executar)
         rodape.addWidget(self._btn_executar)
 
-        v.addLayout(rodape)
+        step3_lay.addLayout(rodape)
+        v.addWidget(step3_wrap)
         return card
 
     def _step_titulo(self, numero: int, texto: str) -> QWidget:
