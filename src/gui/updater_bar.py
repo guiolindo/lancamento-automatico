@@ -57,16 +57,11 @@ class UpdaterBar(QFrame):
         self.lbl_bytes.setStyleSheet("color: rgba(255,255,255,0.8); font-size: 11px;")
         h.addWidget(self.lbl_bytes)
 
-        self.btn_cancel = QPushButton("×")
-        self.btn_cancel.setFixedSize(24, 24)
-        self.btn_cancel.setStyleSheet(
-            "QPushButton { background: transparent; color: white; border: none; "
-            "font-size: 16px; font-weight: bold; }"
-            "QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 4px; }"
-        )
-        self.btn_cancel.setToolTip("Cancelar atualização")
-        self.btn_cancel.clicked.connect(self._cancelar)
-        h.addWidget(self.btn_cancel)
+        # Botão × removido — durante o download não fazia sentido
+        # cancelar (atualização é obrigatória, download é rápido). No
+        # estado 'concluído' e 'erro' o widget é escondido automaticamente
+        # depois de alguns segundos.
+        self.btn_cancel = None
 
         # Cor de fundo laranja Economart (a barra é vistosa por design)
         self.setStyleSheet(
@@ -133,13 +128,9 @@ class UpdaterBar(QFrame):
             "QProgressBar { background: rgba(255,255,255,0.25); border-radius: 4px; }"
             "QProgressBar::chunk { background: white; border-radius: 4px; }"
         )
-        self.btn_cancel.setText("×")
-        self.btn_cancel.setToolTip("Fechar")
-        try:
-            self.btn_cancel.clicked.disconnect()
-        except Exception:
-            pass
-        self.btn_cancel.clicked.connect(lambda: self.setVisible(False))
+        # Some sozinho após 6s
+        from PySide6.QtCore import QTimer as _QT
+        _QT.singleShot(6000, lambda: self.setVisible(False))
 
     def _on_erro(self, msg: str) -> None:
         self.lbl.setText("✕  " + (msg[:80] + "…" if len(msg) > 80 else msg))
@@ -149,8 +140,6 @@ class UpdaterBar(QFrame):
             "QProgressBar::chunk { background: white; border-radius: 4px; }"
         )
         self.bar.setValue(0)
-        try:
-            self.btn_cancel.clicked.disconnect()
-        except Exception:
-            pass
-        self.btn_cancel.clicked.connect(lambda: self.setVisible(False))
+        # Some sozinho após 8s (mais tempo pra usuário ler o erro)
+        from PySide6.QtCore import QTimer as _QT
+        _QT.singleShot(8000, lambda: self.setVisible(False))
