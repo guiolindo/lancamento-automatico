@@ -395,6 +395,7 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 69 | Docs completas: README + ARCHITECTURE + DECISIONS | `*.md` |
 | 70 | UX + docs: deixa claro que auto-detect visual é padrão (botão "Recalibrar (backup)", status label, seção 4b) | `main_window.py`, `README.md`, `ARCHITECTURE.md` |
 | 71 | Boot maximizado + HUD flutuante em mono-monitor; auto-move MainWindow pra tela sem TOTVS em multi-monitor | `main.py`, `main_window.py`, `hud_execucao.py` (novo) |
+| 72 | Accent trocado pra petróleo `#0E4C6E` (não-Tailwind); border-radius 12→6→4 pra sair do "vibe SaaS 2024" | `theme.py`, `hud_execucao.py` |
 
 ---
 

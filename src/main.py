@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-71 (maximizar + HUD flutuante em mono-monitor)"
+BUILD_MARKER = "build-72 (paleta petróleo + radius reduzido — menos cara de template)"
 
 
 def main() -> int:

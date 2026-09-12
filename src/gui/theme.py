@@ -14,12 +14,13 @@ from __future__ import annotations
 
 
 # ---- Cores da marca Auto Conferi (identidade própria) ----
-# Índigo pra ação primária; teal pra brand/inteligência.
+# Petróleo denso pra ação primária (não o índigo Tailwind #3B82F6 clichê);
+# teal pra brand/inteligência processada.
 BRAND_TEAL         = "#14B8A6"
 BRAND_TEAL_HOVER   = "#2DD4BF"
-BRAND_INDIGO       = "#3B82F6"
-BRAND_INDIGO_HOVER = "#60A5FA"
-BRAND_INDIGO_PRESSED = "#2563EB"
+BRAND_INDIGO       = "#0E4C6E"   # petróleo — corporativo, não-Tailwind
+BRAND_INDIGO_HOVER = "#155E85"
+BRAND_INDIGO_PRESSED = "#093A56"
 # Aliases legados (código antigo referencia BRAND_ORANGE/BRAND_BLUE)
 BRAND_ORANGE       = BRAND_TEAL
 BRAND_ORANGE_HOVER = BRAND_TEAL_HOVER
@@ -29,8 +30,9 @@ BRAND_BLUE_HOVER   = BRAND_INDIGO_HOVER
 BRAND_BLUE_PRESSED = BRAND_INDIGO_PRESSED
 
 
-# Paleta Auto Conferi — identidade própria, sem laranja Economart.
-# Índigo funcional pra ações, teal pra "inteligência processada".
+# Paleta Auto Conferi — petróleo funcional + teal (inteligência).
+# Radius reduzidos no build-72 (12→6, 10→6, 8→6) pra sair do "vibe
+# SaaS 2024" e ficar com cara de ferramenta corporativa fiscal.
 PALETTE_DARK = {
     "bg_0":         "#0F141A",
     "bg_1":         "#171E26",
@@ -41,15 +43,15 @@ PALETTE_DARK = {
     "text":         "#F5F7FA",
     "text_muted":   "#B7C2CF",
     "text_disabled":"#718096",
-    "accent":       "#3B82F6",   # índigo (ação primária)
-    "accent_hover": "#60A5FA",
-    "accent_pressed":"#2563EB",
+    "accent":       "#0E4C6E",   # petróleo (ação primária) — não-Tailwind
+    "accent_hover": "#155E85",
+    "accent_pressed":"#093A56",
     # 'brand' = teal (inteligência, confirmação); usamos como brand color
     # do Auto Conferi. Nome mantido pra compatibilidade com QSS existente.
     "brand_orange":       "#14B8A6",   # teal — nome legado, é teal agora
     "brand_orange_hover": "#2DD4BF",
     "brand_orange_soft":  "rgba(20, 184, 166, 0.16)",
-    "brand_blue":         "#3B82F6",
+    "brand_blue":         "#0E4C6E",
     "success":      "#22C55E",
     "warning":      "#F59E0B",
     "danger":       "#EF4444",
@@ -65,13 +67,13 @@ PALETTE_LIGHT = {
     "text":         "#17202A",
     "text_muted":   "#52606D",
     "text_disabled":"#94A3B8",
-    "accent":       "#1D4ED8",   # índigo mais forte pra contraste no light
-    "accent_hover": "#2563EB",
-    "accent_pressed":"#1E40AF",
+    "accent":       "#0E4C6E",   # petróleo consistente com o dark
+    "accent_hover": "#155E85",
+    "accent_pressed":"#093A56",
     "brand_orange":       "#0F766E",   # teal escuro pra light theme
     "brand_orange_hover": "#0D9488",
     "brand_orange_soft":  "rgba(15, 118, 110, 0.14)",
-    "brand_blue":         "#1D4ED8",
+    "brand_blue":         "#0E4C6E",
     "success":      "#15803D",
     "warning":      "#B45309",
     "danger":       "#B91C1C",
@@ -148,7 +150,7 @@ QPushButton[iconOnly="true"] {{
     font-size: 14px;
     min-height: 20px;
     min-width: 20px;
-    border-radius: 6px;
+    border-radius: 3px;
 }}
 QPushButton[iconOnly="true"]:hover {{
     background: {p["bg_2"]};
@@ -206,20 +208,20 @@ QLabel[subtle="true"] {{
 QFrame[card="true"] {{
     background: {p["bg_1"]};
     border: 1px solid {p["border_soft"]};
-    border-radius: 12px;
+    border-radius: 6px;
 }}
 QFrame[cardFooter="true"] {{
     background: {p["bg_0"]};
     border-top: 1px solid {p["border_soft"]};
-    border-bottom-left-radius: 11px;
-    border-bottom-right-radius: 11px;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
 }}
 
-/* ---------- KPI Cards (com destaque laranja Economart) ---------- */
+/* ---------- KPI Cards ---------- */
 QFrame[kpi="true"] {{
     background: {p["bg_1"]};
     border: 1px solid {p["border_soft"]};
-    border-radius: 12px;
+    border-radius: 6px;
 }}
 QFrame[kpi="true"][highlight="true"] {{
     border: 1px solid {p["brand_orange"]};
@@ -293,7 +295,7 @@ QFrame#DivisorH {{
 QLineEdit, QDateEdit, QComboBox, QPlainTextEdit, QTextEdit, QSpinBox {{
     background: {p["bg_2"]};
     border: 1px solid {p["border"]};
-    border-radius: 8px;
+    border-radius: 4px;
     padding: 9px 12px;
     min-height: 20px;
     color: {p["text"]};
@@ -320,14 +322,14 @@ QComboBox QAbstractItemView {{
     selection-color: white;
     padding: 4px;
     outline: 0;
-    border-radius: 8px;
+    border-radius: 4px;
 }}
 
 /* ---------- Buttons ---------- */
 QPushButton {{
     background: {p["bg_2"]};
     border: 1px solid {p["border"]};
-    border-radius: 8px;
+    border-radius: 4px;
     padding: 9px 18px;
     color: {p["text"]};
     font-size: 13px;
@@ -395,7 +397,7 @@ QTableView, QTableWidget {{
     alternate-background-color: {p["bg_2"]};
     gridline-color: {p["border_soft"]};
     border: 1px solid {p["border_soft"]};
-    border-radius: 10px;
+    border-radius: 4px;
     selection-background-color: {p["accent"]};
     selection-color: white;
     font-size: 13px;
@@ -424,7 +426,7 @@ QScrollBar:vertical {{
 }}
 QScrollBar::handle:vertical {{
     background: {p["border"]};
-    border-radius: 5px;
+    border-radius: 3px;
     min-height: 30px;
 }}
 QScrollBar::handle:vertical:hover {{
@@ -440,7 +442,7 @@ QScrollBar:horizontal {{
 }}
 QScrollBar::handle:horizontal {{
     background: {p["border"]};
-    border-radius: 5px;
+    border-radius: 3px;
     min-width: 30px;
 }}
 QScrollBar::handle:horizontal:hover {{
@@ -451,7 +453,7 @@ QScrollBar::handle:horizontal:hover {{
 QProgressBar {{
     background: {p["bg_2"]};
     border: 1px solid {p["border_soft"]};
-    border-radius: 8px;
+    border-radius: 3px;
     height: 10px;
     text-align: center;
     color: {p["text"]};
@@ -460,7 +462,7 @@ QProgressBar {{
 QProgressBar::chunk {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                                  stop:0 {p["brand_orange"]}, stop:1 {p["accent"]});
-    border-radius: 7px;
+    border-radius: 2px;
 }}
 
 /* ---------- Status badges (pill) ---------- */
@@ -501,7 +503,7 @@ QLabel[badge="falha"] {{
 QPlainTextEdit#LogConsole {{
     background: {p["bg_0"]};
     border: 1px solid {p["border_soft"]};
-    border-radius: 10px;
+    border-radius: 4px;
     font-family: "Cascadia Mono", "Consolas", "Menlo", monospace;
     font-size: 12px;
     color: {p["text_muted"]};
@@ -543,7 +545,7 @@ QToolTip {{
 QFrame[filialRow="true"] {{
     background: {p["bg_1"]};
     border: 1px solid {p["border_soft"]};
-    border-radius: 10px;
+    border-radius: 4px;
 }}
 QFrame[filialRow="true"]:hover {{
     border-color: {p["brand_orange"]};
