@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-60 (auto-check com retry — 4s, 30s, 60s, 120s)"
+BUILD_MARKER = "build-61 (build de teste — validando retry do auto-check)"
 
 
 def main() -> int:
