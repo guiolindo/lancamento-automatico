@@ -471,27 +471,49 @@ class MainWindow(QMainWindow):
     def _verificar_setup(self) -> None:
         if not self.settings.get("gemini_api_key"):
             self._abrir_setup(inicial=True)
-        # Check de atualização automático no boot — 2s depois pra dar tempo
-        # da janela renderizar antes do modal aparecer.
+        # Check de atualização automático no boot — dá 4s pra janela
+        # renderizar + Windows Defender fazer a checagem CRL/OCSP inicial
+        # do certificado do github.com (essa demora costuma ser 5-15s na
+        # primeira request HTTPS após o boot da máquina).
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(2000, self._check_atualizacao_boot)
+        QTimer.singleShot(4000, self._check_atualizacao_boot)
 
     def _check_atualizacao_boot(self) -> None:
         """Verifica update no boot em background. Se tem, dispara modal
-        obrigatório (só botão Sim — sem escapatória)."""
+        obrigatório (só botão Sim — sem escapatória).
+        Se a consulta falhar, mostra indicador discreto no topbar em vez
+        de dispensar em silêncio."""
         import threading
         from ..core import updater
         from ..main import BUILD_MARKER
 
+        # Mostra status "verificando" no topbar
+        from PySide6.QtCore import QTimer as _QT
+        self._btn_atualizar.setText("Verificando…")
+        self._btn_atualizar.setEnabled(False)
+
         def worker():
             info = updater.check(BUILD_MARKER)
-            if info and info.tem_atualizacao:
-                # Volta pro main thread pra mostrar o modal
-                from PySide6.QtCore import QMetaObject, Qt as _Qt
-                # Invoca via slot (setter em property funciona bem pra passar dado
-                # simples). Simpler: usar singleShot com closure.
-                from PySide6.QtCore import QTimer as _QT
-                _QT.singleShot(0, lambda: self._modal_obrigatorio(info))
+
+            def _voltar():
+                self._btn_atualizar.setEnabled(True)
+                if info is None:
+                    # Consulta falhou — mostra visualmente pra usuário saber
+                    self._btn_atualizar.setText("⚠ Atualizar")
+                    self._btn_atualizar.setToolTip(
+                        "Não consegui consultar o GitHub agora. "
+                        "Clique pra tentar de novo — pode ser conexão lenta "
+                        "ou API do GitHub temporariamente indisponível."
+                    )
+                    self._log_line("⚠ Falha ao verificar atualização (veja lancamento.log)")
+                    return
+                self._btn_atualizar.setText("Atualizar")
+                if info.tem_atualizacao:
+                    self._modal_obrigatorio(info)
+                else:
+                    self._log_line(f"i Versão local ({info.build_marker_local}) já é a mais recente")
+
+            _QT.singleShot(0, _voltar)
 
         threading.Thread(target=worker, daemon=True).start()
 

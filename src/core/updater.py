@@ -100,17 +100,34 @@ def limpar_download_parcial() -> None:
 
 # ---------------- Check ----------------
 
-def check(build_marker_local: str, timeout: int = 15) -> Optional[InfoAtualizacao]:
+def check(build_marker_local: str, timeout: int = 30, tentativas: int = 3) -> Optional[InfoAtualizacao]:
     """Consulta a release 'latest' e devolve info comparando com local.
     Devolve None se não conseguir conectar (não é erro fatal).
-    Loga a razão exata da falha em lancamento.log."""
+    Faz até N tentativas com backoff — primeira request HTTPS no Windows
+    costuma ser lenta por causa de CRL/OCSP check do Defender."""
+    import time as _time
     url = f"https://api.github.com/repos/{REPO}/releases/tags/{TAG_ROLLING}"
-    log.info("[updater] check: GET %s", url)
-    try:
-        r = requests.get(url, timeout=timeout,
-                         headers={"Accept": "application/vnd.github+json"})
-    except requests.RequestException as e:
-        log.warning("[updater] check falhou (rede): %s: %s", type(e).__name__, e)
+    r = None
+    ultimo_erro = None
+    for tentativa in range(1, tentativas + 1):
+        log.info("[updater] check tentativa %d/%d: GET %s (timeout %ds)",
+                 tentativa, tentativas, url, timeout)
+        try:
+            r = requests.get(url, timeout=timeout,
+                             headers={
+                                 "Accept": "application/vnd.github+json",
+                                 "User-Agent": "LancamentoAutomatico-updater/1.0",
+                             })
+            break  # sucesso
+        except requests.RequestException as e:
+            ultimo_erro = e
+            log.warning("[updater] tentativa %d falhou: %s: %s",
+                        tentativa, type(e).__name__, e)
+            if tentativa < tentativas:
+                _time.sleep(1.5 * tentativa)  # backoff: 1.5s, 3s
+    if r is None:
+        log.warning("[updater] todas as %d tentativas falharam. último erro: %s",
+                    tentativas, ultimo_erro)
         return None
     log.info("[updater] check: HTTP %d", r.status_code)
     if r.status_code == 404:

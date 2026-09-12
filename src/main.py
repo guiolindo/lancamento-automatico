@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-55 (updater — asset fixo + log de erro + escolha do mais novo)"
+BUILD_MARKER = "build-56 (updater — retry no check, esperar mais no boot, indicador visual)"
 
 
 def main() -> int:
