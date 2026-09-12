@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-76 (auto-recovery: launcher baixa update sozinho se boot anterior crashou)"
+BUILD_MARKER = "build-77 (data width 145 + regra emissão≤contábil≤vencimento)"
 
 
 def main() -> int:
