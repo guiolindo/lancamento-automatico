@@ -31,6 +31,7 @@ NAV_ITEMS = [
     ("dashboard",     "📊", "Novo Lote"),
     ("mapeamento",    "🏢", "Filiais (De-Para)"),
     ("configuracoes", "⚙",  "Configurações"),
+    ("sobre",         "ℹ",  "Sobre"),
 ]
 
 NOME_SECAO = {
@@ -589,18 +590,49 @@ class MainWindow(QMainWindow):
     # ---------------- Ações ----------------
 
     def _trocar_secao(self, chave: str) -> None:
+        # 'mapeamento' e 'configuracoes' abrem DIALOG — não são seções
+        # separadas. Não devem tirar o 'active' do dashboard (que é a
+        # única tela real). Antes ficava um estado 'fantasma' onde o
+        # ícone lateral marcava selecionado mas o conteúdo era o
+        # dashboard.
+        if chave in ("mapeamento", "configuracoes", "sobre"):
+            if chave == "configuracoes":
+                self._abrir_setup()
+            elif chave == "mapeamento":
+                dlg = DeParaDialog(self.mapping, self.mapping_path, self)
+                dlg.setStyleSheet(qss(self._tema))
+                if dlg.exec():
+                    self._log_line("✓ De-Para atualizado e recarregado")
+            elif chave == "sobre":
+                self._abrir_sobre()
+            return
+        # Só troca active pra chaves que são realmente seções distintas
         for k, btn in self._nav_buttons.items():
             btn.setProperty("active", k == chave)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
         self._lb_secao.setText(NOME_SECAO.get(chave, chave))
-        if chave == "configuracoes":
-            self._abrir_setup()
-        elif chave == "mapeamento":
-            dlg = DeParaDialog(self.mapping, self.mapping_path, self)
-            dlg.setStyleSheet(qss(self._tema))
-            if dlg.exec():
-                self._log_line("✓ De-Para atualizado e recarregado")
+
+    def _abrir_sobre(self) -> None:
+        """Diálogo Sobre — créditos e info da versão."""
+        from ..main import BUILD_MARKER
+        box = QMessageBox(self)
+        box.setWindowTitle("Sobre")
+        box.setIcon(QMessageBox.Information)
+        box.setTextFormat(Qt.RichText)
+        box.setText(
+            "<h3 style='margin:0 0 6px 0'>Lançamento Automático — TOTVS</h3>"
+            "<p style='color:#888;margin:0'>Automação de lançamento fiscal · "
+            "TOTVS/Consinco</p>"
+            "<br><br>"
+            f"<b>Versão:</b> <code>{BUILD_MARKER}</code><br>"
+            "<b>Produzido por:</b> Guilherme Júnio<br>"
+            "<br>"
+            "<p style='color:#888;font-size:11px'>App portátil sem instalação · "
+            "roda sem admin · atualiza automaticamente pelo GitHub.</p>"
+        )
+        box.setStandardButtons(QMessageBox.Ok)
+        box.exec()
 
     def _selecionar_arquivo(self) -> None:
         ultimo = self.settings.get("ultima_pasta_upload", "") or str(Path.home())

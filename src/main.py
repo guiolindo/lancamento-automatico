@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-62 (fix layout step 3 + splash de update com %/ETA)"
+BUILD_MARKER = "build-63 (fix nav fantasma + botão Sobre + X removido do updater)"
 
 
 def main() -> int:
