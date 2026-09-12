@@ -148,8 +148,11 @@ class MainWindow(QMainWindow):
             v.addWidget(btn)
 
         self._nav_buttons["dashboard"].setProperty("active", True)
-        # ícone do ativo em índigo
-        self._nav_buttons["dashboard"].setIcon(_icons.icon_lote("#3B82F6"))
+        # Ícone do ativo na cor accent do tema atual (verde-fisco no dark,
+        # navy no light).
+        from .theme import PALETTE_DARK, PALETTE_LIGHT
+        _p = PALETTE_LIGHT if self._tema == "claro" else PALETTE_DARK
+        self._nav_buttons["dashboard"].setIcon(_icons.icon_lote(_p["accent"]))
         v.addStretch(1)
 
         # Toggle de tema no rodapé com ícone
@@ -607,7 +610,7 @@ class MainWindow(QMainWindow):
             )
         else:
             self._lbl_status_calib_top.setText("● Auto-detect visual ativo")
-            self._lbl_status_calib_top.setStyleSheet("color:#14B8A6; font-size:11px;")
+            self._lbl_status_calib_top.setStyleSheet("color:#B45309; font-size:11px;")
             self._lbl_status_calib_top.setToolTip(
                 "A cada lote o app tenta detectar os campos do TOTVS "
                 "automaticamente via visão computacional. Sem calibração "
@@ -640,10 +643,13 @@ class MainWindow(QMainWindow):
             btn.setProperty("active", ativo)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
-            # Repinta o ícone na cor certa
+            # Repinta o ícone na cor certa (accent do tema pra ativo,
+            # muted pra inativo)
             item = next((n for n in NAV_ITEMS if n[0] == k), None)
             if item:
-                cor = "#3B82F6" if ativo else "#B7C2CF"
+                from .theme import PALETTE_DARK, PALETTE_LIGHT
+                _p = PALETTE_LIGHT if self._tema == "claro" else PALETTE_DARK
+                cor = _p["accent"] if ativo else _p["text_muted"]
                 btn.setIcon(getattr(_icons, item[1])(cor))
         self._lb_secao.setText(NOME_SECAO.get(chave, chave))
 

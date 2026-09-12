@@ -13,26 +13,31 @@ Uso:
 from __future__ import annotations
 
 
-# ---- Cores da marca Auto Conferi (identidade própria) ----
-# Petróleo denso pra ação primária (não o índigo Tailwind #3B82F6 clichê);
-# teal pra brand/inteligência processada.
-BRAND_TEAL         = "#14B8A6"
-BRAND_TEAL_HOVER   = "#2DD4BF"
-BRAND_INDIGO       = "#0E4C6E"   # petróleo — corporativo, não-Tailwind
-BRAND_INDIGO_HOVER = "#155E85"
-BRAND_INDIGO_PRESSED = "#093A56"
-# Aliases legados (código antigo referencia BRAND_ORANGE/BRAND_BLUE)
+# ---- Cores da marca Auto Conferi (build-73) ----
+# Duas identidades intencionalmente diferentes por tema:
+#   DARK  → verde-fisco (Receita Federal, contador, planilha noturna) +
+#           âmbar-carimbo como brand secundária (selo/documento oficial).
+#   LIGHT → azul-marinho tradicional (planilha SAP, TOTVS legado) +
+#           bordô-registro como brand secundária.
+# Zero azul-índigo Tailwind, zero teal SaaS.
+# Aliases BRAND_TEAL/BRAND_INDIGO/BRAND_ORANGE/BRAND_BLUE apontam agora
+# pros novos valores; nome dos aliases é histórico, não descreve mais a
+# cor. Código novo deve puxar direto de PALETTE_DARK["accent"] etc.
+BRAND_TEAL         = "#B45309"   # âmbar-carimbo (secundária no dark)
+BRAND_TEAL_HOVER   = "#D97706"
+BRAND_INDIGO       = "#15803D"   # verde-fisco (primária no dark)
+BRAND_INDIGO_HOVER = "#16A34A"
+BRAND_INDIGO_PRESSED = "#14532D"
 BRAND_ORANGE       = BRAND_TEAL
 BRAND_ORANGE_HOVER = BRAND_TEAL_HOVER
-BRAND_ORANGE_SOFT  = "rgba(20, 184, 166, 0.14)"
+BRAND_ORANGE_SOFT  = "rgba(180, 83, 9, 0.16)"
 BRAND_BLUE         = BRAND_INDIGO
 BRAND_BLUE_HOVER   = BRAND_INDIGO_HOVER
 BRAND_BLUE_PRESSED = BRAND_INDIGO_PRESSED
 
 
-# Paleta Auto Conferi — petróleo funcional + teal (inteligência).
-# Radius reduzidos no build-72 (12→6, 10→6, 8→6) pra sair do "vibe
-# SaaS 2024" e ficar com cara de ferramenta corporativa fiscal.
+# Paleta DARK — verde-fisco (Receita/contador) + âmbar-carimbo.
+# Sai completamente do azul: sem petróleo, sem índigo, sem teal.
 PALETTE_DARK = {
     "bg_0":         "#0F141A",
     "bg_1":         "#171E26",
@@ -43,37 +48,43 @@ PALETTE_DARK = {
     "text":         "#F5F7FA",
     "text_muted":   "#B7C2CF",
     "text_disabled":"#718096",
-    "accent":       "#0E4C6E",   # petróleo (ação primária) — não-Tailwind
-    "accent_hover": "#155E85",
-    "accent_pressed":"#093A56",
-    # 'brand' = teal (inteligência, confirmação); usamos como brand color
-    # do Auto Conferi. Nome mantido pra compatibilidade com QSS existente.
-    "brand_orange":       "#14B8A6",   # teal — nome legado, é teal agora
-    "brand_orange_hover": "#2DD4BF",
-    "brand_orange_soft":  "rgba(20, 184, 166, 0.16)",
-    "brand_blue":         "#0E4C6E",
-    "success":      "#22C55E",
-    "warning":      "#F59E0B",
+    "accent":       "#15803D",   # verde-fisco (ação primária)
+    "accent_hover": "#16A34A",
+    "accent_pressed":"#14532D",
+    # 'brand_orange' (nome histórico): agora é âmbar-carimbo — remete
+    # a selo/documento oficial impresso. Complementa o verde-fisco.
+    "brand_orange":       "#B45309",   # âmbar-carimbo (brand secundária)
+    "brand_orange_hover": "#D97706",
+    "brand_orange_soft":  "rgba(180, 83, 9, 0.18)",
+    "brand_blue":         "#15803D",   # alias legado → verde
+    # 'success' fica num verde CLARO pra distinguir do accent verde-fisco
+    # escuro. Sem esse offset, badge de sucesso somia visualmente ao lado
+    # do botão primário.
+    "success":      "#4ADE80",
+    "warning":      "#FCD34D",
     "danger":       "#EF4444",
 }
 
+# Paleta LIGHT — planilha corporativa (SAP/TOTVS legado).
+# Azul-marinho tradicional (não Tailwind blue-500), branco puro no
+# conteúdo, bordô-registro como secundária.
 PALETTE_LIGHT = {
-    "bg_0":         "#F5F7FA",
+    "bg_0":         "#F3F5F7",
     "bg_1":         "#FFFFFF",
-    "bg_2":         "#EEF2F6",
-    "bg_3":         "#E2E8F0",
-    "border":       "#CBD5E1",
-    "border_soft":  "#E2E8F0",
-    "text":         "#17202A",
-    "text_muted":   "#52606D",
+    "bg_2":         "#EAEEF2",
+    "bg_3":         "#DCE3EA",
+    "border":       "#B8C2CC",
+    "border_soft":  "#D6DDE3",
+    "text":         "#0F172A",
+    "text_muted":   "#475569",
     "text_disabled":"#94A3B8",
-    "accent":       "#0E4C6E",   # petróleo consistente com o dark
-    "accent_hover": "#155E85",
-    "accent_pressed":"#093A56",
-    "brand_orange":       "#0F766E",   # teal escuro pra light theme
-    "brand_orange_hover": "#0D9488",
-    "brand_orange_soft":  "rgba(15, 118, 110, 0.14)",
-    "brand_blue":         "#0E4C6E",
+    "accent":       "#1E3A5F",   # azul-marinho tradicional (SAP/Excel)
+    "accent_hover": "#2A4B7A",
+    "accent_pressed":"#14284A",
+    "brand_orange":       "#7C2D12",   # bordô-registro (secundária)
+    "brand_orange_hover": "#9A3412",
+    "brand_orange_soft":  "rgba(124, 45, 18, 0.10)",
+    "brand_blue":         "#1E3A5F",
     "success":      "#15803D",
     "warning":      "#B45309",
     "danger":       "#B91C1C",
