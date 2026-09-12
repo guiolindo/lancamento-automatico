@@ -209,47 +209,67 @@ def baixar_e_preparar(
     zip_path = dl_dir / "download.zip"
 
     # ---- Baixa em streaming
+    # Retenta 1x com URL nova se der 404 — o workflow substitui o asset
+    # com o mesmo nome, e clientes que fizeram check() logo antes podem
+    # cair na janela em que o URL antigo já foi expirado. Buscar release
+    # info de novo dá a URL nova.
     on_progress(0, info.asset_tamanho, "Conectando…")
-    try:
-        with requests.get(info.asset_url, stream=True, timeout=30,
-                          headers={"Accept": "application/octet-stream"}) as r:
-            if r.status_code != 200:
-                raise UpdateError(f"GitHub retornou HTTP {r.status_code}")
-
-            total = int(r.headers.get("Content-Length") or info.asset_tamanho or 0)
-            baixados = 0
-            sha = hashlib.sha256()
-
-            with open(zip_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=CHUNK):
-                    if cancel_event.is_set():
-                        raise UpdateCancelled("Cancelado pelo operador")
-                    if not chunk:
+    url_atual = info.asset_url
+    tentativa_download = 0
+    baixados = 0
+    total = 0
+    sha = hashlib.sha256()
+    while True:
+        tentativa_download += 1
+        try:
+            with requests.get(url_atual, stream=True, timeout=30,
+                              headers={"Accept": "application/octet-stream"}) as r:
+                if r.status_code == 404 and tentativa_download == 1:
+                    log.warning("[updater] download 404 — buscando release info de novo (workflow pode ter republicado o asset)")
+                    on_progress(0, info.asset_tamanho, "Atualizando URL do arquivo…")
+                    info_novo = check(info.build_marker_local, tentativas=2)
+                    if info_novo and info_novo.asset_url:
+                        url_atual = info_novo.asset_url
                         continue
-                    f.write(chunk)
-                    sha.update(chunk)
-                    baixados += len(chunk)
-                    on_progress(baixados, total, "Baixando…")
+                    raise UpdateError("GitHub retornou HTTP 404 (asset não encontrado após retry)")
+                if r.status_code != 200:
+                    raise UpdateError(f"GitHub retornou HTTP {r.status_code}")
 
-            # Verifica que baixou tudo (não bateu)
-            if total > 0 and baixados < total:
-                raise UpdateError(
-                    f"Download incompleto: {baixados} de {total} bytes "
-                    "(rede caiu antes do fim)"
-                )
+                total = int(r.headers.get("Content-Length") or info.asset_tamanho or 0)
+                baixados = 0
+                sha = hashlib.sha256()
 
-    except UpdateError:
-        limpar_download_parcial()
-        raise
-    except UpdateCancelled:
-        limpar_download_parcial()
-        raise
-    except requests.RequestException as e:
-        limpar_download_parcial()
-        raise UpdateError(f"Rede: {e}") from e
-    except OSError as e:
-        limpar_download_parcial()
-        raise UpdateError(f"Disco: {e}") from e
+                with open(zip_path, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=CHUNK):
+                        if cancel_event.is_set():
+                            raise UpdateCancelled("Cancelado pelo operador")
+                        if not chunk:
+                            continue
+                        f.write(chunk)
+                        sha.update(chunk)
+                        baixados += len(chunk)
+                        on_progress(baixados, total, "Baixando…")
+
+                # Verifica que baixou tudo (não bateu)
+                if total > 0 and baixados < total:
+                    raise UpdateError(
+                        f"Download incompleto: {baixados} de {total} bytes "
+                        "(rede caiu antes do fim)"
+                    )
+                break  # sucesso
+
+        except UpdateError:
+            limpar_download_parcial()
+            raise
+        except UpdateCancelled:
+            limpar_download_parcial()
+            raise
+        except requests.RequestException as e:
+            limpar_download_parcial()
+            raise UpdateError(f"Rede: {e}") from e
+        except OSError as e:
+            limpar_download_parcial()
+            raise UpdateError(f"Disco: {e}") from e
 
     # ---- Valida SHA256
     on_progress(baixados, total, "Verificando integridade…")
