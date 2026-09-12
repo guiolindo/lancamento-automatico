@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-64 (rebrand Auto Conferi + paleta índigo/teal + fix 15s file dialog)"
+BUILD_MARKER = "build-65 (logo próprio + sidebar 184 SVG + layout single-screen + splash)"
 
 
 def main() -> int:
@@ -95,7 +95,18 @@ def main() -> int:
         QMessageBox.critical(None, "Erro na inicialização", str(e))
         return 1
 
+    _boot_trace("criando splash")
+    from .gui.splash import AutoConferiSplash
+    splash = AutoConferiSplash()
+    splash.show()
+    splash.start_animation()
+    app.processEvents()
+    splash.set_etapa("Carregando módulos…")
+    app.processEvents()
+
     _boot_trace("criando MainWindow")
+    splash.set_etapa("Preparando interface…")
+    app.processEvents()
     win = MainWindow(settings, mapping, mp)
 
     # Garante que qualquer worker rodando é encerrado antes do app fechar —
@@ -104,7 +115,12 @@ def main() -> int:
     app.aboutToQuit.connect(win._encerrar_threads)
 
     _boot_trace("MainWindow.show()")
+    splash.set_etapa("Pronto")
+    app.processEvents()
     win.show()
+    # Fecha splash com pequeno delay pra dar sensação de transição
+    from PySide6.QtCore import QTimer as _QT
+    _QT.singleShot(200, splash.close)
     _boot_trace("app.exec()")
     return app.exec()
 
