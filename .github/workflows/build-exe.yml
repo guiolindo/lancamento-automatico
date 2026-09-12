@@ -50,11 +50,15 @@ jobs:
       - name: Zipar pasta portátil
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".Replace("/", "-")
-          if ("${{ github.ref_type }}" -ne "tag") {
-            $version = "dev-$(git rev-parse --short HEAD)"
+          # Nome FIXO pra rolling release em main — softprops sobrescreve,
+          # não acumula. Assets com nome variável causavam múltiplos zips na
+          # mesma tag 'latest' e o updater não sabia qual pegar.
+          if ("${{ github.ref }}" -eq "refs/heads/main") {
+            $zipName = "LancamentoAutomatico-portatil.zip"
+          } else {
+            $version = "${{ github.ref_name }}".Replace("/", "-")
+            $zipName = "LancamentoAutomatico-$version.zip"
           }
-          $zipName = "LancamentoAutomatico-$version.zip"
           Compress-Archive -Path "dist/LancamentoAutomatico.dist/*" -DestinationPath $zipName -Force
           echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
           Get-Item $zipName | Format-List Name, Length
@@ -80,6 +84,27 @@ jobs:
           $bm = (Select-String -Path "src/main.py" -Pattern 'BUILD_MARKER = "(.+)"').Matches[0].Groups[1].Value
           echo "value=$bm" >> $env:GITHUB_OUTPUT
           echo "Detected: $bm"
+
+      - name: Limpar assets antigos da rolling release
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Assets antigos ficavam empilhando em cada push — o updater não
+          # sabia qual pegar e às vezes escolhia um com SHA256 desatualizado.
+          # Aqui deletamos TODOS antes de publicar o novo com nome fixo.
+          $existentes = gh release view latest --repo ${{ github.repository }} --json assets --jq '.assets[].name' 2>$null
+          if ($LASTEXITCODE -eq 0 -and $existentes) {
+            foreach ($nome in $existentes -split "`n") {
+              if ($nome.Trim()) {
+                Write-Host "Deletando asset antigo: $nome"
+                gh release delete-asset latest "$nome" --repo ${{ github.repository }} --yes 2>$null
+              }
+            }
+          } else {
+            Write-Host "Release 'latest' ainda não existe — nada pra limpar"
+          }
 
       - name: Publicar rolling release (a cada push em main)
         if: github.ref == 'refs/heads/main'
