@@ -25,6 +25,8 @@ class ExtracaoWorker(QObject):
         imposto: Imposto,
         mapping: MappingRepository,
         data_emissao: date,
+        data_contabilizacao: date | None = None,
+        vencimento: date | None = None,
     ):
         super().__init__()
         self.arquivo = arquivo
@@ -33,6 +35,11 @@ class ExtracaoWorker(QObject):
         self.imposto = imposto
         self.mapping = mapping
         self.data_emissao = data_emissao
+        # None → montar_lancamentos usa data_emissao como fallback (mesmo
+        # comportamento antigo). Passando as 3 explicitamente, ele usa
+        # cada uma no campo correto do TOTVS.
+        self.data_contabilizacao = data_contabilizacao
+        self.vencimento = vencimento
 
     def run(self) -> None:
         try:
@@ -47,6 +54,8 @@ class ExtracaoWorker(QObject):
             )
             lancamentos, nao_resolvidas = montar_lancamentos(
                 extracao, self.imposto, self.mapping, self.data_emissao,
+                data_contabilizacao=self.data_contabilizacao,
+                vencimento=self.vencimento,
             )
             if nao_resolvidas:
                 self.log_line.emit(

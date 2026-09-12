@@ -333,14 +333,33 @@ class MainWindow(QMainWindow):
         self._combo_imposto.setFixedWidth(110)
         h.addWidget(self._combo_imposto)
 
-        # Data
-        h.addWidget(self._campo_inline("DATA"))
+        # Três datas independentes: EMISSÃO / CONTÁBIL / VENCIMENTO.
+        # Preenchem os 3 campos correspondentes no TOTVS (Inclusão de
+        # Títulos). Default todas = hoje; usuário edita cada uma
+        # independentemente conforme a nota fiscal.
+        h.addWidget(self._campo_inline("EMISS"))
         self._date_emissao = QDateEdit(QDate.currentDate())
         self._date_emissao.setDisplayFormat("dd/MM/yyyy")
         self._date_emissao.setCalendarPopup(True)
-        # 120px cortava o ano (dd/MM/yyyy + botão calendário precisam ~145)
-        self._date_emissao.setFixedWidth(150)
+        self._date_emissao.setFixedWidth(120)
+        self._date_emissao.setToolTip("Data de emissão do documento")
         h.addWidget(self._date_emissao)
+
+        h.addWidget(self._campo_inline("CONTÁB"))
+        self._date_contabil = QDateEdit(QDate.currentDate())
+        self._date_contabil.setDisplayFormat("dd/MM/yyyy")
+        self._date_contabil.setCalendarPopup(True)
+        self._date_contabil.setFixedWidth(120)
+        self._date_contabil.setToolTip("Data contábil (Inclusão no TOTVS)")
+        h.addWidget(self._date_contabil)
+
+        h.addWidget(self._campo_inline("VENC"))
+        self._date_vencimento = QDateEdit(QDate.currentDate())
+        self._date_vencimento.setDisplayFormat("dd/MM/yyyy")
+        self._date_vencimento.setCalendarPopup(True)
+        self._date_vencimento.setFixedWidth(120)
+        self._date_vencimento.setToolTip("Data de vencimento")
+        h.addWidget(self._date_vencimento)
 
         # Separador visual
         sep = QFrame()
@@ -745,8 +764,13 @@ class MainWindow(QMainWindow):
         self._btn_extrair.setEnabled(False)
         self._set_status_revisao("andamento", "Extraindo…")
 
-        qd = self._date_emissao.date().toPython()
-        emissao = date(qd.year, qd.month, qd.day)
+        def _to_date(q):
+            d = q.toPython()
+            return date(d.year, d.month, d.day)
+
+        emissao = _to_date(self._date_emissao.date())
+        contabil = _to_date(self._date_contabil.date())
+        vencto = _to_date(self._date_vencimento.date())
 
         worker = ExtracaoWorker(
             arquivo=self._arquivo_selecionado,
@@ -755,6 +779,8 @@ class MainWindow(QMainWindow):
             imposto=self._imposto_atual(),
             mapping=self.mapping,
             data_emissao=emissao,
+            data_contabilizacao=contabil,
+            vencimento=vencto,
         )
         worker.log_line.connect(self._log_line)
         worker.finished.connect(self._on_extraido)

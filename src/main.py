@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-73 (verde-fisco no dark + azul-marinho no light — fora do azul-índigo genérico)"
+BUILD_MARKER = "build-74 (fix calendário cortando 10+ + 3 datas separadas: emissão/contábil/vencimento)"
 
 
 def main() -> int:

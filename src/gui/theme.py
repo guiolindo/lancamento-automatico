@@ -429,6 +429,75 @@ QTableView::item, QTableWidget::item {{
     border-bottom: 1px solid {p["border_soft"]};
 }}
 
+/* ---------- Calendar popup (QDateEdit) ----------
+ * QCalendarWidget usa um QTableView interno. Sem overrides explícitos,
+ * a regra global QTableView::item{padding:9px 12px} acima empurrava
+ * datas de 2 dígitos (10+) pra fora da célula — o popup mostrava só
+ * dias 1-9. Aqui damos padding compacto e cell width justo pro
+ * calendário, sem afetar a PreviewTable. */
+QCalendarWidget QAbstractItemView {{
+    background: {p["bg_1"]};
+    selection-background-color: {p["accent"]};
+    selection-color: white;
+    outline: 0;
+    border: none;
+    font-size: 12px;
+}}
+QCalendarWidget QAbstractItemView:enabled {{
+    color: {p["text"]};
+}}
+QCalendarWidget QAbstractItemView:disabled {{
+    color: {p["text_disabled"]};
+}}
+QCalendarWidget QTableView {{
+    background: {p["bg_1"]};
+    border: none;
+    gridline-color: transparent;
+    alternate-background-color: {p["bg_1"]};
+}}
+QCalendarWidget QTableView::item {{
+    padding: 2px 4px;
+    border-bottom: none;
+    min-width: 24px;
+}}
+QCalendarWidget QHeaderView::section {{
+    background: {p["bg_2"]};
+    color: {p["text_muted"]};
+    padding: 4px 4px;
+    border: none;
+    font-weight: 700;
+    font-size: 10px;
+    text-transform: none;
+    letter-spacing: 0;
+}}
+QCalendarWidget QWidget#qt_calendar_navigationbar {{
+    background: {p["bg_2"]};
+    border-bottom: 1px solid {p["border_soft"]};
+}}
+QCalendarWidget QToolButton {{
+    background: transparent;
+    color: {p["text"]};
+    border: none;
+    padding: 6px 10px;
+    font-weight: 600;
+    font-size: 12px;
+}}
+QCalendarWidget QToolButton:hover {{
+    background: {p["bg_3"]};
+    border-radius: 3px;
+}}
+QCalendarWidget QToolButton::menu-indicator {{
+    image: none;
+}}
+QCalendarWidget QSpinBox {{
+    background: {p["bg_2"]};
+    color: {p["text"]};
+    border: 1px solid {p["border"]};
+    border-radius: 3px;
+    padding: 2px 4px;
+    min-height: 18px;
+}}
+
 /* ---------- Scroll ---------- */
 QScrollBar:vertical {{
     background: transparent;

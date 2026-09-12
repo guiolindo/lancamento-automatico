@@ -397,6 +397,7 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 71 | Boot maximizado + HUD flutuante em mono-monitor; auto-move MainWindow pra tela sem TOTVS em multi-monitor | `main.py`, `main_window.py`, `hud_execucao.py` (novo) |
 | 72 | Accent trocado pra petróleo `#0E4C6E` (não-Tailwind); border-radius 12→6→4 pra sair do "vibe SaaS 2024" | `theme.py`, `hud_execucao.py` |
 | 73 | Sai do azul: dark = verde-fisco `#15803D` + âmbar-carimbo; light = azul-marinho SAP `#1E3A5F` + bordô. Duas identidades intencionais por tema. | `theme.py`, `main_window.py`, `hud_execucao.py`, `splash.py` |
+| 74 | Fix crítico: calendário do QDateEdit cortava datas 10+ (regra global `QTableView::item` do build-72 vazando pro popup interno). Adiciona overrides `QCalendarWidget QTableView::item` compactos. Além disso, expõe 3 datas separadas na UI (emissão/contábil/vencimento) — o modelo e `montar_lancamentos` já suportavam. | `theme.py`, `main_window.py`, `workers.py` |
 
 ---
 
