@@ -19,7 +19,7 @@ class SetupDialog(QDialog):
         layout.setContentsMargins(28, 24, 28, 24)
         layout.setSpacing(16)
 
-        titulo = QLabel("Bem-vindo ao Lançamento Automático")
+        titulo = QLabel("Bem-vindo ao Auto Conferi")
         titulo.setProperty("h1", True)
         layout.addWidget(titulo)
 

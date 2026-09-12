@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
         self.settings = settings
         self.mapping = mapping
         self.mapping_path = mapping_path
-        self.setWindowTitle("Lançamento Automático — TOTVS")
+        self.setWindowTitle("Auto Conferi — Automação Fiscal TOTVS")
         self.resize(1320, 840)
         self.setMinimumSize(1040, 680)
         self._tema = self.settings.get("tema", "escuro") or "escuro"
@@ -621,9 +621,9 @@ class MainWindow(QMainWindow):
         box.setIcon(QMessageBox.Information)
         box.setTextFormat(Qt.RichText)
         box.setText(
-            "<h3 style='margin:0 0 6px 0'>Lançamento Automático — TOTVS</h3>"
+            "<h3 style='margin:0 0 6px 0'>Auto Conferi</h3>"
             "<p style='color:#888;margin:0'>Automação de lançamento fiscal · "
-            "TOTVS/Consinco</p>"
+            "integração para TOTVS/Consinco</p>"
             "<br><br>"
             f"<b>Versão:</b> <code>{BUILD_MARKER}</code><br>"
             "<b>Produzido por:</b> Guilherme Júnio<br>"
@@ -636,10 +636,16 @@ class MainWindow(QMainWindow):
 
     def _selecionar_arquivo(self) -> None:
         ultimo = self.settings.get("ultima_pasta_upload", "") or str(Path.home())
+        # Usa o dialog PRÓPRIO do Qt (não o nativo do Windows). O nativo
+        # trava 5-30s em cenários comuns: OneDrive/Dropbox hidratando o
+        # arquivo, antivírus escaneando ao abrir preview, shell extensions
+        # corporativas checando policies, network share lento. O Qt não
+        # depende do explorer.exe e abre instantâneo.
         arquivo, _ = QFileDialog.getOpenFileName(
             self, "Selecionar documento",
             ultimo,
             "Documentos (*.pdf *.png *.jpg *.jpeg *.webp)",
+            options=QFileDialog.DontUseNativeDialog | QFileDialog.ReadOnly,
         )
         if not arquivo:
             return

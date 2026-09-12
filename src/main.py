@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-63 (fix nav fantasma + botão Sobre + X removido do updater)"
+BUILD_MARKER = "build-64 (rebrand Auto Conferi + paleta índigo/teal + fix 15s file dialog)"
 
 
 def main() -> int:
@@ -66,8 +66,8 @@ def main() -> int:
 
     _boot_trace("criando QApplication")
     app = QApplication(sys.argv)
-    app.setApplicationName("Lançamento Automático TOTVS")
-    app.setOrganizationName("Multicom")
+    app.setApplicationName("Auto Conferi")
+    app.setOrganizationName("Auto Conferi")
     # Ícone: barra de título, taskbar, alt-tab
     try:
         from PySide6.QtGui import QIcon
