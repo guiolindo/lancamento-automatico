@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-70 (auto-detect visual em destaque: botão, status, docs)"
+BUILD_MARKER = "build-71 (maximizar + HUD flutuante em mono-monitor)"
 
 
 def main() -> int:
@@ -122,10 +122,13 @@ def main() -> int:
     win = MainWindow(settings, mapping, mp)
     app.aboutToQuit.connect(win._encerrar_threads)
 
-    _boot_trace("MainWindow.show()")
+    _boot_trace("MainWindow.showMaximized()")
     splash.set_etapa("Pronto")
     app.processEvents()
-    win.show()
+    # Sempre maximizado — em multi-monitor ocupa a tela onde estiver; em
+    # mono-monitor, no início do lote a janela se minimiza e um HUD
+    # compacto aparece no canto (ver MainWindow._preparar_janela_para_execucao).
+    win.showMaximized()
     # Fecha splash com pequeno delay pra dar sensação de transição
     QTimer.singleShot(200, splash.close)
     _boot_trace("app.exec()")

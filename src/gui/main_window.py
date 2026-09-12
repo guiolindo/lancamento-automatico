@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QSize, Qt, QThread
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtCore import QDate, QRect, QSize, Qt, QThread
+from PySide6.QtGui import QGuiApplication, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDateEdit, QFileDialog, QFrame, QGridLayout,
     QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPlainTextEdit,
@@ -21,6 +21,7 @@ from ..core.models import Imposto, Lancamento
 from ..core.settings_store import SettingsStore
 from .calibracao_dialog import CalibracaoDialog
 from .depara_dialog import DeParaDialog
+from .hud_execucao import HudExecucao
 from .preview_table import PreviewTable
 from .setup_dialog import SetupDialog
 from .theme import qss
@@ -63,6 +64,11 @@ class MainWindow(QMainWindow):
         self._lancamentos: list[Lancamento] = []
         self._calibracao = calib_store.carregar()
         self._eventos: list[str] = []
+        self._hud: HudExecucao | None = None
+        # Registra se o lote atual está usando o HUD (mono-monitor). Usado
+        # em _on_pedir_confirmacao_manual pra decidir se abre QMessageBox
+        # ou usa o painel do HUD.
+        self._lote_com_hud = False
 
         self._montar_ui()
         self._verificar_setup()
@@ -827,6 +833,27 @@ class MainWindow(QMainWindow):
         self._progress.setMaximum(len(lancamentos_exec))
         self._progress.setValue(0)
 
+        # Decide MONO vs MULTI monitor e prepara HUD se for o caso.
+        # Ver ARCHITECTURE.md seção "Auto-posicionamento e HUD".
+        self._lote_com_hud = False
+        try:
+            geo_tela_totvs = self._preparar_janela_para_execucao()
+            if geo_tela_totvs is not None:
+                self._log_line(
+                    "i Monitor único detectado — minimizando janela e "
+                    "abrindo HUD no canto superior direito"
+                )
+                self._hud = HudExecucao()
+                self._hud.parar_clicado.connect(self._cancelar)
+                self._hud.confirmacao_respondida.connect(
+                    self._on_hud_confirmacao_respondida
+                )
+                self._hud.iniciar(len(lancamentos_exec), geo_tela_totvs)
+                self._lote_com_hud = True
+                self.showMinimized()
+        except Exception:  # noqa: BLE001
+            log.exception("Falha preparando janela pra execução — segue sem HUD")
+
         worker = LoteWorker(lancamentos_exec, self.settings.data, self._calibracao)
         worker.log_line.connect(self._log_line)
         worker.progresso.connect(self._on_progresso)
@@ -849,6 +876,8 @@ class MainWindow(QMainWindow):
     def _on_progresso(self, i: int, total: int, msg: str) -> None:
         self._progress.setValue(i + 1)
         self._progress.setFormat(f"{i + 1}/{total} · {msg}")
+        if self._hud is not None:
+            self._hud.on_progresso(i, total, msg)
 
     def _on_lote_finalizado(self, sucessos: int, falhas: int) -> None:
         self._btn_executar.setEnabled(True)
@@ -862,6 +891,8 @@ class MainWindow(QMainWindow):
         self._log_line(
             f"# Lote finalizado às {datetime.now():%H:%M}: {sucessos} sucessos, {falhas} falhas"
         )
+        self._encerrar_hud(sucessos, falhas)
+        self._restaurar_janela_pos_lote()
         QMessageBox.information(self, "Lote finalizado", f"Sucessos: {sucessos}\nFalhas: {falhas}")
 
     def _on_erro_lote(self, msg: str) -> None:
@@ -870,6 +901,8 @@ class MainWindow(QMainWindow):
         self._btn_cancelar.setVisible(False)
         self._progress.setVisible(False)
         self._set_status_revisao("falha", "Erro no lote")
+        self._encerrar_hud(0, 1)
+        self._restaurar_janela_pos_lote()
         QMessageBox.critical(self, "Erro no lote", msg)
 
     def _cancelar(self) -> None:
@@ -889,6 +922,12 @@ class MainWindow(QMainWindow):
     def _on_pedir_confirmacao_manual(self, index: int, resumo: str) -> None:
         if not self._worker_lote:
             return
+        # Se estamos em mono-monitor com HUD ativo, usa o painel do HUD
+        # em vez de abrir QMessageBox (que restauraria a janela por cima
+        # do TOTVS, quebrando toda a razão de ter minimizado).
+        if self._hud is not None and self._lote_com_hud:
+            self._hud.pedir_confirmacao_manual(index, resumo)
+            return
         box = QMessageBox(self)
         box.setWindowTitle("Revisão manual — confirme no TOTVS")
         box.setIcon(QMessageBox.Question)
@@ -904,9 +943,132 @@ class MainWindow(QMainWindow):
         prosseguir = box.clickedButton() is btn_continuar
         self._worker_lote.responder_confirmacao(prosseguir)
 
+    def _on_hud_confirmacao_respondida(self, prosseguir: bool) -> None:
+        if self._worker_lote:
+            self._worker_lote.responder_confirmacao(prosseguir)
+
     def _log_line(self, msg: str) -> None:
         self._log.appendPlainText(f"[{datetime.now():%H:%M:%S}] {msg}")
         log.info(msg)
+
+    # ---------------- Auto-posicionamento (mono vs multi monitor) ----------------
+    # Ver ARCHITECTURE.md seção "Auto-posicionamento e HUD" para o contrato.
+    #
+    # Regra: se o operador tem só um monitor, ao executar o lote a MainWindow
+    # é minimizada e um HUD compacto aparece no canto superior direito da
+    # tela — fora da região que o TOTVS está usando, mas visível pra
+    # acompanhar o progresso. Em multi-monitor a janela principal fica
+    # como está (num monitor, TOTVS no outro).
+
+    def _encontrar_totvs_geometry(self) -> QRect | None:
+        """Se a janela 'Operador Financeiro' estiver aberta, devolve seu
+        rect na tela. Best-effort — só Windows."""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+            achado = [0]
+
+            @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+            def _cb(hwnd, _lparam):
+                if not user32.IsWindowVisible(hwnd):
+                    return True
+                buf = ctypes.create_unicode_buffer(256)
+                user32.GetWindowTextW(hwnd, buf, 256)
+                if buf.value and "operador financeiro" in buf.value.lower():
+                    achado[0] = hwnd
+                    return False
+                return True
+
+            user32.EnumWindows(_cb, 0)
+            hwnd = achado[0]
+            if not hwnd:
+                return None
+
+            rect = wintypes.RECT()
+            if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                return None
+            return QRect(
+                rect.left, rect.top,
+                rect.right - rect.left, rect.bottom - rect.top,
+            )
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _tela_que_contem(self, geo: QRect):
+        """Devolve o QScreen cujo geometry contém o centro do rect,
+        ou o primário se nenhum contiver (fora de tela)."""
+        centro = geo.center()
+        for screen in QGuiApplication.screens():
+            if screen.geometry().contains(centro):
+                return screen
+        return QGuiApplication.primaryScreen()
+
+    def _preparar_janela_para_execucao(self) -> QRect | None:
+        """Chamado no início de _executar(). Se detectar monitor único,
+        devolve o geometry da tela pra o HUD se posicionar (e o caller
+        deve minimizar a MainWindow e mostrar o HUD). Se multi-monitor,
+        devolve None — nada muda."""
+        screens = QGuiApplication.screens()
+        # Salva estado atual pra restaurar depois do lote
+        self._estado_pre_lote = {
+            "maximized": self.isMaximized(),
+            "geometry": self.geometry(),
+        }
+        if len(screens) < 2:
+            # Mono: HUD vai no canto superior direito do único monitor
+            return QGuiApplication.primaryScreen().availableGeometry()
+
+        # Multi-monitor: se acharmos o TOTVS num monitor, garante que a
+        # MainWindow está num monitor DIFERENTE. Se já está, nada a fazer.
+        geo_totvs = self._encontrar_totvs_geometry()
+        if geo_totvs is not None:
+            tela_totvs = self._tela_que_contem(geo_totvs)
+            tela_atual = self.screen() or QGuiApplication.primaryScreen()
+            if tela_atual is tela_totvs:
+                # MainWindow tá na mesma tela do TOTVS — move pra outra
+                for s in screens:
+                    if s is not tela_totvs:
+                        self._mover_para_tela(s)
+                        break
+        # Multi-monitor não usa HUD
+        return None
+
+    def _mover_para_tela(self, screen) -> None:
+        geo_disponivel = screen.availableGeometry()
+        alvo = self.geometry()
+        alvo.moveCenter(geo_disponivel.center())
+        # Clamp pra caber
+        if alvo.width() > geo_disponivel.width():
+            alvo.setWidth(geo_disponivel.width() - 40)
+        if alvo.height() > geo_disponivel.height():
+            alvo.setHeight(geo_disponivel.height() - 40)
+        self.setGeometry(alvo)
+        self.showMaximized()
+
+    def _encerrar_hud(self, sucessos: int, falhas: int) -> None:
+        if self._hud is not None:
+            try:
+                self._hud.finalizar(sucessos, falhas)
+            except Exception:  # noqa: BLE001
+                log.exception("Falha finalizando HUD")
+            # HUD se auto-fecha em 3s via QTimer; limpa referência
+            self._hud = None
+        self._lote_com_hud = False
+
+    def _restaurar_janela_pos_lote(self) -> None:
+        """Após o lote, se tínhamos minimizado, restaura a janela como estava."""
+        estado = getattr(self, "_estado_pre_lote", None)
+        if not estado:
+            return
+        if estado.get("maximized"):
+            self.showMaximized()
+        else:
+            self.setGeometry(estado["geometry"])
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        self._estado_pre_lote = None
 
     # ---------------- Shutdown limpo ----------------
     # Se o usuário fechar o app OU o Windows mandar shutdown, precisamos
@@ -929,6 +1091,14 @@ class MainWindow(QMainWindow):
 
     def _encerrar_threads(self) -> None:
         """Força parada limpa de qualquer worker/thread em execução."""
+        # Fecha HUD se estiver aberto — ele é uma janela top-level separada
+        # e não fecharia sozinho quando a MainWindow fecha.
+        if self._hud is not None:
+            try:
+                self._hud.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self._hud = None
         # Cancela worker do lote (se rodando) — ele checka cancel a cada
         # loop e sai
         if self._worker_lote:
