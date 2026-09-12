@@ -38,6 +38,16 @@ dentro de VM via RemoteApp (Auto Sky), onde a janela aparece com sufixo
    entre lançamentos) ou **Testar só o primeiro** (dry-run).
 7. **Executar** — o app cria cada título no TOTVS.
 
+> **Configuração de tela detectada automaticamente:**
+> - **1 monitor**: ao apertar Executar, a janela principal se **minimiza
+>   sozinha** e aparece um HUD compacto no canto superior direito com
+>   contador, tempo, ETA e botão de parar — sem cobrir o TOTVS.
+> - **2+ monitores**: se a janela principal estiver na mesma tela do
+>   TOTVS, ela **se move automaticamente pra outra tela**. Sem HUD,
+>   porque você já vê tudo.
+>
+> Não precisa arrastar nada manualmente.
+
 > **Não precisa calibrar antes.** Todo lote começa com uma **detecção
 > automática dos campos por visão computacional** (`src/core/visao_totvs.py`),
 > que localiza cada campo pixel-perfect na janela do TOTVS. A janela é
@@ -216,6 +226,7 @@ src/
     icons.py              ícones vetoriais QPainter (não depende de font emoji)
     splash.py             AutoConferiSplash — splash inicial com logo animada
     updater_bar.py        barra laranja no topo com estado do updater
+    hud_execucao.py       HUD flutuante top-right (só em mono-monitor durante lote)
     setup_dialog.py       primeiro uso (API key)
     calibracao_dialog.py  captura das posições no TOTVS
     depara_dialog.py      editor do mapeamento.json

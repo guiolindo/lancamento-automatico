@@ -271,6 +271,75 @@ Serve pra:
 
 ---
 
+## 4c. Auto-posicionamento e HUD (build-71)
+
+Resolve o problema clássico de single-monitor: se a MainWindow está
+maximizada e o operador clica "Executar", ela cobre o TOTVS — o RPA
+não consegue nem enxergar a janela alvo.
+
+### Regra de decisão (em `_executar()`)
+
+Antes de instanciar o `LoteWorker`, chama `_preparar_janela_para_execucao()`:
+
+1. `QGuiApplication.screens()` → conta monitores.
+2. **1 monitor** → devolve `availableGeometry()` da tela. Caller
+   minimiza (`self.showMinimized()`) e instancia `HudExecucao`,
+   posicionando-o no canto superior direito.
+3. **2+ monitores** → tenta achar a janela do TOTVS
+   (`_encontrar_totvs_geometry()` via `EnumWindows` + `GetWindowRect`)
+   e verifica qual monitor a contém. Se a MainWindow está na
+   **mesma tela** do TOTVS, move-a pra outra e re-maximiza. Se está
+   noutra tela, nada muda. Devolve `None` (sem HUD).
+
+Em ambos os casos guarda `_estado_pre_lote` (`maximized`, `geometry`)
+pra restaurar depois via `_restaurar_janela_pos_lote()`.
+
+### O HUD (`src/gui/hud_execucao.py`)
+
+Widget top-level (parent `None`, senão herdaria o estado minimizado da
+MainWindow). Flags: `Qt.Tool | FramelessWindowHint | WindowStaysOnTopHint`.
+Tamanho fixo 380×132 no modo normal, 380×232 com painel de confirmação.
+
+Sinais espelham os do `LoteWorker`:
+- `parar_clicado` → conectado ao `_cancelar()` da MainWindow.
+- `confirmacao_respondida(bool)` → chamado quando o operador aperta
+  Próximo/Parar no painel de confirmação manual. MainWindow encaminha
+  pro `worker.responder_confirmacao(prosseguir)`.
+
+Métodos públicos:
+- `iniciar(total, geo_tela)` — abre o HUD posicionado
+- `on_progresso(i, total, msg)` — atualiza barra e label
+- `pedir_confirmacao_manual(index, resumo)` — só chamado se o
+  checkbox "Não apertar '+' automaticamente" estiver marcado.
+  Cresce o HUD e mostra painel Prosseguir/Parar.
+- `finalizar(sucessos, falhas)` — mostra resumo e auto-fecha em 3s.
+
+### Sobre a confirmação manual
+
+Duplicidade de `Nro. Documento` NÃO precisa de HUD: já é resolvida
+automaticamente desde o build-32 (snapshot-diff → OK → novo número
+aleatório, até 10 tentativas). A confirmação manual só aparece quando
+o operador ativou explicitamente "Não apertar '+' automaticamente"
+(modo revisão manual), e nesse caso — em mono-monitor — vai pro HUD;
+em multi-monitor vai pra QMessageBox normal.
+
+### Contratos importantes
+
+- **HUD é top-level sem parent** — se der `HudExecucao(self)` como
+  parent, o Qt propaga o estado minimizado da MainWindow pro HUD e
+  ele some junto com ela. Quebra tudo.
+- **`_estado_pre_lote` guarda estado ANTES de qualquer mudança** —
+  mesmo em multi-monitor (por causa da possível movimentação entre
+  telas). Nunca sobrescrever no meio do lote.
+- **HUD auto-fecha em 3s após finalizar** — MainWindow nunca deve
+  chamar `hud.close()` diretamente após um lote normal, só usar
+  `_encerrar_hud()` que aciona `finalizar()`.
+- **No shutdown do app** (`_encerrar_threads`), o HUD é fechado
+  explicitamente — como é janela top-level separada, não fecharia
+  sozinho quando a MainWindow fechasse.
+
+---
+
 ## 5. Empacotamento Nuitka
 
 Ver comentários em `build/build.py` — mas o essencial:
@@ -325,6 +394,7 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 68 | **Fix race condition HTTP 404 no auto-update** (workflow + updater) | workflow, `updater.py` |
 | 69 | Docs completas: README + ARCHITECTURE + DECISIONS | `*.md` |
 | 70 | UX + docs: deixa claro que auto-detect visual é padrão (botão "Recalibrar (backup)", status label, seção 4b) | `main_window.py`, `README.md`, `ARCHITECTURE.md` |
+| 71 | Boot maximizado + HUD flutuante em mono-monitor; auto-move MainWindow pra tela sem TOTVS em multi-monitor | `main.py`, `main_window.py`, `hud_execucao.py` (novo) |
 
 ---
 
