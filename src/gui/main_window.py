@@ -487,26 +487,55 @@ class MainWindow(QMainWindow):
         from PySide6.QtCore import QTimer
         QTimer.singleShot(4000, self._check_atualizacao_boot)
 
-    def _check_atualizacao_boot(self) -> None:
-        """Boot check — usa o mesmo helper thread + watchdog."""
+    def _check_atualizacao_boot(self, tentativa: int = 1) -> None:
+        """Boot check — usa o mesmo helper thread + watchdog.
+        Se falhar (rede lenta na primeira request HTTPS), agenda retry
+        automático. Delays entre tentativas: 30s, 60s, 120s. Após a 4ª
+        tentativa, para — usuário pode acionar manualmente pelo botão."""
+        from PySide6.QtCore import QTimer
+
+        # Não intercepta o botão se manual já está rolando ou se o botão
+        # está em uso pelo próprio check anterior; simplesmente agenda.
         self._btn_atualizar.setText("Verificando…")
         self._btn_atualizar.setEnabled(False)
 
         def on_done(info):
             self._btn_atualizar.setEnabled(True)
-            if info is None:
+
+            if info is not None:
+                # Sucesso — não precisa mais retry
+                self._btn_atualizar.setText("Atualizar")
+                if info.tem_atualizacao:
+                    self._modal_obrigatorio(info)
+                else:
+                    self._log_line(f"i Versão local já é a mais recente")
+                return
+
+            # Falha — decide se agenda outra tentativa
+            proximos_delays = {1: 30, 2: 60, 3: 120}
+            if tentativa in proximos_delays:
+                delay_s = proximos_delays[tentativa]
+                self._btn_atualizar.setText("Atualizar")  # deixa neutro
+                self._btn_atualizar.setToolTip(
+                    f"Falha ao consultar GitHub. Tentando de novo em {delay_s}s."
+                )
+                self._log_line(
+                    f"⚠ Tentativa {tentativa} de verificar atualização falhou — "
+                    f"nova tentativa em {delay_s}s"
+                )
+                QTimer.singleShot(delay_s * 1000,
+                                  lambda: self._check_atualizacao_boot(tentativa + 1))
+            else:
+                # Última tentativa também falhou — desiste, deixa manual
                 self._btn_atualizar.setText("⚠ Atualizar")
                 self._btn_atualizar.setToolTip(
-                    "Não consegui consultar o GitHub agora. "
-                    "Clique pra tentar de novo."
+                    "Não consegui consultar o GitHub em várias tentativas. "
+                    "Clique pra tentar manualmente."
                 )
-                self._log_line("⚠ Falha ao verificar atualização (veja lancamento.log)")
-                return
-            self._btn_atualizar.setText("Atualizar")
-            if info.tem_atualizacao:
-                self._modal_obrigatorio(info)
-            else:
-                self._log_line(f"i Versão local já é a mais recente")
+                self._log_line(
+                    "⚠ Todas as tentativas automáticas de verificar atualização falharam. "
+                    "Use o botão Atualizar quando quiser tentar de novo."
+                )
 
         self._rodar_check_em_thread(on_done)
 

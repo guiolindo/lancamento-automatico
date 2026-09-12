@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-59 (fix visual: separador entre tabela e step 3 + teste de auto-update)"
+BUILD_MARKER = "build-60 (auto-check com retry — 4s, 30s, 60s, 120s)"
 
 
 def main() -> int:
