@@ -390,6 +390,112 @@ def _reiniciar_como_novo_exe() -> None:
     os._exit(0)
 
 
+# ---------- 4b. Auto-recovery de boot quebrado ----------
+# Se o boot ANTES da MainWindow.show() crashou (ex: import de tema
+# quebrado, NameError em f-string, DLL faltando), o updater interno da
+# MainWindow nunca roda — o usuário fica preso num app que não abre.
+# Este bloco roda ANTES de importar src.main, detecta boot anterior
+# quebrado, e se houver update NOVO no GitHub, baixa e aplica.
+#
+# Detecção: main.py escreve boot_ok.marker LOGO APÓS showMaximized().
+# Se esse marker é MAIS VELHO que o .exe atual (ou não existe), sabemos
+# que o exe atual nunca chegou até a UI.
+
+def _boot_ok_path() -> Path:
+    return _exe_dir() / "boot_ok.marker"
+
+
+def _build_marker_local() -> str:
+    """Lê o BUILD_MARKER do build_marker.txt (escrito pelo build.py).
+    Se não existir (dev), tenta importar src.main — em dev não tem
+    updater pra rodar mesmo, então tanto faz."""
+    try:
+        p = _exe_dir() / "build_marker.txt"
+        if p.exists():
+            return p.read_text(encoding="utf-8").strip()
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
+def _boot_anterior_falhou() -> bool:
+    """True se o exe atual foi trocado mas boot_ok.marker não foi
+    atualizado desde então — significa que o boot novo nunca chegou
+    até MainWindow.show()."""
+    try:
+        exe_path = Path(sys.argv[0]).resolve()
+        if not exe_path.exists():
+            return False
+        ok = _boot_ok_path()
+        if not ok.exists():
+            # Nunca teve boot bem-sucedido — pode ser primeiro uso OU
+            # sempre crashou. Trata como "primeiro uso" pra não gastar
+            # rede se for legítimo.
+            return False
+        # Se exe é mais NOVO que o marker, o exe novo nunca subiu OK
+        return ok.stat().st_mtime < exe_path.stat().st_mtime
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _auto_recovery_boot(splash_cb=None) -> bool:
+    """Se o boot anterior falhou E há update NOVO no GitHub, baixa e
+    aplica. Devolve True se aplicou (caller deve reiniciar)."""
+    if not _boot_anterior_falhou():
+        return False
+
+    bm_local = _build_marker_local()
+    if not bm_local:
+        _boot_trace("recovery: sem build_marker.txt — não sei minha versão, pulando")
+        return False
+
+    _boot_trace(f"recovery: boot anterior falhou (local={bm_local}) — buscando update no GitHub")
+
+    # updater não importa Qt nem theme — deve ser seguro mesmo se src.gui
+    # estiver quebrado. Se import falhar, sem opção.
+    try:
+        from src.core import updater
+    except Exception as e:  # noqa: BLE001
+        _boot_trace(f"recovery: import updater falhou ({e}) — sem opção de auto-fix")
+        return False
+
+    try:
+        info = updater.check(bm_local, tentativas=2)
+    except Exception as e:  # noqa: BLE001
+        _boot_trace(f"recovery: check falhou: {e}")
+        return False
+
+    if info is None:
+        _boot_trace("recovery: sem resposta do GitHub — sem opção")
+        return False
+    if not info.tem_atualizacao:
+        _boot_trace(
+            f"recovery: versão remota ({info.build_marker_remoto}) == local — "
+            "sem correção disponível pra baixar"
+        )
+        return False
+
+    _boot_trace(
+        f"recovery: update novo disponível ({info.build_marker_remoto}) — "
+        "baixando pra corrigir boot"
+    )
+    try:
+        updater.baixar_e_preparar(
+            info,
+            on_progress=(splash_cb if splash_cb else (lambda a, b, m: None)),
+        )
+    except Exception as e:  # noqa: BLE001
+        _boot_trace(f"recovery: download/preparação falhou: {e}")
+        return False
+
+    _boot_trace("recovery: download OK, aplicando update in-place")
+    aplicou = _aplicar_pendente(progress_cb=splash_cb)
+    if not aplicou:
+        _boot_trace("recovery: _aplicar_pendente devolveu False — sem novo _next/READY (?)")
+        return False
+    return True
+
+
 # ---------- 5. Boot com tracing ----------
 def main() -> int:
     _boot_trace("launcher: início")
@@ -431,6 +537,35 @@ def main() -> int:
                 # a nova versão.
         except Exception as e:  # noqa: BLE001
             _boot_trace(f"aviso: erro aplicando update pendente: {e}")
+
+        # ----- Auto-recovery: se o boot anterior nunca chegou até a UI
+        # (crash em import, tema quebrado, etc.), tenta baixar update
+        # novo do GitHub e aplicar sozinho ANTES de tentar importar
+        # src.main de novo. Sem isso, um build quebrado deixa o usuário
+        # preso sem forma de auto-fix.
+        try:
+            if _boot_anterior_falhou():
+                _boot_trace("boot anterior falhou — iniciando auto-recovery")
+                rec_splash = None
+                rec_cb = None
+                if splash_widget is None:
+                    try:
+                        _, rec_splash, rec_cb = _criar_splash_update()
+                    except Exception as e:  # noqa: BLE001
+                        _boot_trace(f"recovery: splash Qt falhou ({e})")
+                else:
+                    rec_cb = splash_cb
+                recuperou = _auto_recovery_boot(splash_cb=rec_cb)
+                if rec_splash is not None:
+                    try:
+                        rec_splash.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+                if recuperou:
+                    _boot_trace("recovery aplicado — reiniciando com versão corrigida")
+                    _reiniciar_como_novo_exe()
+        except Exception as e:  # noqa: BLE001
+            _boot_trace(f"recovery: erro inesperado ({e}) — segue com código atual")
 
         _boot_trace("importando src.main")
         from src.main import main as run

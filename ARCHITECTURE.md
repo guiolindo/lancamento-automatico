@@ -157,6 +157,78 @@ asset atual sem já ter subido o substituto.
 Não tem botão X. Fecha sozinho. Decisão do build-63 (usuário achou o X
 poluente).
 
+### 2.4b Auto-recovery de boot quebrado (build-76)
+
+Motivação: o updater regular roda DENTRO da `MainWindow`
+(`_check_atualizacao_boot`). Se um build novo crashou ANTES de chegar
+até `MainWindow.show()` (ex: `NameError` em `theme.py` no build-74,
+DLL faltando, import quebrado), o updater regular nunca roda — e o
+usuário fica preso num app que não abre. Sem intervenção manual, ele
+teria que baixar o zip do GitHub e substituir a pasta na mão.
+
+Solução: `launcher.py` detecta esse cenário e faz o download+aplica
+SOZINHO, antes de importar `src.main`.
+
+### Contrato do `boot_ok.marker`
+
+- `src/main.py` escreve `<install>/boot_ok.marker` **logo após**
+  `win.showMaximized()` — se a UI subiu, o marker é atualizado. Se
+  crashou antes disso, o marker mantém `mtime` antigo.
+- No próximo boot, `launcher._boot_anterior_falhou()` compara
+  `boot_ok.marker.mtime` vs `.exe.mtime`. Se o exe é mais NOVO que o
+  marker, o exe atual nunca subiu com sucesso.
+- Marker não existente = primeiro uso (não é falha). Trata como OK
+  pra não gastar rede.
+
+### Contrato do `build_marker.txt`
+
+Escrito por `build/build.py` no dist Nuitka. Contém o texto do
+`BUILD_MARKER` da versão compilada. O launcher lê esse arquivo em
+vez de `from src.main import BUILD_MARKER` — o import poderia falhar
+justamente pela mesma razão que quebrou o boot original.
+
+### Fluxo do recovery
+
+```
+launcher.main()
+  ├── _aplicar_pendente()  (fluxo normal — se tem _next/READY, aplica)
+  │       ├── True  → _reiniciar_como_novo_exe → os._exit(0)
+  │       └── False → segue
+  │
+  ├── _boot_anterior_falhou()?  (mtime marker < mtime exe?)
+  │       ├── Não → segue direto pro import
+  │       └── Sim → _auto_recovery_boot(splash_cb)
+  │             ├── from src.core import updater  (updater não usa Qt/theme —
+  │             │                                    seguro mesmo com gui quebrada)
+  │             ├── info = updater.check(build_marker_local)
+  │             ├── info.tem_atualizacao?
+  │             │     ├── Não  → sem correção disponível, sai
+  │             │     └── Sim  → baixar_e_preparar + _aplicar_pendente
+  │             │                → _reiniciar_como_novo_exe → os._exit(0)
+  │             └── qualquer falha → segue com tentativa normal (vai crashar
+  │                                    de novo, mas ao menos loga)
+  │
+  └── from src.main import main; main()
+```
+
+### Anti-loop
+
+Se o build remoto == build local, o recovery **não roda** (`info.tem_atualizacao == False`).
+Portanto: quando o usuário já está no build corrigido publicado, o
+recovery para de tentar sozinho. Isso limita a 1 tentativa efetiva
+por versão remota nova.
+
+### Regras invioláveis
+
+- `updater.py` NUNCA pode importar `theme`, `main_window`, ou qualquer
+  coisa de `src.gui`. Se importar, o recovery quebra junto do resto.
+- `boot_ok.marker` só deve ser escrito depois que a UI comprovadamente
+  subiu (chamar `showMaximized`, `show`, ou equivalente antes).
+- Nunca comparar por conteúdo/hash do marker — só mtime. Conteúdo do
+  arquivo é informativo, não parte do contrato.
+
+---
+
 ### 2.5 BUILD_MARKER
 
 Só é atualizado em um lugar: `src/main.py`, linha próxima ao topo:
@@ -399,6 +471,7 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 73 | Sai do azul: dark = verde-fisco `#15803D` + âmbar-carimbo; light = azul-marinho SAP `#1E3A5F` + bordô. Duas identidades intencionais por tema. | `theme.py`, `main_window.py`, `hud_execucao.py`, `splash.py` |
 | 74 | Fix crítico: calendário do QDateEdit cortava datas 10+ (regra global `QTableView::item` do build-72 vazando pro popup interno). Adiciona overrides `QCalendarWidget QTableView::item` compactos. Além disso, expõe 3 datas separadas na UI (emissão/contábil/vencimento) — o modelo e `montar_lancamentos` já suportavam. **QUEBROU BOOT** (ver 75). | `theme.py`, `main_window.py`, `workers.py` |
 | 75 | Hotfix build-74: chaves não escapadas dentro de comentário CSS do f-string quebraram `qss()` em runtime (`NameError: name 'padding' is not defined`). `ast.parse` não pega — só executar `qss()` pega. Nova gotcha #9 nesse doc. | `theme.py` |
+| 76 | Auto-recovery de boot: `launcher.py` detecta boot anterior que nunca chegou até a UI (marker `boot_ok.marker` mais velho que o .exe) e baixa+aplica update remoto sozinho, antes de tentar importar `src.main`. Fecha o gap do build-74/75, onde um build quebrado deixava o usuário sem forma de auto-fix. Nova seção 2b nesse doc. | `launcher.py`, `main.py`, `build/build.py` |
 
 ---
 
