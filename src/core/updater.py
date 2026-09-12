@@ -100,20 +100,22 @@ def limpar_download_parcial() -> None:
 
 # ---------------- Check ----------------
 
-def check(build_marker_local: str, timeout: int = 30, tentativas: int = 3) -> Optional[InfoAtualizacao]:
+def check(build_marker_local: str, tentativas: int = 2) -> Optional[InfoAtualizacao]:
     """Consulta a release 'latest' e devolve info comparando com local.
     Devolve None se não conseguir conectar (não é erro fatal).
-    Faz até N tentativas com backoff — primeira request HTTPS no Windows
-    costuma ser lenta por causa de CRL/OCSP check do Defender."""
+    Tuple timeout (connect, read) = (5, 8) — total máximo ~13s por tentativa,
+    26s pra 2 tentativas com backoff. Antes eram 30s×3 = 90s (parecia
+    travado)."""
     import time as _time
     url = f"https://api.github.com/repos/{REPO}/releases/tags/{TAG_ROLLING}"
     r = None
     ultimo_erro = None
     for tentativa in range(1, tentativas + 1):
-        log.info("[updater] check tentativa %d/%d: GET %s (timeout %ds)",
-                 tentativa, tentativas, url, timeout)
+        log.info("[updater] check tentativa %d/%d: GET %s (timeout 5+8s)",
+                 tentativa, tentativas, url)
         try:
-            r = requests.get(url, timeout=timeout,
+            # Timeout tuple: 5s pra estabelecer conexão, 8s pra ler resposta
+            r = requests.get(url, timeout=(5, 8),
                              headers={
                                  "Accept": "application/vnd.github+json",
                                  "User-Agent": "LancamentoAutomatico-updater/1.0",
@@ -124,7 +126,7 @@ def check(build_marker_local: str, timeout: int = 30, tentativas: int = 3) -> Op
             log.warning("[updater] tentativa %d falhou: %s: %s",
                         tentativa, type(e).__name__, e)
             if tentativa < tentativas:
-                _time.sleep(1.5 * tentativa)  # backoff: 1.5s, 3s
+                _time.sleep(1.0)  # backoff curto — 1s só
     if r is None:
         log.warning("[updater] todas as %d tentativas falharam. último erro: %s",
                     tentativas, ultimo_erro)

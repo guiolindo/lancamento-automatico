@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-57 (single instance + splash informativo durante apply do update)"
+BUILD_MARKER = "build-58 (fim do 'Verificando…' travado: thread + watchdog 22s)"
 
 
 def main() -> int:
