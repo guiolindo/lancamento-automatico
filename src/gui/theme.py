@@ -13,56 +13,65 @@ Uso:
 from __future__ import annotations
 
 
-# ---- Cores da marca (fixas em ambos os temas) ----
-BRAND_ORANGE       = "#FF6900"
-BRAND_ORANGE_HOVER = "#FF7A1A"
-BRAND_ORANGE_SOFT  = "rgba(255, 105, 0, 0.14)"
-BRAND_BLUE         = "#004D96"
-BRAND_BLUE_HOVER   = "#0060B8"
-BRAND_BLUE_PRESSED = "#003D7A"
+# ---- Cores da marca Auto Conferi (identidade própria) ----
+# Índigo pra ação primária; teal pra brand/inteligência.
+BRAND_TEAL         = "#14B8A6"
+BRAND_TEAL_HOVER   = "#2DD4BF"
+BRAND_INDIGO       = "#3B82F6"
+BRAND_INDIGO_HOVER = "#60A5FA"
+BRAND_INDIGO_PRESSED = "#2563EB"
+# Aliases legados (código antigo referencia BRAND_ORANGE/BRAND_BLUE)
+BRAND_ORANGE       = BRAND_TEAL
+BRAND_ORANGE_HOVER = BRAND_TEAL_HOVER
+BRAND_ORANGE_SOFT  = "rgba(20, 184, 166, 0.14)"
+BRAND_BLUE         = BRAND_INDIGO
+BRAND_BLUE_HOVER   = BRAND_INDIGO_HOVER
+BRAND_BLUE_PRESSED = BRAND_INDIGO_PRESSED
 
 
+# Paleta Auto Conferi — identidade própria, sem laranja Economart.
+# Índigo funcional pra ações, teal pra "inteligência processada".
 PALETTE_DARK = {
-    "bg_0":         "#0B0F17",   # background da janela (bem escuro)
-    "bg_1":         "#141926",   # cards, sidebar
-    "bg_2":         "#1E2536",   # inputs, headers de tabela
-    "bg_3":         "#2A3346",   # hover, elementos elevados
-    "border":       "#2F3852",
-    "border_soft":  "#222A3D",
-    "text":         "#F0F4FA",
-    "text_muted":   "#8996AE",
-    "text_disabled":"#4F5A72",
-    # Ações principais = azul Economart adaptado (mais claro pro dark contrastar)
-    "accent":       "#3B82F6",
-    "accent_hover": "#5B96F8",
+    "bg_0":         "#0F141A",
+    "bg_1":         "#171E26",
+    "bg_2":         "#202A35",
+    "bg_3":         "#2B3949",
+    "border":       "#344252",
+    "border_soft":  "#273340",
+    "text":         "#F5F7FA",
+    "text_muted":   "#B7C2CF",
+    "text_disabled":"#718096",
+    "accent":       "#3B82F6",   # índigo (ação primária)
+    "accent_hover": "#60A5FA",
     "accent_pressed":"#2563EB",
-    "brand_orange": BRAND_ORANGE,
-    "brand_orange_hover": BRAND_ORANGE_HOVER,
-    "brand_orange_soft":  BRAND_ORANGE_SOFT,
-    "brand_blue":         BRAND_BLUE,
+    # 'brand' = teal (inteligência, confirmação); usamos como brand color
+    # do Auto Conferi. Nome mantido pra compatibilidade com QSS existente.
+    "brand_orange":       "#14B8A6",   # teal — nome legado, é teal agora
+    "brand_orange_hover": "#2DD4BF",
+    "brand_orange_soft":  "rgba(20, 184, 166, 0.16)",
+    "brand_blue":         "#3B82F6",
     "success":      "#22C55E",
     "warning":      "#F59E0B",
     "danger":       "#EF4444",
 }
 
 PALETTE_LIGHT = {
-    "bg_0":         "#F5F7FB",
+    "bg_0":         "#F5F7FA",
     "bg_1":         "#FFFFFF",
-    "bg_2":         "#F1F4F9",
-    "bg_3":         "#E7EBF2",
-    "border":       "#D5DBE5",
-    "border_soft":  "#EAEEF4",
-    "text":         "#0F172A",
-    "text_muted":   "#5A6478",
-    "text_disabled":"#9AA3B4",
-    # No tema claro o azul primário é o azul Economart puro
-    "accent":       BRAND_BLUE,
-    "accent_hover": BRAND_BLUE_HOVER,
-    "accent_pressed":BRAND_BLUE_PRESSED,
-    "brand_orange": BRAND_ORANGE,
-    "brand_orange_hover": BRAND_ORANGE_HOVER,
-    "brand_orange_soft":  BRAND_ORANGE_SOFT,
-    "brand_blue":         BRAND_BLUE,
+    "bg_2":         "#EEF2F6",
+    "bg_3":         "#E2E8F0",
+    "border":       "#CBD5E1",
+    "border_soft":  "#E2E8F0",
+    "text":         "#17202A",
+    "text_muted":   "#52606D",
+    "text_disabled":"#94A3B8",
+    "accent":       "#1D4ED8",   # índigo mais forte pra contraste no light
+    "accent_hover": "#2563EB",
+    "accent_pressed":"#1E40AF",
+    "brand_orange":       "#0F766E",   # teal escuro pra light theme
+    "brand_orange_hover": "#0D9488",
+    "brand_orange_soft":  "rgba(15, 118, 110, 0.14)",
+    "brand_blue":         "#1D4ED8",
     "success":      "#15803D",
     "warning":      "#B45309",
     "danger":       "#B91C1C",

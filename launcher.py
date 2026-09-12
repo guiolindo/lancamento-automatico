@@ -96,7 +96,7 @@ def _show_error_dialog(msg: str) -> None:
     try:
         import ctypes  # type: ignore[import-not-found]
         ctypes.windll.user32.MessageBoxW(
-            None, msg, "Lançamento Automático — erro no início", 0x10
+            None, msg, "Auto Conferi — erro no início", 0x10
         )
     except Exception:  # noqa: BLE001
         pass
@@ -104,7 +104,7 @@ def _show_error_dialog(msg: str) -> None:
 
 # ---------- Single instance (mutex Windows) ----------
 _MUTEX_NAME = r"Local\LancamentoAutomatico_SingleInstance_v1"
-_JANELA_PREFIXO = "Lançamento Automático"
+_JANELA_PREFIXO = "Auto Conferi"
 
 
 def _lock_instancia_unica():
@@ -160,7 +160,7 @@ def _aviso_ja_aberto() -> None:
         import ctypes
         ctypes.windll.user32.MessageBoxW(
             None,
-            "O Lançamento Automático já está aberto.\n\n"
+            "O Auto Conferi já está aberto.\n\n"
             "Verifique a barra de tarefas ou os cantos da tela.",
             "Aplicativo já aberto",
             0x40 | 0x1000,  # MB_ICONINFORMATION | MB_SYSTEMMODAL
