@@ -765,6 +765,43 @@ class MainWindow(QMainWindow):
         self._log.appendPlainText(f"[{datetime.now():%H:%M:%S}] {msg}")
         log.info(msg)
 
+    # ---------------- Shutdown limpo ----------------
+    # Se o usuário fechar o app OU o Windows mandar shutdown, precisamos
+    # garantir que nenhum QThread/worker fique rodando — senão o processo
+    # pode segurar o shutdown do Windows (ele espera timeout, mata forçado).
+    def closeEvent(self, event) -> None:  # noqa: N802 (Qt convention)
+        try:
+            self._encerrar_threads()
+        except Exception:  # noqa: BLE001
+            log.exception("Erro encerrando threads no closeEvent")
+        super().closeEvent(event)
+
+    def commitData(self, sm) -> None:  # noqa: N802 (Qt session manager)
+        """Chamado pelo Windows quando shutdown/logoff é iniciado.
+        Não pergunta nada, deixa o Windows fechar sem bloquear."""
+        try:
+            self._encerrar_threads()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _encerrar_threads(self) -> None:
+        """Força parada limpa de qualquer worker/thread em execução."""
+        # Cancela worker do lote (se rodando) — ele checka cancel a cada
+        # loop e sai
+        if self._worker_lote:
+            try:
+                self._worker_lote.cancelar()
+            except Exception:  # noqa: BLE001
+                pass
+        # Termina QThread se ainda tá rodando (2s de timeout — se não
+        # sair, força)
+        if self._thread and self._thread.isRunning():
+            self._thread.quit()
+            if not self._thread.wait(2000):
+                log.warning("QThread não parou em 2s — terminando forçado")
+                self._thread.terminate()
+                self._thread.wait(1000)
+
     # ---------------- Atualizador ----------------
 
     def _verificar_atualizacao(self) -> None:

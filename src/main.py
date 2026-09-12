@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-53 (atualização obrigatória no boot + auto-restart pós-apply)"
+BUILD_MARKER = "build-54 (shutdown limpo — não segura desligamento do Windows)"
 
 
 def main() -> int:
@@ -97,6 +97,12 @@ def main() -> int:
 
     _boot_trace("criando MainWindow")
     win = MainWindow(settings, mapping, mp)
+
+    # Garante que qualquer worker rodando é encerrado antes do app fechar —
+    # evita 'QThread: Destroyed while thread is still running' e segurar
+    # shutdown do Windows.
+    app.aboutToQuit.connect(win._encerrar_threads)
+
     _boot_trace("MainWindow.show()")
     win.show()
     _boot_trace("app.exec()")
