@@ -79,6 +79,15 @@ class MappingRepository:
     def filiais(self) -> list[Filial]:
         return list(self._filiais)
 
+    def filial_por_codigo(self, codigo: int) -> Filial | None:
+        """Lookup direto por código. Devolve None se não cadastrada.
+        Usado pelo menu contextual da tabela (editar filial de um
+        lançamento — build-79)."""
+        for f in self._filiais:
+            if f.codigo == codigo:
+                return f
+        return None
+
     def imposto(self, chave: str) -> Imposto:
         try:
             return self._impostos[chave]

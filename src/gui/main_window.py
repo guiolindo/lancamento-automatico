@@ -22,6 +22,7 @@ from ..core.settings_store import SettingsStore
 from .calibracao_dialog import CalibracaoDialog
 from .depara_dialog import DeParaDialog
 from .hud_execucao import HudExecucao
+from .lote_resumo_dialog import LoteResumoDialog
 from .preview_table import PreviewTable
 from .setup_dialog import SetupDialog
 from .theme import qss
@@ -419,9 +420,29 @@ class MainWindow(QMainWindow):
     def _resumo_lote(self) -> QWidget:
         wrap = QFrame()
         wrap.setStyleSheet("QFrame { background: transparent; }")
-        h = QHBoxLayout(wrap)
-        h.setContentsMargins(4, 0, 4, 0)
+        outer = QVBoxLayout(wrap)
+        outer.setContentsMargins(4, 0, 4, 0)
+        outer.setSpacing(6)
+
+        # Linha 1: RESUMO FISCAL grande (build-79). Vazia antes de
+        # extrair; depois mostra "IRRF · Ref. 09/2026 · 12 filiais ·
+        # R$ 47.320,80" em accent, dando personalidade fiscal (sai do
+        # "cara de SaaS genérico"). Escondida por padrão.
+        from .theme import PALETTE_DARK, PALETTE_LIGHT
+        _p = PALETTE_LIGHT if self._tema == "claro" else PALETTE_DARK
+        self._lbl_resumo_fiscal = QLabel("")
+        self._lbl_resumo_fiscal.setStyleSheet(
+            f"font-size: 16px; font-weight: 700; color: {_p['accent']}; "
+            f"font-family: 'Cascadia Mono', 'Consolas', 'Segoe UI'; "
+            f"letter-spacing: 0.2px; padding: 2px 0;"
+        )
+        self._lbl_resumo_fiscal.setVisible(False)
+        outer.addWidget(self._lbl_resumo_fiscal)
+
+        # Linha 2: badge de status + checkboxes + botão recalibrar
+        h = QHBoxLayout()
         h.setSpacing(16)
+        outer.addLayout(h)
 
         self._label_status_revisao = QLabel("Aguardando documento")
         self._label_status_revisao.setProperty("badge", "pendente")
@@ -465,6 +486,13 @@ class MainWindow(QMainWindow):
 
         self._tabela = PreviewTable()
         self._tabela.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # Conecta menu contextual: PreviewTable emite sinais, MainWindow
+        # executa (ver _on_pediu_* handlers). Separação: tabela não sabe
+        # sobre workers nem QInputDialog.
+        self._tabela.pediu_editar_filial.connect(self._on_pediu_editar_filial)
+        self._tabela.pediu_editar_valor.connect(self._on_pediu_editar_valor)
+        self._tabela.pediu_remover.connect(self._on_pediu_remover)
+        self._tabela.pediu_reprocessar.connect(self._on_pediu_reprocessar)
         v.addWidget(self._tabela, 1)
 
         return card
@@ -838,11 +866,41 @@ class MainWindow(QMainWindow):
         total = sum(l.valor for l in lancamentos)
         self._kpi_qtd_label.setText(f"{len(lancamentos)} lançamento(s)")
         self._kpi_valor_label.setText(self._formatar_moeda(total))
+        self._atualizar_resumo_fiscal()
         if nao_resolvidas:
             self._set_status_revisao("falha", f"{len(nao_resolvidas)} filial(is) não resolvidas")
         else:
             self._set_status_revisao("sucesso", "Pronto pra executar")
         self._btn_executar.setEnabled(bool(lancamentos))
+
+    def _atualizar_resumo_fiscal(self) -> None:
+        """Preenche a linha grande de resumo fiscal com base nos
+        lançamentos atuais. Formato: 'IRRF · Ref. 09/2026 · 12 filiais
+        · R$ 47.320,80'. Se vazio, esconde."""
+        if not self._lancamentos:
+            self._lbl_resumo_fiscal.setVisible(False)
+            self._lbl_resumo_fiscal.setText("")
+            return
+        imposto_str = self._combo_imposto.currentText()
+        # Pega mes_ref/ano_ref do primeiro lançamento (todos do mesmo lote
+        # compartilham). Formato mês zero-padded pra ficar "09/2026".
+        primeiro = self._lancamentos[0]
+        try:
+            mes = int(primeiro.mes_ref) if primeiro.mes_ref else 0
+            ref = f"{mes:02d}/{primeiro.ano_ref}" if mes else str(primeiro.ano_ref or "")
+        except (ValueError, TypeError):
+            ref = f"{primeiro.mes_ref}/{primeiro.ano_ref}"
+        # Filiais únicas (o lote pode ter N linhas pra mesma filial em
+        # tipos de folha diferentes — conta uma vez)
+        n_filiais = len({l.filial_codigo for l in self._lancamentos})
+        total = sum(l.valor for l in self._lancamentos)
+        partes = [imposto_str]
+        if ref and ref != "None/None":
+            partes.append(f"Ref. {ref}")
+        partes.append(f"{n_filiais} filial(is)")
+        partes.append(self._formatar_moeda(total))
+        self._lbl_resumo_fiscal.setText("  ·  ".join(partes))
+        self._lbl_resumo_fiscal.setVisible(True)
 
     def _on_erro_extracao(self, msg: str) -> None:
         self._btn_extrair.setEnabled(True)
@@ -950,7 +1008,12 @@ class MainWindow(QMainWindow):
         )
         self._encerrar_hud(sucessos, falhas)
         self._restaurar_janela_pos_lote()
-        QMessageBox.information(self, "Lote finalizado", f"Sucessos: {sucessos}\nFalhas: {falhas}")
+        # Dialog custom no lugar do QMessageBox — mostra lista das
+        # falhas com filial+erro e permite reprocessar só o que falhou.
+        dlg = LoteResumoDialog(self._lancamentos, self)
+        dlg.setStyleSheet(qss(self._tema))
+        dlg.reprocessar_falhas.connect(self._reprocessar_falhas)
+        dlg.exec()
 
     def _on_erro_lote(self, msg: str) -> None:
         self._btn_executar.setEnabled(True)
@@ -1019,6 +1082,117 @@ class MainWindow(QMainWindow):
     def _on_hud_confirmacao_respondida(self, prosseguir: bool) -> None:
         if self._worker_lote:
             self._worker_lote.responder_confirmacao(prosseguir)
+
+    # ---------- Reprocessar falhas ----------
+    def _reprocessar_falhas(self) -> None:
+        """Filtra os lançamentos com status FALHA, reseta pra PENDENTE,
+        substitui self._lancamentos com esse subset e dispara _executar
+        de novo. O lote 'esquece' os sucessos porque eles já foram
+        lançados no TOTVS — reprocessar tudo criaria duplicidade."""
+        from ..core.models import StatusLancamento
+        falhas = [l for l in self._lancamentos if l.status == StatusLancamento.FALHA]
+        if not falhas:
+            return
+        for l in falhas:
+            l.status = StatusLancamento.PENDENTE
+            l.erro = None
+        self._lancamentos = falhas
+        self._tabela.carregar(falhas)
+        self._atualizar_resumo_fiscal()
+        self._log_line(f"↻ Reprocessando {len(falhas)} lançamento(s) que falharam")
+        self._executar()
+
+    # ---------- Menu contextual da tabela ----------
+    def _on_pediu_editar_filial(self, i: int) -> None:
+        from PySide6.QtWidgets import QInputDialog
+        if not (0 <= i < len(self._lancamentos)):
+            return
+        lanc = self._lancamentos[i]
+        atual = str(lanc.filial_codigo)
+        novo, ok = QInputDialog.getText(
+            self, "Editar filial",
+            f"Código da filial (atual: {lanc.filial_nome} = {atual}):",
+            text=atual,
+        )
+        if not ok or not novo.strip():
+            return
+        try:
+            cod = int(novo.strip())
+        except ValueError:
+            QMessageBox.warning(self, "Filial inválida", "Código deve ser numérico.")
+            return
+        filial = self.mapping.filial_por_codigo(cod) if hasattr(self.mapping, "filial_por_codigo") else None
+        if filial is None:
+            # Se não achou no mapping, aceita mas avisa — usuário sabe o que faz
+            resp = QMessageBox.question(
+                self, "Filial não cadastrada",
+                f"Código {cod} não está no de-para. Usar mesmo assim?",
+            )
+            if resp != QMessageBox.Yes:
+                return
+            lanc.filial_codigo = cod
+        else:
+            lanc.filial_codigo = filial.codigo
+            lanc.filial_nome = filial.nome
+        self._tabela.atualizar_linha(i)
+        self._atualizar_resumo_fiscal()
+        self._log_line(f"✎ Filial da linha {i + 1} editada pra {lanc.filial_nome} ({lanc.filial_codigo})")
+
+    def _on_pediu_editar_valor(self, i: int) -> None:
+        from PySide6.QtWidgets import QInputDialog
+        if not (0 <= i < len(self._lancamentos)):
+            return
+        lanc = self._lancamentos[i]
+        novo, ok = QInputDialog.getDouble(
+            self, "Editar valor",
+            f"Valor (atual: R$ {lanc.valor:,.2f}):",
+            value=lanc.valor, minValue=0.0, maxValue=99999999.99, decimals=2,
+        )
+        if not ok:
+            return
+        lanc.valor = float(novo)
+        self._tabela.atualizar_linha(i)
+        # KPIs e resumo fiscal precisam refletir o novo total
+        total = sum(l.valor for l in self._lancamentos)
+        self._kpi_valor_label.setText(self._formatar_moeda(total))
+        self._atualizar_resumo_fiscal()
+        self._log_line(f"✎ Valor da linha {i + 1} editado pra {self._formatar_moeda(novo)}")
+
+    def _on_pediu_remover(self, i: int) -> None:
+        if not (0 <= i < len(self._lancamentos)):
+            return
+        lanc = self._lancamentos[i]
+        resp = QMessageBox.question(
+            self, "Remover do lote",
+            f"Remover '{lanc.filial_nome} — {lanc.tipo_folha}' do lote?\n"
+            "Isso não desfaz nada no TOTVS — só tira da lista antes do execução.",
+        )
+        if resp != QMessageBox.Yes:
+            return
+        self._tabela.remover_linha(i)
+        # Ressincroniza a lista da MainWindow com a da tabela
+        self._lancamentos = self._tabela.lancamentos()
+        total = sum(l.valor for l in self._lancamentos)
+        self._kpi_qtd_label.setText(f"{len(self._lancamentos)} lançamento(s)")
+        self._kpi_valor_label.setText(self._formatar_moeda(total))
+        self._atualizar_resumo_fiscal()
+        self._btn_executar.setEnabled(bool(self._lancamentos))
+        self._log_line(f"✂ Linha {i + 1} removida — {lanc.filial_nome}")
+
+    def _on_pediu_reprocessar(self, i: int) -> None:
+        """Reprocessa APENAS esta linha — reseta status pra PENDENTE,
+        substitui self._lancamentos com [essa uma], dispara _executar."""
+        from ..core.models import StatusLancamento
+        if not (0 <= i < len(self._lancamentos)):
+            return
+        lanc = self._lancamentos[i]
+        lanc.status = StatusLancamento.PENDENTE
+        lanc.erro = None
+        self._lancamentos = [lanc]
+        self._tabela.carregar(self._lancamentos)
+        self._atualizar_resumo_fiscal()
+        self._log_line(f"↻ Reprocessando linha isolada: {lanc.filial_nome} — {lanc.tipo_folha}")
+        self._executar()
 
     def _log_line(self, msg: str) -> None:
         self._log.appendPlainText(f"[{datetime.now():%H:%M:%S}] {msg}")

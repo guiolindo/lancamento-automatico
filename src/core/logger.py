@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
@@ -56,8 +56,18 @@ def setup_logger(name: str = "lancamento", level: int = logging.INFO) -> logging
     stream.setFormatter(fmt)
     logger.addHandler(stream)
 
-    logfile = _log_dir() / f"{datetime.now():%Y-%m-%d}.log"
-    fh = logging.FileHandler(logfile, encoding="utf-8")
+    # RotatingFileHandler: máximo 5MB por arquivo, 3 backups. Total ~20MB.
+    # Antes usávamos um arquivo por dia (yyyy-mm-dd.log) sem limpeza —
+    # acumulava indefinidamente e um dia crescia sem limite. Rotation
+    # resolve os dois problemas com um handler só. Nome fixo pra o
+    # updater/backup encontrar sem regex.
+    logfile = _log_dir() / "lancamento.log"
+    fh = RotatingFileHandler(
+        logfile,
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
     fh.setFormatter(fmt)
     logger.addHandler(fh)
 
