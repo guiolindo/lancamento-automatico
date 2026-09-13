@@ -24,6 +24,7 @@ from .depara_dialog import DeParaDialog
 from .hud_execucao import HudExecucao
 from .lote_resumo_dialog import LoteResumoDialog
 from .preview_table import PreviewTable
+from .widgets import DateEditFast
 from .setup_dialog import SetupDialog
 from .theme import qss
 from .updater_bar import UpdaterBar
@@ -381,7 +382,7 @@ class MainWindow(QMainWindow):
         row2.setSpacing(10)
 
         row2.addWidget(self._campo_inline("EMISSÃO"))
-        self._date_emissao = QDateEdit(hoje)
+        self._date_emissao = DateEditFast(hoje)
         self._date_emissao.setDisplayFormat("dd/MM/yyyy")
         self._date_emissao.setCalendarPopup(True)
         self._date_emissao.setFixedWidth(LARG_DATA)
@@ -390,7 +391,7 @@ class MainWindow(QMainWindow):
 
         row2.addSpacing(12)
         row2.addWidget(self._campo_inline("CONTÁBIL"))
-        self._date_contabil = QDateEdit(hoje)
+        self._date_contabil = DateEditFast(hoje)
         self._date_contabil.setDisplayFormat("dd/MM/yyyy")
         self._date_contabil.setCalendarPopup(True)
         self._date_contabil.setFixedWidth(LARG_DATA)
@@ -403,7 +404,7 @@ class MainWindow(QMainWindow):
 
         row2.addSpacing(12)
         row2.addWidget(self._campo_inline("VENCIMENTO"))
-        self._date_vencimento = QDateEdit(hoje)
+        self._date_vencimento = DateEditFast(hoje)
         self._date_vencimento.setDisplayFormat("dd/MM/yyyy")
         self._date_vencimento.setCalendarPopup(True)
         self._date_vencimento.setFixedWidth(LARG_DATA)

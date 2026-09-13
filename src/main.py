@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-83 (mensagens de erro humanas + traz TOTVS pro topo)"
+BUILD_MARKER = "build-84 (fade-in animations + DateEditFast: sem scroll, foco no dia)"
 
 
 def main() -> int:
@@ -50,7 +50,7 @@ def main() -> int:
     # isso aqui e mostrando o splash ANTES dos outros imports, o usuário
     # vê algo na tela em ~2s em vez dos ~10s antigos.
     _boot_trace("importando PySide6 (mínimo)")
-    from PySide6.QtCore import QTimer
+    from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -134,7 +134,18 @@ def main() -> int:
     # Sempre maximizado — em multi-monitor ocupa a tela onde estiver; em
     # mono-monitor, no início do lote a janela se minimiza e um HUD
     # compacto aparece no canto (ver MainWindow._preparar_janela_para_execucao).
+    # Fade-in leve (250ms, InOutQuad) — dá sensação de app profissional
+    # em vez de aparecer instantâneo. Só polimento, sem lógica.
+    win.setWindowOpacity(0.0)
     win.showMaximized()
+    _fade_anim = QPropertyAnimation(win, b"windowOpacity")
+    _fade_anim.setDuration(250)
+    _fade_anim.setStartValue(0.0)
+    _fade_anim.setEndValue(1.0)
+    _fade_anim.setEasingCurve(QEasingCurve.InOutQuad)
+    _fade_anim.start()
+    # Guarda referência pra o GC não matar antes da animação rodar
+    win._fade_in_anim = _fade_anim
 
     # Marca boot bem-sucedido: chegamos até a UI. O launcher lê esse
     # marker no próximo boot pra decidir se precisa fazer auto-recovery
