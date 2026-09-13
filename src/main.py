@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-79 (resumo fiscal + dialog pós-lote com reprocessar + menu tabela + log rotation)"
+BUILD_MARKER = "build-80 (hotfix: QApplication singleton — reuse se launcher já criou)"
 
 
 def main() -> int:
@@ -54,8 +54,14 @@ def main() -> int:
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication, QMessageBox
 
-    _boot_trace("criando QApplication")
-    app = QApplication(sys.argv)
+    _boot_trace("obtendo QApplication (reusa se launcher já criou)")
+    # Reusa a instância se o launcher já criou uma (ex: splash de update
+    # pendente OU splash de auto-recovery do build-76). Chamar
+    # QApplication(sys.argv) uma segunda vez explode com
+    # "Please destroy the QApplication singleton before creating a new".
+    # Esse crash apareceu em prod quando o recovery abria splash, não
+    # aplicava update (versão já era a mais recente), e caía neste main.
+    app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("Auto Conferi")
     app.setOrganizationName("Auto Conferi")
 

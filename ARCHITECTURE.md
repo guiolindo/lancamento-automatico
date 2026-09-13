@@ -475,6 +475,7 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 77 | Fix data cortando ano (120→145) + regra `emissão ≤ contábil ≤ vencimento` enforcada via `setMinimumDate` + auto-bump em cascata (TOTVS recusa se violar). | `main_window.py` |
 | 78 | CI smoke gate no workflow: antes de compilar Nuitka, roda import dos módulos core + `qss('escuro')` + `qss('claro')` + valida formato do `BUILD_MARKER`. Bloqueia builds tipo 74 (NameError em runtime) de chegar em prod. | `.github/workflows/build-exe.yml` |
 | 79 | Pacote UX: (a) `LoteResumoDialog` custom substitui `QMessageBox` no fim do lote — lista falhas com filial+erro, botão "Reprocessar falhas". (b) Menu contextual na PreviewTable: editar filial/valor, remover, reprocessar isolada. (c) Linha grande de resumo fiscal (`IRRF · Ref. 09/2026 · N filiais · R$ X,XX`) aparece pós-extração. (d) Log rotation (5MB × 3 backups) no `lancamento.log` — antes acumulava um arquivo por dia sem limite. | `lote_resumo_dialog.py` (novo), `preview_table.py`, `main_window.py`, `mapping.py`, `logger.py` |
+| 80 | Hotfix: `QApplication` singleton — auto-recovery do build-76 criava splash Qt (nasce a instância) mesmo sem update pra baixar; ao cair no boot normal, `src/main.py` chamava `QApplication(sys.argv)` de novo → `RuntimeError`. Troca por `QApplication.instance() or QApplication(sys.argv)`. Nova gotcha #10. | `main.py` |
 
 ---
 
@@ -516,7 +517,17 @@ Coisas que vão pegar contribuidor novo (humano ou IA) de surpresa:
    corrigido no build-75. **`ast.parse` não pega**: o erro é
    `NameError` em runtime durante `qss()`, não SyntaxError. Sempre
    testar com `qss('escuro')` E `qss('claro')` depois de mexer no
-   `theme.py`.
+   `theme.py`. Agora o CI (build-78+) enforça automaticamente.
+10. **QApplication é singleton** — nunca chame `QApplication(sys.argv)`
+    incondicional se outro código já pode ter criado uma. Sempre:
+    `app = QApplication.instance() or QApplication(sys.argv)`. Isso
+    quebrou em prod no build-76: o auto-recovery do launcher criava
+    splash Qt (nascendo a instância) mesmo quando não havia update
+    novo pra baixar; ao cair no fluxo normal, `src/main.py` fazia
+    `QApplication(sys.argv)` de novo e Qt recusava com
+    `RuntimeError: Please destroy the QApplication singleton before
+    creating a new`. Corrigido no build-80. Todo lugar que cria
+    QApplication no projeto deve usar o pattern `.instance() or ...`.
 
 ---
 
