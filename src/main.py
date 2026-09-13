@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-77 (data width 145 + regra emissão≤contábil≤vencimento)"
+BUILD_MARKER = "build-78 (CI smoke gate — bloqueia build-74-like antes de compilar)"
 
 
 def main() -> int:

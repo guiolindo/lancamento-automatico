@@ -473,6 +473,7 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 75 | Hotfix build-74: chaves não escapadas dentro de comentário CSS do f-string quebraram `qss()` em runtime (`NameError: name 'padding' is not defined`). `ast.parse` não pega — só executar `qss()` pega. Nova gotcha #9 nesse doc. | `theme.py` |
 | 76 | Auto-recovery de boot: `launcher.py` detecta boot anterior que nunca chegou até a UI (marker `boot_ok.marker` mais velho que o .exe) e baixa+aplica update remoto sozinho, antes de tentar importar `src.main`. Fecha o gap do build-74/75, onde um build quebrado deixava o usuário sem forma de auto-fix. Nova seção 2b nesse doc. | `launcher.py`, `main.py`, `build/build.py` |
 | 77 | Fix data cortando ano (120→145) + regra `emissão ≤ contábil ≤ vencimento` enforcada via `setMinimumDate` + auto-bump em cascata (TOTVS recusa se violar). | `main_window.py` |
+| 78 | CI smoke gate no workflow: antes de compilar Nuitka, roda import dos módulos core + `qss('escuro')` + `qss('claro')` + valida formato do `BUILD_MARKER`. Bloqueia builds tipo 74 (NameError em runtime) de chegar em prod. | `.github/workflows/build-exe.yml` |
 
 ---
 
