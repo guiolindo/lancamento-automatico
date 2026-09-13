@@ -33,7 +33,10 @@ def _default_path() -> Path:
 
 
 DEFAULTS: dict[str, Any] = {
-    "gemini_api_key": "",
+    # gemini_api_key foi DESCONTINUADO — chave agora vive só em
+    # gemini_api_key_enc (base64 do DPAPI). Se aparecer plain,
+    # _migrar_chave_gemini abaixo transfere e apaga. Ver secret_store.
+    "gemini_api_key_enc": "",
     "gemini_model": "gemini-3.5-flash-lite",
     "delays": {
         # Delays enxutos v2 — visão computacional já entrega click preciso,
@@ -81,6 +84,7 @@ class SettingsStore:
         self._merge_defaults(self._data, DEFAULTS)
         self._migrar_modelos_obsoletos()
         self._migrar_delays()
+        self._migrar_chave_gemini()
 
     def _migrar_delays(self) -> None:
         """Força atualizar delays quando bump de versão — usuário existente
@@ -109,6 +113,50 @@ class SettingsStore:
             log.info("Migrando modelo Gemini: %s -> %s", atual, novo)
             self._data["gemini_model"] = novo
             self.save()
+
+    def _migrar_chave_gemini(self) -> None:
+        """Se ainda existe `gemini_api_key` em plain text (upgrade do
+        build-84 ou anterior), cifra pra `gemini_api_key_enc` e apaga
+        a versão plain. Roda uma vez por instalação."""
+        plain = self._data.get("gemini_api_key")
+        if plain:  # existe e não é vazio → migra
+            from . import secret_store
+            log.info("Migrando gemini_api_key (plain) → gemini_api_key_enc (DPAPI)")
+            enc = secret_store.encrypt_str(plain)
+            if enc:
+                self._data["gemini_api_key_enc"] = enc
+                # Remove APENAS após confirmar que o enc foi gerado.
+                # Se encryption falhou, mantém plain pra não perder a chave.
+                self._data.pop("gemini_api_key", None)
+                self.save()
+            else:
+                log.warning("Migração da chave Gemini falhou — mantendo plain (será tentada de novo)")
+        elif "gemini_api_key" in self._data:
+            # Vazia — só limpa
+            self._data.pop("gemini_api_key", None)
+            self.save()
+
+    def get_gemini_api_key(self) -> str:
+        """Devolve a chave em plain text (descriptografada in-memory).
+        Retorna '' se não configurada OU se a descriptografia falhar
+        (ex: settings.json foi copiado de outra máquina/usuário)."""
+        from . import secret_store
+        enc = self._data.get("gemini_api_key_enc", "") or ""
+        return secret_store.decrypt_str(enc)
+
+    def set_gemini_api_key(self, plaintext: str) -> None:
+        """Cifra e salva. Vazio limpa."""
+        from . import secret_store
+        enc = secret_store.encrypt_str(plaintext or "")
+        self._data["gemini_api_key_enc"] = enc
+        # Garante que nunca sobrou plain
+        self._data.pop("gemini_api_key", None)
+        self.save()
+
+    def tem_chave_gemini(self) -> bool:
+        """Só chega até o disco, sem descriptografar — útil pra checks
+        rápidos que não precisam do valor (ex: primeira execução)."""
+        return bool(self._data.get("gemini_api_key_enc"))
 
     def _merge_defaults(self, current: dict, defaults: dict) -> None:
         for k, v in defaults.items():

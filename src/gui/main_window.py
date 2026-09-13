@@ -575,7 +575,7 @@ class MainWindow(QMainWindow):
     # ---------------- Setup ----------------
 
     def _verificar_setup(self) -> None:
-        if not self.settings.get("gemini_api_key"):
+        if not self.settings.tem_chave_gemini():
             self._abrir_setup(inicial=True)
         # Check de atualização automático no boot — dá 4s pra janela
         # renderizar + Windows Defender fazer a checagem CRL/OCSP inicial
@@ -645,11 +645,17 @@ class MainWindow(QMainWindow):
         self._rodar_check_em_thread(on_done)
 
     def _abrir_setup(self, inicial: bool = False) -> None:
-        dlg = SetupDialog(self, current_key=self.settings.get("gemini_api_key", ""))
+        # A chave nunca é passada pra UI — o dialog só sabe SE existe
+        # (via bool), pra decidir placeholder/rótulo. Ver secret_store.
+        ja_tem = self.settings.tem_chave_gemini()
+        dlg = SetupDialog(self, chave_ja_configurada=ja_tem)
         dlg.setStyleSheet(qss(self._tema))
         if dlg.exec():
-            self.settings.set("gemini_api_key", dlg.chave())
-            self._log_line("✓ Chave da API Gemini salva")
+            if dlg.substituir():
+                self.settings.set_gemini_api_key(dlg.chave())
+                self._log_line("✓ Chave da API Gemini salva (criptografada)")
+            elif not ja_tem:
+                self._log_line("⚠ Chave em branco — extração indisponível")
         elif inicial:
             self._log_line("⚠ Sem chave configurada — extração ficará indisponível")
 
@@ -798,9 +804,18 @@ class MainWindow(QMainWindow):
         if self._arquivo_selecionado is None:
             QMessageBox.warning(self, "Atenção", "Selecione um documento primeiro.")
             return
-        api_key = self.settings.get("gemini_api_key", "")
+        # Descriptografa a chave só aqui (in-memory, passa pro worker
+        # que roda em thread separada). Se DPAPI falhar (settings.json
+        # veio de outro user/máquina), get_gemini_api_key devolve ''.
+        api_key = self.settings.get_gemini_api_key()
         if not api_key:
-            QMessageBox.warning(self, "Chave ausente", "Configure a chave da API Gemini antes de continuar.")
+            QMessageBox.warning(
+                self, "Chave ausente",
+                "Configure a chave da API Gemini antes de continuar.\n\n"
+                "Se você já configurou, mas está vendo esse aviso, o "
+                "arquivo de configurações pode ter vindo de outro usuário "
+                "Windows. Cole a chave de novo pra reconfigurar."
+            )
             self._abrir_setup(inicial=False)
             return
 

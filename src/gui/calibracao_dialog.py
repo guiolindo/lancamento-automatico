@@ -16,7 +16,7 @@ assim). Se por acaso mudar de nome no futuro, edite manualmente em
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QDialog, QGridLayout, QHBoxLayout, QLabel, QMessageBox, QPushButton,
@@ -220,6 +220,16 @@ class CalibracaoDialog(QDialog):
             if resp != QMessageBox.Yes:
                 return
         self.accept()
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        self.setWindowOpacity(0.0)
+        self._fade = QPropertyAnimation(self, b"windowOpacity")
+        self._fade.setDuration(200)
+        self._fade.setStartValue(0.0)
+        self._fade.setEndValue(1.0)
+        self._fade.setEasingCurve(QEasingCurve.InOutQuad)
+        self._fade.start()
 
     def calibracao(self) -> Calibracao:
         return self._calibracao

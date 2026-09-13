@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-84 (fade-in animations + DateEditFast: sem scroll, foco no dia)"
+BUILD_MARKER = "build-85 (segurança: chave Gemini criptografada com DPAPI + nunca exibida)"
 
 
 def main() -> int:
