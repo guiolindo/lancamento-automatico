@@ -72,14 +72,22 @@ def run() -> int:
         # (porque estamos em modo GUI). Redirecionamos pra arquivos ao
         # lado do exe.
         #
-        # AV-SAFETY (build-86): trocamos %TEMP% → %USERPROFILE% porque
-        # %TEMP% é red-flag clássico de malware (unpackers em runtime,
-        # droppers). %USERPROFILE% é caminho comum e neutro. Nuitka
-        # aceita a variável literal — expandida em runtime no Windows.
-        # Se %USERPROFILE% falhar em algum PC (raro), Windows cria o
-        # arquivo em C:\Users\Default ou similar, que ainda é aceitável.
-        "--force-stdout-spec=%USERPROFILE%/.lancamento-automatico/LancamentoAutomatico.stdout.log",
-        "--force-stderr-spec=%USERPROFILE%/.lancamento-automatico/LancamentoAutomatico.stderr.log",
+        # AV-SAFETY (build-88): sai de %TEMP% (red-flag clássico de
+        # dropper) pra %HOME% (home dir do usuário Windows, neutro).
+        # IMPORTANTE — Nuitka só aceita variáveis da sua lista fixa:
+        # %HOME%, %TEMP%, %CACHE_DIR%, %PROGRAM%, %PROGRAM_BASE%,
+        # %PID%, %TIME%, %TIMESTAMP%, %COMPANY%, %PRODUCT%, %VERSION%,
+        # %NONE%.
+        # NÃO tem %USERPROFILE% (tentei no build-86, quebrou o CI com
+        # 'FATAL: Found unknown variable name USERPROFILE'), NÃO tem
+        # %PROGRAM_DIR%.
+        # Nome do arquivo sem subpasta porque Nuitka NÃO cria parent
+        # dirs — se apontasse pra %HOME%/.lancamento-automatico/... e
+        # a pasta não existisse no primeiro boot, o redirect falharia
+        # silenciosamente e a app crashava com STATUS_FATAL_APP_EXIT.
+        # %HOME% sempre existe.
+        "--force-stdout-spec=%HOME%/AutoConferi.stdout.log",
+        "--force-stderr-spec=%HOME%/AutoConferi.stderr.log",
         # Performance de build (não de runtime): desabilita LTO — LTO custa
         # 20+ min extras em máquinas com PySide6 e não muda anti-AV.
         "--lto=no",

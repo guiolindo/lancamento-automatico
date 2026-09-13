@@ -551,7 +551,8 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 84 | Polimento UX: (a) fade-in 250ms na MainWindow ao abrir + 200ms no LoteResumoDialog — dá cara de app profissional; (b) novo `DateEditFast` (subclass de QDateEdit): ignora scroll da rodinha do mouse (não muda mais data sem querer) e ao ganhar foco já seleciona a seção do dia (permite digitar `13092026` de uma vez com auto-avanço entre seções). Aplicado nos 3 campos de data. | `widgets.py` (novo), `main_window.py`, `main.py`, `lote_resumo_dialog.py` |
 | 85 | Segurança da chave Gemini: (a) novo `secret_store.py` usa Windows DPAPI (`CryptProtectData`) — só o mesmo user Windows na mesma máquina descriptografa; (b) `settings.json` guarda `gemini_api_key_enc` (base64) em vez de plain; (c) migração automática do plain antigo → cifrado; (d) `SetupDialog` reformulado: nunca pré-preenche o campo, sem botão "Mostrar chave", só placeholder "chave já configurada — deixe em branco pra manter"; (e) fade-in em SetupDialog/CalibracaoDialog/DeParaDialog pra consistência com LoteResumoDialog. | `secret_store.py` (novo), `settings_store.py`, `setup_dialog.py`, `main_window.py`, `calibracao_dialog.py`, `depara_dialog.py` |
 | 86 | AV-safety hardening: (a) `_trazer_para_frente` NÃO usa mais `SetForegroundWindow`+`AttachThreadInput` (padrão RAT que AV corporativo marca) — troca por `BringWindowToTop` + `FlashWindowEx` (piscar taskbar sem hijack); (b) Nuitka `--force-stdout/stderr-spec` sai de `%TEMP%` pra `%USERPROFILE%\.lancamento-automatico\` — `%TEMP%` é red-flag clássico de dropper; (c) nova seção 4d "AV-safety — checklist de primeira classe" no ARCHITECTURE.md listando TODAS as APIs sensíveis usadas + as que evitamos deliberadamente + checklist antes de adicionar API nova. | `rpa_totvs.py`, `build/build.py`, `ARCHITECTURE.md` |
-| 87 | Meio-termo do foreground: adiciona de volta `SetForegroundWindow` LIMPO (sem `AttachThreadInput`) em `_trazer_para_frente`. Aceito pelo Windows porque nosso processo ainda tem foreground quando o operador clica Executar — não é o combo AV-flagged. Recupera "TOTVS vem pra frente sozinho" no edge case Chrome-maximizado-por-cima que o build-86 pedia clique manual. `FlashWindowEx` vira fallback só se Windows negar. | `rpa_totvs.py`, `ARCHITECTURE.md` |
+| 87 | Meio-termo do foreground: adiciona de volta `SetForegroundWindow` LIMPO (sem `AttachThreadInput`) em `_trazer_para_frente`. Aceito pelo Windows porque nosso processo ainda tem foreground quando o operador clica Executar — não é o combo AV-flagged. Recupera "TOTVS vem pra frente sozinho" no edge case Chrome-maximizado-por-cima que o build-86 pedia clique manual. `FlashWindowEx` vira fallback só se Windows negar. **NUNCA COMPILOU** — build-86 já tinha broken o CI, ver 88. | `rpa_totvs.py`, `ARCHITECTURE.md` |
+| 88 | Hotfix crítico: Nuitka `--force-stdout/stderr-spec=%USERPROFILE%/...` do build-86 quebrou o workflow com `FATAL: Found unknown variable name 'USERPROFILE'`. Nuitka só aceita variáveis da lista fixa dele (`%HOME%`, `%TEMP%`, `%CACHE_DIR%`, `%PROGRAM%`, `%PID%`, `%TIME%`, etc.) — não são env vars do Windows. Builds 86 e 87 nunca chegaram a compilar; nenhum zip publicado desde build-85. Troca por `%HOME%/AutoConferi.stdout.log` (nome direto, sem subpasta — Nuitka não cria parent dirs). Nova gotcha #10 documentando as variáveis aceitas. | `build/build.py`, `ARCHITECTURE.md` |
 
 ---
 
@@ -594,7 +595,19 @@ Coisas que vão pegar contribuidor novo (humano ou IA) de surpresa:
    `NameError` em runtime durante `qss()`, não SyntaxError. Sempre
    testar com `qss('escuro')` E `qss('claro')` depois de mexer no
    `theme.py`. Agora o CI (build-78+) enforça automaticamente.
-10. **QApplication é singleton** — nunca chame `QApplication(sys.argv)`
+10. **Nuitka `--force-stdout/stderr-spec` só aceita variáveis da
+    lista fixa** — não são variáveis de ambiente do Windows. Aceitas:
+    `%HOME%`, `%TEMP%`, `%CACHE_DIR%`, `%PROGRAM%`, `%PROGRAM_BASE%`,
+    `%PID%`, `%TIME%`, `%TIMESTAMP%`, `%COMPANY%`, `%PRODUCT%`,
+    `%VERSION%`, `%NONE%`. **NÃO aceita** `%USERPROFILE%`,
+    `%APPDATA%`, `%LOCALAPPDATA%`, `%PROGRAM_DIR%`. Build-86 quebrou
+    o CI com "FATAL: Found unknown variable name 'USERPROFILE'" —
+    corrigido no build-88 usando `%HOME%`. Nuitka também **não cria
+    parent dirs** — se apontar pra subpasta que ainda não existe no
+    primeiro boot, o redirect falha silenciosamente e o exe crasha
+    com `STATUS_FATAL_APP_EXIT` (0x40000015). Use nome direto na
+    variable, sem subpasta.
+11. **QApplication é singleton** — nunca chame `QApplication(sys.argv)`
     incondicional se outro código já pode ter criado uma. Sempre:
     `app = QApplication.instance() or QApplication(sys.argv)`. Isso
     quebrou em prod no build-76: o auto-recovery do launcher criava
