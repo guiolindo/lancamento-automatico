@@ -33,6 +33,47 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Smoke gate: ANTES de gastar 10min compilando Nuitka, garante que
+      # o Python arranca sem exceção. Cobre os erros que ast.parse não
+      # pega:
+      #  - f-string com chave não escapada (o bug do build-74 que quebrou
+      #    prod: NameError durante qss() em runtime)
+      #  - import circular ou módulo faltando (cai em ImportError)
+      #  - erro em top-level de qualquer módulo importado no boot
+      # Se falhar aqui, o job aborta antes do Nuitka, poupando ~10min de
+      # CI e o pior: bloqueia o release ruim de subir pra rolling.
+      - name: Smoke gate (import + qss runtime)
+        shell: pwsh
+        run: |
+          python -c "
+          import sys
+          # Stub PySide6 pra o smoke rodar sem GUI (o CI não tem tela)
+          class _Stub:
+              def __getattr__(self, n): return _Stub()
+              def __call__(self, *a, **k): return _Stub()
+          for m in ['PySide6','PySide6.QtCore','PySide6.QtGui','PySide6.QtWidgets']:
+              sys.modules[m] = _Stub()
+
+          # 1. Módulos core têm que importar limpo — o auto-recovery do
+          #    launcher depende deles importarem mesmo com src.gui quebrado.
+          from src.core import updater, mapping, models, settings_store, logger
+
+          # 2. QSS runtime: DOIS temas. O bug do build-74 só aparecia ao
+          #    chamar qss(), não em import ou ast.parse.
+          from src.gui.theme import qss
+          qss('escuro')
+          qss('claro')
+
+          # 3. BUILD_MARKER tem que ter formato bumpado (não vazio, contém
+          #    'build-N'). Evita esquecer de bumpar em push pra main.
+          from src.main import BUILD_MARKER
+          import re
+          if not re.match(r'^build-\d+', BUILD_MARKER):
+              raise SystemExit(f'BUILD_MARKER fora do padrão: {BUILD_MARKER!r}')
+
+          print('smoke gate OK:', BUILD_MARKER)
+          "
+
       - name: Cache Nuitka
         uses: actions/cache@v4
         with:
