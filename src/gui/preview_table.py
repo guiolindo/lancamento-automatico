@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
+    QAbstractItemView, QHeaderView, QMenu, QTableWidget, QTableWidgetItem
 )
 
 from ..core.models import Lancamento, StatusLancamento
@@ -21,6 +21,14 @@ STATUS_ROTULOS = {
 class PreviewTable(QTableWidget):
     COLS = ["#", "Filial", "Cód.", "Tipo Folha", "Observação", "Valor (R$)", "Status"]
 
+    # Sinais emitidos pelo menu contextual. MainWindow escuta e faz o
+    # trabalho real (QInputDialog, mexer no worker, etc.). PreviewTable
+    # mantém-se estúpida — só sabe da lista dela.
+    pediu_editar_filial = Signal(int)      # index
+    pediu_editar_valor = Signal(int)
+    pediu_remover = Signal(int)
+    pediu_reprocessar = Signal(int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setColumnCount(len(self.COLS))
@@ -30,6 +38,7 @@ class PreviewTable(QTableWidget):
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.setShowGrid(False)
+        self.setContextMenuPolicy(Qt.DefaultContextMenu)
 
         header = self.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -77,3 +86,46 @@ class PreviewTable(QTableWidget):
 
     def lancamentos(self) -> list[Lancamento]:
         return self._lancamentos
+
+    def remover_linha(self, i: int) -> None:
+        """Remove um lançamento da lista + da tabela em bloco. MainWindow
+        precisa recarregar KPIs depois (via sinal na chamada)."""
+        if not (0 <= i < len(self._lancamentos)):
+            return
+        del self._lancamentos[i]
+        self.removeRow(i)
+        # Renumera a coluna # nas linhas restantes
+        for row in range(self.rowCount()):
+            item = self.item(row, 0)
+            if item:
+                item.setText(str(row + 1))
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802 (Qt convention)
+        row = self.rowAt(event.pos().y())
+        if row < 0 or row >= len(self._lancamentos):
+            return
+        # Seleciona a linha clicada pra dar feedback visual
+        self.selectRow(row)
+
+        lanc = self._lancamentos[row]
+        menu = QMenu(self)
+        act_filial = menu.addAction("Editar filial…")
+        act_valor = menu.addAction("Editar valor…")
+        menu.addSeparator()
+        act_remover = menu.addAction("Remover deste lote")
+        # "Reprocessar apenas esta" só faz sentido se o lote já rodou
+        # (status ≠ PENDENTE) — mas mostrar sempre e deixar MainWindow
+        # decidir se o comando tem efeito. Aqui só sinaliza intenção.
+        menu.addSeparator()
+        act_reproc = menu.addAction("Reprocessar apenas esta")
+        act_reproc.setEnabled(lanc.status != StatusLancamento.EM_ANDAMENTO)
+
+        chosen = menu.exec(event.globalPos())
+        if chosen is act_filial:
+            self.pediu_editar_filial.emit(row)
+        elif chosen is act_valor:
+            self.pediu_editar_valor.emit(row)
+        elif chosen is act_remover:
+            self.pediu_remover.emit(row)
+        elif chosen is act_reproc:
+            self.pediu_reprocessar.emit(row)
