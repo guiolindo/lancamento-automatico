@@ -140,6 +140,8 @@ class LoteWorker(QObject):
 
             # Auto-detecção via visão computacional. Se der certo, preenche
             # calibracao.campos sem exigir calibração manual do operador.
+            ok_visao = False
+            msg_visao = ""
             try:
                 from ..core.visao_totvs import preencher_calibracao_automatica
                 ok_visao, msg_visao = preencher_calibracao_automatica(self.calibracao)
@@ -147,7 +149,38 @@ class LoteWorker(QObject):
                 if not ok_visao:
                     self._emit_e_log("[visão] fallback pra calibração manual salva")
             except BaseException as e:  # noqa: BLE001
-                self._emit_e_log(f"[visão] módulo indisponível ({e}) — usando calibração manual")
+                msg_visao = f"módulo indisponível: {e}"
+                self._emit_e_log(f"[visão] {msg_visao} — usando calibração manual")
+
+            # Pré-check com mensagem HUMANA antes de tentar RpaTotvs.
+            # Se a visão falhou E não tem calibração manual salva, o
+            # RpaTotvs.__init__ ia estourar 'Calibração incompleta —
+            # faltam empresa, especie, pessoa...' que é ininteligível
+            # pro usuário final. Aqui traduzimos pra causa real.
+            if not ok_visao and not self.calibracao.esta_completa():
+                m_low = (msg_visao or "").lower()
+                if any(k in m_low for k in ("sumiu", "reconhecer", "pygetwindow", "indisponível", "indisponivel")):
+                    friendly = (
+                        "Não achei o TOTVS aberto na tela 'Inclusão de Títulos'.\n\n"
+                        "Antes de executar:\n"
+                        "  1. Abra o TOTVS e vá até a tela 'Inclusão de Títulos' "
+                        "(janela 'Operador Financeiro').\n"
+                        "  2. Deixe essa janela visível (não minimizada).\n"
+                        "  3. Clique em 'Executar no TOTVS' de novo.\n\n"
+                        "Se o TOTVS já está aberto e mesmo assim dá esse erro, "
+                        "clique em 'Recalibrar (backup)' pra calibrar manualmente uma vez."
+                    )
+                else:
+                    friendly = (
+                        f"Não consegui preparar a automação do TOTVS.\n\n"
+                        f"Detalhe técnico: {msg_visao}\n\n"
+                        "Verifique se o TOTVS está aberto na tela 'Inclusão de "
+                        "Títulos' e tente de novo. Se persistir, calibre "
+                        "manualmente com o botão 'Recalibrar (backup)'."
+                    )
+                self._emit_e_log("XX " + friendly.replace("\n", " "))
+                self.error.emit(friendly)
+                return
 
             try:
                 rpa = RpaTotvs(
@@ -158,8 +191,21 @@ class LoteWorker(QObject):
                 )
             except BaseException as e:  # noqa: BLE001
                 log.exception("Falha instanciando RpaTotvs")
-                self._emit_e_log(f"XX Falha instanciando RpaTotvs: {type(e).__name__}: {e}")
-                self.error.emit(f"RpaTotvs() falhou: {e}")
+                # Traduz a exceção interna pra linguagem humana quando
+                # for reconhecível.
+                msg = str(e)
+                if "Calibração incompleta" in msg or "Calibracao incompleta" in msg:
+                    friendly = (
+                        "A configuração dos campos do TOTVS está incompleta.\n\n"
+                        "Isso normalmente acontece quando o TOTVS não estava "
+                        "aberto na tela certa quando você apertou 'Executar'. "
+                        "Abra o TOTVS na tela 'Inclusão de Títulos' e tente "
+                        "de novo."
+                    )
+                else:
+                    friendly = f"Não consegui preparar a automação:\n\n{msg}"
+                self._emit_e_log(f"XX {friendly}")
+                self.error.emit(friendly)
                 return
             self._emit_e_log(">> RpaTotvs instanciado")
             self._emit_e_log("-> Conectando à janela do TOTVS...")
@@ -169,8 +215,21 @@ class LoteWorker(QObject):
                     rpa.conectar()
                 except BaseException as e:  # noqa: BLE001
                     log.exception("Falha em rpa.conectar()")
-                    self._emit_e_log(f"XX Falha em conectar(): {type(e).__name__}: {e}")
-                    raise
+                    msg = str(e)
+                    if "não encontrada" in msg or "nao encontrada" in msg:
+                        friendly = (
+                            "A janela 'Operador Financeiro' do TOTVS não "
+                            "apareceu no tempo esperado.\n\n"
+                            "Verifique se:\n"
+                            "  • O TOTVS está aberto\n"
+                            "  • A tela 'Inclusão de Títulos' está ativa\n"
+                            "  • A janela não está minimizada"
+                        )
+                    else:
+                        friendly = f"Não consegui conectar ao TOTVS:\n\n{msg}"
+                    self._emit_e_log(f"XX {friendly}")
+                    self.error.emit(friendly)
+                    return
                 self._emit_e_log("OK Janela conectada")
 
                 sucessos = 0

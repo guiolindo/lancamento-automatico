@@ -63,14 +63,61 @@ class EmergencyAbortException(RuntimeError):
 
 
 def _trazer_para_frente(win) -> None:
-    """DESABILITADO por causa de travamentos suspeitos.
+    """Traz a janela do TOTVS pro topo (se outros apps estão cobrindo).
 
-    Antes tentava SetForegroundWindow + keybd_event(Alt) — parece que essa
-    combinação estava causando o Executar 'travar' no PC do usuário
-    (provavelmente uma race no user32 ou proteção de roubo de foco).
-    Operador deixa o TOTVS visível manualmente antes de rodar.
+    Reativado no build-83. Usa o pattern AttachThreadInput, que é
+    o único jeito confiável no Windows moderno de contornar o
+    foreground lock — normalmente só o app que já tem foco pode
+    dar foco pra outro. Anexando os input threads brevemente, o
+    SetForegroundWindow é aceito.
+
+    IMPORTANTE: NÃO usar keybd_event(Alt) como truque de foco — essa
+    combinação foi suspeita de travar o Executar em builds anteriores.
+    O truque AttachThreadInput é mais limpo e testado.
+
+    Best-effort: se qualquer step falhar, engole a exception — o lote
+    continua com a janela onde estiver. O RPA ainda funciona com a
+    janela em segundo plano (send input direto), só o operador não
+    consegue acompanhar visualmente.
     """
-    log.info("_trazer_para_frente: NO-OP (deixe o TOTVS visível manualmente)")
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        # pygetwindow expõe o HWND como _hWnd
+        hwnd = getattr(win, "_hWnd", None)
+        if not hwnd:
+            log.info("_trazer_para_frente: janela sem HWND — pulando")
+            return
+
+        # Se minimizada, restaura antes
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+
+        fg = user32.GetForegroundWindow()
+        if fg == hwnd:
+            log.info("_trazer_para_frente: TOTVS já está em foco")
+            return
+
+        # AttachThreadInput trick pra contornar o foreground lock
+        user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+        tid_current = kernel32.GetCurrentThreadId()
+        tid_fg = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+        anexou = False
+        if tid_fg and tid_fg != tid_current:
+            anexou = bool(user32.AttachThreadInput(tid_current, tid_fg, True))
+        try:
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+            user32.ShowWindow(hwnd, 5)  # SW_SHOW
+            log.info("_trazer_para_frente: TOTVS trazido pro topo (HWND=%s)", hwnd)
+        finally:
+            if anexou:
+                user32.AttachThreadInput(tid_current, tid_fg, False)
+    except Exception as e:  # noqa: BLE001
+        log.warning("_trazer_para_frente falhou (%s: %s) — segue com janela onde estiver",
+                    type(e).__name__, e)
 
 
 class RpaTotvs:

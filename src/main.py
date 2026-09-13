@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-82 (download automático silencioso — sem modal 'atualização obrigatória')"
+BUILD_MARKER = "build-83 (mensagens de erro humanas + traz TOTVS pro topo)"
 
 
 def main() -> int:
