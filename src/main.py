@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-86 (AV-safety: sem foreground hijack + fora do %TEMP% + doc)"
+BUILD_MARKER = "build-87 (SetForegroundWindow limpo — TOTVS vem pra frente sozinho sem trigger AV)"
 
 
 def main() -> int:

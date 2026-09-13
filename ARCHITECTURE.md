@@ -434,7 +434,7 @@ comportamento suspeito é grátis quando planejado desde o início.
 | --- | --- | --- |
 | `CryptProtectData` (DPAPI) | Cifra chave Gemini | Chrome/Edge/Outlook usam. Padrão do OS pra secrets locais. |
 | HTTPS `github.com` | Auto-update check + download | Domínio famoso, cert legítimo, HTTP GET simples. |
-| `ShowWindow`, `BringWindowToTop`, `FlashWindowEx` | Surface TOTVS | APIs oficiais de UX, sem hijack de foco. |
+| `ShowWindow`, `BringWindowToTop`, `SetForegroundWindow` (limpo), `FlashWindowEx` | Surface TOTVS | APIs oficiais de UX. `SetForegroundWindow` só é red-flag quando combinado com `AttachThreadInput` (padrão RAT). Sozinho é o que Chrome/Zoom/Slack chamam o tempo todo. Windows só aceita a transferência de foco quando nosso processo ainda é foreground (nosso caso: usuário acabou de clicar Executar). |
 | `EnumWindows`, `GetWindowRect`, `GetWindowTextW` | Detectar TOTVS/monitor | Leitura passiva. Sem hooks. |
 | `CreateMutexW` (`Local\...`) | Single-instance | Padrão Windows pra evitar múltipla abertura. |
 | `GetAsyncKeyState(VK_END)` | Tecla emergência | Polling (não hook). Menos suspeito que `SetWindowsHookEx`. |
@@ -446,7 +446,7 @@ comportamento suspeito é grátis quando planejado desde o início.
 
 | API que NÃO usamos | Por que | Alternativa que usamos |
 | --- | --- | --- |
-| `SetForegroundWindow` + `AttachThreadInput` | Hijack de foreground = padrão RAT. Removido no build-86. | `BringWindowToTop` + `FlashWindowEx` |
+| `SetForegroundWindow` + `AttachThreadInput` (combo) | Hijack de foreground quando já perdeu foreground rights = padrão RAT. Só `SetForegroundWindow` sozinho é aceitável (build-87 usa assim). | `BringWindowToTop` + `SetForegroundWindow` limpo + `FlashWindowEx` fallback |
 | `SetWindowsHookEx(WH_KEYBOARD_LL)` | Keylogger clássico | `GetAsyncKeyState` polling |
 | `%TEMP%` pra qualquer output | Malware clássico usa `%TEMP%` como stage/dropper. Removido no build-86. | `%USERPROFILE%\.lancamento-automatico\` |
 | `--onefile` (Nuitka/PyInstaller) | Extract-and-run = dropper pattern | `--standalone` |
@@ -551,6 +551,7 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 84 | Polimento UX: (a) fade-in 250ms na MainWindow ao abrir + 200ms no LoteResumoDialog — dá cara de app profissional; (b) novo `DateEditFast` (subclass de QDateEdit): ignora scroll da rodinha do mouse (não muda mais data sem querer) e ao ganhar foco já seleciona a seção do dia (permite digitar `13092026` de uma vez com auto-avanço entre seções). Aplicado nos 3 campos de data. | `widgets.py` (novo), `main_window.py`, `main.py`, `lote_resumo_dialog.py` |
 | 85 | Segurança da chave Gemini: (a) novo `secret_store.py` usa Windows DPAPI (`CryptProtectData`) — só o mesmo user Windows na mesma máquina descriptografa; (b) `settings.json` guarda `gemini_api_key_enc` (base64) em vez de plain; (c) migração automática do plain antigo → cifrado; (d) `SetupDialog` reformulado: nunca pré-preenche o campo, sem botão "Mostrar chave", só placeholder "chave já configurada — deixe em branco pra manter"; (e) fade-in em SetupDialog/CalibracaoDialog/DeParaDialog pra consistência com LoteResumoDialog. | `secret_store.py` (novo), `settings_store.py`, `setup_dialog.py`, `main_window.py`, `calibracao_dialog.py`, `depara_dialog.py` |
 | 86 | AV-safety hardening: (a) `_trazer_para_frente` NÃO usa mais `SetForegroundWindow`+`AttachThreadInput` (padrão RAT que AV corporativo marca) — troca por `BringWindowToTop` + `FlashWindowEx` (piscar taskbar sem hijack); (b) Nuitka `--force-stdout/stderr-spec` sai de `%TEMP%` pra `%USERPROFILE%\.lancamento-automatico\` — `%TEMP%` é red-flag clássico de dropper; (c) nova seção 4d "AV-safety — checklist de primeira classe" no ARCHITECTURE.md listando TODAS as APIs sensíveis usadas + as que evitamos deliberadamente + checklist antes de adicionar API nova. | `rpa_totvs.py`, `build/build.py`, `ARCHITECTURE.md` |
+| 87 | Meio-termo do foreground: adiciona de volta `SetForegroundWindow` LIMPO (sem `AttachThreadInput`) em `_trazer_para_frente`. Aceito pelo Windows porque nosso processo ainda tem foreground quando o operador clica Executar — não é o combo AV-flagged. Recupera "TOTVS vem pra frente sozinho" no edge case Chrome-maximizado-por-cima que o build-86 pedia clique manual. `FlashWindowEx` vira fallback só se Windows negar. | `rpa_totvs.py`, `ARCHITECTURE.md` |
 
 ---
 

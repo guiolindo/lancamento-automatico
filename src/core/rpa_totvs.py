@@ -63,31 +63,38 @@ class EmergencyAbortException(RuntimeError):
 
 
 def _trazer_para_frente(win) -> None:
-    """Surface a janela do TOTVS sem hijack de foreground (build-86).
+    """Traz a janela do TOTVS pra frente sem trigger heurístico de AV.
 
-    IMPORTANTE — decisão AV-safety: NÃO usamos mais a combinação
-    `AttachThreadInput + SetForegroundWindow`. Essa combinação é o
-    padrão clássico que AV corporativo (SentinelOne, CrowdStrike,
-    Kaspersky) marca como comportamento tipo RAT/keylogger — hijack
-    de foreground é técnica de malware. Foi usado no build-83 e
-    trocado aqui pra não empilhar red-flag heurístico no perfil do
-    app (que já usa pyautogui + GetAsyncKeyState, ambos meio
-    borderline).
+    Histórico:
+    - Build-83: usava `AttachThreadInput + SetForegroundWindow`
+      pra forçar foco. Combinação é padrão RAT clássico — trocado.
+    - Build-86: só `BringWindowToTop + FlashWindowEx` (sem foco).
+      Funcionava, mas em cenário raro (Chrome maximizado por cima
+      do TOTVS + mono-monitor) o operador tinha que clicar
+      manualmente. Cliques do RPA podiam cair no Chrome.
+    - Build-87 (aqui): `BringWindowToTop + SetForegroundWindow
+      "limpo"` (sem AttachThreadInput). Fallback pra FlashWindowEx
+      se o Windows negar a transferência de foco.
 
-    O que fazemos em vez:
-      1. Se minimizada → `ShowWindow(SW_RESTORE)` — API padrão, zero AV.
-      2. `BringWindowToTop` — só reordena Z-order, não força foco.
-      3. `FlashWindowEx` — pisca a taskbar 3x pra chamar atenção do
-         operador sem hijack. API oficial pra notificação.
+    Por que SetForegroundWindow sozinho é OK do ponto de vista AV:
+    Chrome/Zoom/Slack/WhatsApp chamam essa API sozinha o tempo
+    todo — Kaspersky/SentinelOne não flagam. O que flagam é o
+    combo `AttachThreadInput + SetForegroundWindow`, que é o padrão
+    de malware pra roubar foco QUANDO JÁ PERDEU foreground rights.
+    Aqui não precisamos disso: o operador acabou de clicar em
+    Executar no MainWindow, então nosso processo AINDA tem
+    foreground e o Windows aceita a transferência natural pra
+    outra janela nossa (TOTVS).
 
-    O RPA ainda funciona mesmo sem foreground focus, porque:
-      - Clicks vão pra coordenadas absolutas (pyautogui.click(x, y))
-      - Teclas usam typewrite direto — não precisa de foco de teclado
-    Só o feedback VISUAL pode ficar prejudicado se o TOTVS ficar atrás
-    de outra janela. Mitigação: em mono-monitor a MainWindow já
-    minimiza-se (build-71), então o TOTVS naturalmente vira o topo.
+    Fluxo:
+      1. `ShowWindow(SW_RESTORE)` se minimizado — API padrão.
+      2. `BringWindowToTop` — reordena Z sem tocar em foco.
+      3. `SetForegroundWindow` — tenta transferir foco. Aceito em
+         99% dos casos porque nosso processo tem foreground.
+      4. Se negou (retornou 0) → `FlashWindowEx` pisca taskbar 3x
+         pra chamar atenção do operador clicar manualmente.
 
-    Best-effort: qualquer falha só loga warning.
+    Best-effort: qualquer falha só loga warning; RPA continua.
     """
     try:
         import ctypes
@@ -108,10 +115,26 @@ def _trazer_para_frente(win) -> None:
         #    foco de teclado do app que está ativo). Zero AV.
         user32.BringWindowToTop(hwnd)
 
-        # 3. Se ainda não estamos em foreground, pisca a taskbar do
-        #    TOTVS pra chamar atenção do operador (sem hijack).
-        #    FLASHW_TRAY = 2, FLASHW_TIMERNOFG = 0xC = pisca até virar
-        #    foreground (naturalmente, pelo usuário clicar).
+        # 3. SetForegroundWindow "limpo" (sem AttachThreadInput).
+        #    Windows aceita a transferência de foco QUANDO o processo
+        #    chamador ainda tem foreground rights — que é o nosso caso,
+        #    já que o operador acabou de clicar no botão Executar (o
+        #    MainWindow ainda está foreground nesse instante).
+        #    Chrome/Zoom/Slack chamam SetForegroundWindow sozinho o
+        #    tempo todo — não é padrão AV-flagged. Só o combo com
+        #    AttachThreadInput (roubar foco quando já perdeu) é.
+        #    Retorna 0 se Windows negar — nesse caso, fallback pra
+        #    FlashWindowEx abaixo.
+        aceitou_foco = bool(user32.SetForegroundWindow(hwnd))
+        if aceitou_foco:
+            log.info("_trazer_para_frente: TOTVS trazido pra foreground")
+            return
+
+        # 4. Fallback: Windows negou a transferência (algum app terceiro
+        #    tomou foreground antes, ou timing raro). Pisca a taskbar
+        #    do TOTVS 3x pra chamar atenção do operador (sem hijack).
+        #    FLASHW_TRAY | FLASHW_TIMERNOFG = 0xC = pisca até virar
+        #    foreground naturalmente pelo usuário clicar.
         fg = user32.GetForegroundWindow()
         if fg != hwnd:
             class FLASHWINFO(ctypes.Structure):
