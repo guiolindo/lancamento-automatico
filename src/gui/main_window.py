@@ -321,99 +321,107 @@ class MainWindow(QMainWindow):
         return wrap
 
     def _toolbar_acoes(self) -> QWidget:
+        # Toolbar em DUAS linhas dentro do mesmo card. Uma só linha
+        # não cabia com 3 QDateEdit de 145px + combo + botão selecionar
+        # + label arquivo + botão extrair (build-79 sobrepunha labels e
+        # cortava textos). Dividindo o layout: linha 1 imposto+arquivo+
+        # extrair, linha 2 as 3 datas.
         wrap = QFrame()
         wrap.setProperty("card", True)
-        h = QHBoxLayout(wrap)
-        h.setContentsMargins(14, 10, 14, 10)
-        h.setSpacing(10)
+        outer = QVBoxLayout(wrap)
+        outer.setContentsMargins(14, 10, 14, 10)
+        outer.setSpacing(8)
 
-        # Imposto (combo compacto)
-        h.addWidget(self._campo_inline("IMPOSTO"))
+        # ----- Linha 1: IMPOSTO | arquivo | Extrair
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+
+        row1.addWidget(self._campo_inline("IMPOSTO"))
         self._combo_imposto = QComboBox()
         self._combo_imposto.addItem("IRRF")
         self._combo_imposto.setFixedWidth(110)
-        h.addWidget(self._combo_imposto)
+        row1.addWidget(self._combo_imposto)
 
-        # Três datas independentes: EMISSÃO / CONTÁBIL / VENCIMENTO.
-        # Preenchem os 3 campos correspondentes no TOTVS (Inclusão de
-        # Títulos). Default todas = hoje; usuário edita cada uma
-        # independentemente conforme a nota fiscal.
-        # REGRAS DE ORDEM (TOTVS recusa se violadas — enforçadas via
-        # setMinimumDate abaixo, usuário não consegue selecionar inválido):
-        #   contábil >= emissão
-        #   vencimento >= contábil
-        # Width 145 pra dd/MM/aaaa + botão popup caberem sem cortar o ano
-        # (120 estava cortando o último dígito).
-        LARG_DATA = 145
-        hoje = QDate.currentDate()
+        sep1 = QFrame()
+        sep1.setObjectName("Divisor")
+        sep1.setFixedSize(1, 24)
+        row1.addWidget(sep1)
 
-        h.addWidget(self._campo_inline("EMISS"))
-        self._date_emissao = QDateEdit(hoje)
-        self._date_emissao.setDisplayFormat("dd/MM/yyyy")
-        self._date_emissao.setCalendarPopup(True)
-        self._date_emissao.setFixedWidth(LARG_DATA)
-        self._date_emissao.setToolTip("Data de emissão do documento")
-        h.addWidget(self._date_emissao)
-
-        h.addWidget(self._campo_inline("CONTÁB"))
-        self._date_contabil = QDateEdit(hoje)
-        self._date_contabil.setDisplayFormat("dd/MM/yyyy")
-        self._date_contabil.setCalendarPopup(True)
-        self._date_contabil.setFixedWidth(LARG_DATA)
-        self._date_contabil.setMinimumDate(hoje)  # nunca antes da emissão
-        self._date_contabil.setToolTip(
-            "Data contábil (Inclusão no TOTVS). Nunca pode ser antes da "
-            "emissão — o TOTVS recusa."
-        )
-        h.addWidget(self._date_contabil)
-
-        h.addWidget(self._campo_inline("VENC"))
-        self._date_vencimento = QDateEdit(hoje)
-        self._date_vencimento.setDisplayFormat("dd/MM/yyyy")
-        self._date_vencimento.setCalendarPopup(True)
-        self._date_vencimento.setFixedWidth(LARG_DATA)
-        self._date_vencimento.setMinimumDate(hoje)  # nunca antes da contábil
-        self._date_vencimento.setToolTip(
-            "Data de vencimento. Nunca pode ser antes da contábil — o "
-            "TOTVS recusa."
-        )
-        h.addWidget(self._date_vencimento)
-
-        # Enforcement das regras: quando emissão muda, contábil não pode
-        # ser antes dela; quando contábil muda, vencimento não pode ser
-        # antes dela. setMinimumDate impede seleção manual E o auto-bump
-        # se o valor atual ficou inválido garante que os campos abaixo
-        # acompanham quando o usuário anda pra frente na emissão.
-        self._date_emissao.dateChanged.connect(self._on_emissao_mudou)
-        self._date_contabil.dateChanged.connect(self._on_contabil_mudou)
-
-        # Separador visual
-        sep = QFrame()
-        sep.setObjectName("Divisor")
-        sep.setFixedSize(1, 24)
-        h.addWidget(sep)
-
-        # Arquivo
         btn_pick = QPushButton("  Selecionar arquivo")
         btn_pick.setIcon(_icons.icon_lote("#B7C2CF"))
         btn_pick.setIconSize(QSize(14, 14))
         btn_pick.setProperty("ghost", True)
         btn_pick.clicked.connect(self._selecionar_arquivo)
-        h.addWidget(btn_pick)
+        row1.addWidget(btn_pick)
 
         self._label_arquivo = QLabel("Nenhum arquivo · arraste um aqui")
         self._label_arquivo.setStyleSheet("color: #B7C2CF; font-size: 12px;")
         self._label_arquivo.setToolTip("Você pode arrastar o arquivo direto pra janela do app.")
         self._label_arquivo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self._label_arquivo.setMinimumWidth(80)
-        h.addWidget(self._label_arquivo, 1)
+        row1.addWidget(self._label_arquivo, 1)
 
-        # Extrair (primário)
         self._btn_extrair = QPushButton("Extrair dados")
         self._btn_extrair.setProperty("primary", True)
         self._btn_extrair.setMinimumWidth(150)
         self._btn_extrair.clicked.connect(self._extrair)
-        h.addWidget(self._btn_extrair)
+        row1.addWidget(self._btn_extrair)
+
+        outer.addLayout(row1)
+
+        # ----- Linha 2: EMISSÃO / CONTÁBIL / VENCIMENTO
+        # REGRAS DE ORDEM (TOTVS recusa se violadas — enforçadas via
+        # setMinimumDate abaixo):
+        #   contábil >= emissão   ·   vencimento >= contábil
+        # Width 145 pra dd/MM/aaaa + botão popup caberem sem cortar o ano.
+        LARG_DATA = 145
+        hoje = QDate.currentDate()
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(10)
+
+        row2.addWidget(self._campo_inline("EMISSÃO"))
+        self._date_emissao = QDateEdit(hoje)
+        self._date_emissao.setDisplayFormat("dd/MM/yyyy")
+        self._date_emissao.setCalendarPopup(True)
+        self._date_emissao.setFixedWidth(LARG_DATA)
+        self._date_emissao.setToolTip("Data de emissão do documento")
+        row2.addWidget(self._date_emissao)
+
+        row2.addSpacing(12)
+        row2.addWidget(self._campo_inline("CONTÁBIL"))
+        self._date_contabil = QDateEdit(hoje)
+        self._date_contabil.setDisplayFormat("dd/MM/yyyy")
+        self._date_contabil.setCalendarPopup(True)
+        self._date_contabil.setFixedWidth(LARG_DATA)
+        self._date_contabil.setMinimumDate(hoje)
+        self._date_contabil.setToolTip(
+            "Data contábil (Inclusão no TOTVS). Nunca pode ser antes da "
+            "emissão — o TOTVS recusa."
+        )
+        row2.addWidget(self._date_contabil)
+
+        row2.addSpacing(12)
+        row2.addWidget(self._campo_inline("VENCIMENTO"))
+        self._date_vencimento = QDateEdit(hoje)
+        self._date_vencimento.setDisplayFormat("dd/MM/yyyy")
+        self._date_vencimento.setCalendarPopup(True)
+        self._date_vencimento.setFixedWidth(LARG_DATA)
+        self._date_vencimento.setMinimumDate(hoje)
+        self._date_vencimento.setToolTip(
+            "Data de vencimento. Nunca pode ser antes da contábil — o "
+            "TOTVS recusa."
+        )
+        row2.addWidget(self._date_vencimento)
+
+        row2.addStretch(1)
+        outer.addLayout(row2)
+
+        # Enforcement das regras — quando emissão muda, minimum da
+        # contábil sobe. Quando contábil muda, minimum do vencimento.
+        # Auto-bump se o valor atual ficou inválido.
+        self._date_emissao.dateChanged.connect(self._on_emissao_mudou)
+        self._date_contabil.dateChanged.connect(self._on_contabil_mudou)
 
         return wrap
 

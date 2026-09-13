@@ -476,6 +476,7 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 78 | CI smoke gate no workflow: antes de compilar Nuitka, roda import dos módulos core + `qss('escuro')` + `qss('claro')` + valida formato do `BUILD_MARKER`. Bloqueia builds tipo 74 (NameError em runtime) de chegar em prod. | `.github/workflows/build-exe.yml` |
 | 79 | Pacote UX: (a) `LoteResumoDialog` custom substitui `QMessageBox` no fim do lote — lista falhas com filial+erro, botão "Reprocessar falhas". (b) Menu contextual na PreviewTable: editar filial/valor, remover, reprocessar isolada. (c) Linha grande de resumo fiscal (`IRRF · Ref. 09/2026 · N filiais · R$ X,XX`) aparece pós-extração. (d) Log rotation (5MB × 3 backups) no `lancamento.log` — antes acumulava um arquivo por dia sem limite. | `lote_resumo_dialog.py` (novo), `preview_table.py`, `main_window.py`, `mapping.py`, `logger.py` |
 | 80 | Hotfix: `QApplication` singleton — auto-recovery do build-76 criava splash Qt (nasce a instância) mesmo sem update pra baixar; ao cair no boot normal, `src/main.py` chamava `QApplication(sys.argv)` de novo → `RuntimeError`. Troca por `QApplication.instance() or QApplication(sys.argv)`. Nova gotcha #10. | `main.py` |
+| 81 | Toolbar em 2 linhas dentro do mesmo card. As 3 QDateEdit (145×3=435px) + combo + botão selecionar + label arquivo + botão extrair não cabiam numa linha — labels sobrepondo campos, "Selecionar arquivo" cortado. Linha 1: IMPOSTO / arquivo / Extrair. Linha 2: EMISSÃO / CONTÁBIL / VENCIMENTO. Labels voltam ao nome completo. | `main_window.py` |
 
 ---
 

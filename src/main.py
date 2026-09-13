@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-80 (hotfix: QApplication singleton — reuse se launcher já criou)"
+BUILD_MARKER = "build-81 (toolbar em 2 linhas — sem sobreposição das datas)"
 
 
 def main() -> int:
