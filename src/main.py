@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-85 (segurança: chave Gemini criptografada com DPAPI + nunca exibida)"
+BUILD_MARKER = "build-86 (AV-safety: sem foreground hijack + fora do %TEMP% + doc)"
 
 
 def main() -> int:

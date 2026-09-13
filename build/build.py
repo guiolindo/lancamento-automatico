@@ -71,12 +71,15 @@ def run() -> int:
         # imprimir warnings durante o boot, mas o stdout/stderr não existe
         # (porque estamos em modo GUI). Redirecionamos pra arquivos ao
         # lado do exe.
-        # Variáveis aceitas pelo Nuitka são poucas — PROGRAM_DIR não existe.
-        # Uso %TEMP% (sempre existe no Windows) para não depender do path
-        # do exe. Os logs de boot próprios (boot_trace.log, startup_error.log)
-        # continuam na pasta do exe, então nada muda pro usuário.
-        "--force-stdout-spec=%TEMP%/LancamentoAutomatico.stdout.log",
-        "--force-stderr-spec=%TEMP%/LancamentoAutomatico.stderr.log",
+        #
+        # AV-SAFETY (build-86): trocamos %TEMP% → %USERPROFILE% porque
+        # %TEMP% é red-flag clássico de malware (unpackers em runtime,
+        # droppers). %USERPROFILE% é caminho comum e neutro. Nuitka
+        # aceita a variável literal — expandida em runtime no Windows.
+        # Se %USERPROFILE% falhar em algum PC (raro), Windows cria o
+        # arquivo em C:\Users\Default ou similar, que ainda é aceitável.
+        "--force-stdout-spec=%USERPROFILE%/.lancamento-automatico/LancamentoAutomatico.stdout.log",
+        "--force-stderr-spec=%USERPROFILE%/.lancamento-automatico/LancamentoAutomatico.stderr.log",
         # Performance de build (não de runtime): desabilita LTO — LTO custa
         # 20+ min extras em máquinas com PySide6 e não muda anti-AV.
         "--lto=no",

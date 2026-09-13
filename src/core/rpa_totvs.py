@@ -63,58 +63,75 @@ class EmergencyAbortException(RuntimeError):
 
 
 def _trazer_para_frente(win) -> None:
-    """Traz a janela do TOTVS pro topo (se outros apps estão cobrindo).
+    """Surface a janela do TOTVS sem hijack de foreground (build-86).
 
-    Reativado no build-83. Usa o pattern AttachThreadInput, que é
-    o único jeito confiável no Windows moderno de contornar o
-    foreground lock — normalmente só o app que já tem foco pode
-    dar foco pra outro. Anexando os input threads brevemente, o
-    SetForegroundWindow é aceito.
+    IMPORTANTE — decisão AV-safety: NÃO usamos mais a combinação
+    `AttachThreadInput + SetForegroundWindow`. Essa combinação é o
+    padrão clássico que AV corporativo (SentinelOne, CrowdStrike,
+    Kaspersky) marca como comportamento tipo RAT/keylogger — hijack
+    de foreground é técnica de malware. Foi usado no build-83 e
+    trocado aqui pra não empilhar red-flag heurístico no perfil do
+    app (que já usa pyautogui + GetAsyncKeyState, ambos meio
+    borderline).
 
-    IMPORTANTE: NÃO usar keybd_event(Alt) como truque de foco — essa
-    combinação foi suspeita de travar o Executar em builds anteriores.
-    O truque AttachThreadInput é mais limpo e testado.
+    O que fazemos em vez:
+      1. Se minimizada → `ShowWindow(SW_RESTORE)` — API padrão, zero AV.
+      2. `BringWindowToTop` — só reordena Z-order, não força foco.
+      3. `FlashWindowEx` — pisca a taskbar 3x pra chamar atenção do
+         operador sem hijack. API oficial pra notificação.
 
-    Best-effort: se qualquer step falhar, engole a exception — o lote
-    continua com a janela onde estiver. O RPA ainda funciona com a
-    janela em segundo plano (send input direto), só o operador não
-    consegue acompanhar visualmente.
+    O RPA ainda funciona mesmo sem foreground focus, porque:
+      - Clicks vão pra coordenadas absolutas (pyautogui.click(x, y))
+      - Teclas usam typewrite direto — não precisa de foco de teclado
+    Só o feedback VISUAL pode ficar prejudicado se o TOTVS ficar atrás
+    de outra janela. Mitigação: em mono-monitor a MainWindow já
+    minimiza-se (build-71), então o TOTVS naturalmente vira o topo.
+
+    Best-effort: qualquer falha só loga warning.
     """
     try:
         import ctypes
         from ctypes import wintypes
         user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
         # pygetwindow expõe o HWND como _hWnd
         hwnd = getattr(win, "_hWnd", None)
         if not hwnd:
             log.info("_trazer_para_frente: janela sem HWND — pulando")
             return
 
-        # Se minimizada, restaura antes
+        # 1. Restaura se minimizada — API 100% safe
         if user32.IsIconic(hwnd):
             user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            log.info("_trazer_para_frente: TOTVS restaurado (estava minimizado)")
 
+        # 2. Reordena Z (janela aparece no topo visual, mas sem roubar
+        #    foco de teclado do app que está ativo). Zero AV.
+        user32.BringWindowToTop(hwnd)
+
+        # 3. Se ainda não estamos em foreground, pisca a taskbar do
+        #    TOTVS pra chamar atenção do operador (sem hijack).
+        #    FLASHW_TRAY = 2, FLASHW_TIMERNOFG = 0xC = pisca até virar
+        #    foreground (naturalmente, pelo usuário clicar).
         fg = user32.GetForegroundWindow()
-        if fg == hwnd:
-            log.info("_trazer_para_frente: TOTVS já está em foco")
-            return
-
-        # AttachThreadInput trick pra contornar o foreground lock
-        user32.GetWindowThreadProcessId.restype = wintypes.DWORD
-        tid_current = kernel32.GetCurrentThreadId()
-        tid_fg = user32.GetWindowThreadProcessId(fg, None) if fg else 0
-        anexou = False
-        if tid_fg and tid_fg != tid_current:
-            anexou = bool(user32.AttachThreadInput(tid_current, tid_fg, True))
-        try:
-            user32.BringWindowToTop(hwnd)
-            user32.SetForegroundWindow(hwnd)
-            user32.ShowWindow(hwnd, 5)  # SW_SHOW
-            log.info("_trazer_para_frente: TOTVS trazido pro topo (HWND=%s)", hwnd)
-        finally:
-            if anexou:
-                user32.AttachThreadInput(tid_current, tid_fg, False)
+        if fg != hwnd:
+            class FLASHWINFO(ctypes.Structure):
+                _fields_ = [
+                    ("cbSize", wintypes.UINT),
+                    ("hwnd", wintypes.HWND),
+                    ("dwFlags", wintypes.DWORD),
+                    ("uCount", wintypes.UINT),
+                    ("dwTimeout", wintypes.DWORD),
+                ]
+            fi = FLASHWINFO()
+            fi.cbSize = ctypes.sizeof(FLASHWINFO)
+            fi.hwnd = hwnd
+            fi.dwFlags = 0xC  # FLASHW_TRAY | FLASHW_TIMERNOFG
+            fi.uCount = 3
+            fi.dwTimeout = 0
+            user32.FlashWindowEx(ctypes.byref(fi))
+            log.info("_trazer_para_frente: TOTVS piscando na taskbar (foco não hijackado)")
+        else:
+            log.info("_trazer_para_frente: TOTVS já está em foreground")
     except Exception as e:  # noqa: BLE001
         log.warning("_trazer_para_frente falhou (%s: %s) — segue com janela onde estiver",
                     type(e).__name__, e)

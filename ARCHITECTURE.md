@@ -412,6 +412,75 @@ em multi-monitor vai pra QMessageBox normal.
 
 ---
 
+## 4d. AV-safety — checklist de primeira classe
+
+**Premissa do projeto**: rodar em PC corporativo trancado (sem admin,
+sem instalação, com AV corporativo ativo). Toda API sensível adicionada
+precisa passar por esse filtro ANTES de ir pra produção. Um bloqueio
+de AV em prod é pior do que um feature perdido.
+
+**AV específico do ambiente atual (2026-09-13)**: **Kaspersky
+Endpoint** — moderado. Confirmação do operador: "nunca vi ele
+ativando com nada, o máximo foi bloquear porta USB às vezes, e até
+hoje não me impediu de executar aplicativos". Boa margem, mas
+seguimos a checklist mesmo assim: (1) TI pode reforçar policy sem
+avisar; (2) se o app for portado pra outro ambiente (SentinelOne,
+CrowdStrike EDR, Bitdefender), a checklist já cobre; (3) evitar
+comportamento suspeito é grátis quando planejado desde o início.
+
+### APIs que USAMOS e por que são aceitáveis
+
+| API | Uso no app | Por que é aceitável |
+| --- | --- | --- |
+| `CryptProtectData` (DPAPI) | Cifra chave Gemini | Chrome/Edge/Outlook usam. Padrão do OS pra secrets locais. |
+| HTTPS `github.com` | Auto-update check + download | Domínio famoso, cert legítimo, HTTP GET simples. |
+| `ShowWindow`, `BringWindowToTop`, `FlashWindowEx` | Surface TOTVS | APIs oficiais de UX, sem hijack de foco. |
+| `EnumWindows`, `GetWindowRect`, `GetWindowTextW` | Detectar TOTVS/monitor | Leitura passiva. Sem hooks. |
+| `CreateMutexW` (`Local\...`) | Single-instance | Padrão Windows pra evitar múltipla abertura. |
+| `GetAsyncKeyState(VK_END)` | Tecla emergência | Polling (não hook). Menos suspeito que `SetWindowsHookEx`. |
+| `pyautogui.click/typewrite` | RPA no TOTVS | É o core do produto. Sem alternativa. |
+| `mss` (screenshot) + OpenCV | Visão automática dos campos | Screenshot é read-only, aceitável. |
+| Nuitka `--standalone` (nunca `--onefile`) | Bundle | `--onefile` extrai em `%TEMP%` em runtime = padrão dropper. `--standalone` gera pasta plain, zero unpack. |
+
+### APIs que EVITAMOS explicitamente
+
+| API que NÃO usamos | Por que | Alternativa que usamos |
+| --- | --- | --- |
+| `SetForegroundWindow` + `AttachThreadInput` | Hijack de foreground = padrão RAT. Removido no build-86. | `BringWindowToTop` + `FlashWindowEx` |
+| `SetWindowsHookEx(WH_KEYBOARD_LL)` | Keylogger clássico | `GetAsyncKeyState` polling |
+| `%TEMP%` pra qualquer output | Malware clássico usa `%TEMP%` como stage/dropper. Removido no build-86. | `%USERPROFILE%\.lancamento-automatico\` |
+| `--onefile` (Nuitka/PyInstaller) | Extract-and-run = dropper pattern | `--standalone` |
+| UPX compression | Malware clássico usa UPX | Nunca compress |
+| `subprocess` chamando `.exe` externo | Suspicious dropper chain | Só usamos `Popen` do próprio exe pós-update, com `DETACHED_PROCESS` |
+| Auto-restart matando o próprio processo | Squirrel-style = AV odeia | Update DIFERIDO (`_next/READY`), aplicado no próximo boot manual |
+| Registry writes | Alteração de sistema = red flag | Tudo em `~/.lancamento-automatico/` |
+| Serviços Windows / scheduled tasks | Persistência de malware | Nunca criamos. App é 100% user-mode. |
+| Assinatura falsa / certificado próprio | Trigger óbvio | Sem cert (aceita SmartScreen até TI whitelistar) |
+
+### Perfil heurístico acumulado
+
+Cada red-flag por si só é ~aceitável. O problema é acumular:
+`pyautogui + GetAsyncKeyState + auto-update in-place + foreground grab +
+%TEMP%` já vira "muito parecido com malware". Ao adicionar
+funcionalidade nova, checar se ela empilha OU se dá pra usar variante
+mais neutra.
+
+### Checklist antes de adicionar API sensível
+
+1. **É estritamente necessário pro feature?** Se não, dispensa.
+2. **Existe API oficial menos agressiva?** (ex: `FlashWindowEx` no
+   lugar de `SetForegroundWindow`).
+3. **A API é usada por software mainstream?** (ex: DPAPI é OK porque
+   Chrome usa. Hook de teclado global não é OK.)
+4. **Escreve em algum lugar sensível?** (`%TEMP%`, registry,
+   `Program Files`, `System32`) — se sim, mudar destino pra
+   `~/.lancamento-automatico/`.
+5. **Modifica arquivos em runtime?** (auto-update). Se sim, garantir
+   que é o próprio exe fazendo, não binário externo.
+6. **Documentar na tabela acima** antes do merge.
+
+---
+
 ## 5. Empacotamento Nuitka
 
 Ver comentários em `build/build.py` — mas o essencial:
@@ -481,6 +550,7 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 83 | Mensagens de erro humanas: `LoteWorker.run()` pré-checa cenário "visão falhou + sem calibração manual" e traduz pra "Abra o TOTVS na tela 'Inclusão de Títulos'..." em vez do técnico "Calibração incompleta — faltam empresa, especie, pessoa, dt_emissao...". Idem pro `conectar()` (janela não encontrada em 30s → "Verifique se TOTVS está aberto e não minimizado"). BÔNUS: `_trazer_para_frente` reativado com `AttachThreadInput` (contorna foreground lock do Windows sem `keybd_event(Alt)` que travava em builds antigos) — se outros apps estão cobrindo o TOTVS, agora o app traz pro topo. | `workers.py`, `rpa_totvs.py` |
 | 84 | Polimento UX: (a) fade-in 250ms na MainWindow ao abrir + 200ms no LoteResumoDialog — dá cara de app profissional; (b) novo `DateEditFast` (subclass de QDateEdit): ignora scroll da rodinha do mouse (não muda mais data sem querer) e ao ganhar foco já seleciona a seção do dia (permite digitar `13092026` de uma vez com auto-avanço entre seções). Aplicado nos 3 campos de data. | `widgets.py` (novo), `main_window.py`, `main.py`, `lote_resumo_dialog.py` |
 | 85 | Segurança da chave Gemini: (a) novo `secret_store.py` usa Windows DPAPI (`CryptProtectData`) — só o mesmo user Windows na mesma máquina descriptografa; (b) `settings.json` guarda `gemini_api_key_enc` (base64) em vez de plain; (c) migração automática do plain antigo → cifrado; (d) `SetupDialog` reformulado: nunca pré-preenche o campo, sem botão "Mostrar chave", só placeholder "chave já configurada — deixe em branco pra manter"; (e) fade-in em SetupDialog/CalibracaoDialog/DeParaDialog pra consistência com LoteResumoDialog. | `secret_store.py` (novo), `settings_store.py`, `setup_dialog.py`, `main_window.py`, `calibracao_dialog.py`, `depara_dialog.py` |
+| 86 | AV-safety hardening: (a) `_trazer_para_frente` NÃO usa mais `SetForegroundWindow`+`AttachThreadInput` (padrão RAT que AV corporativo marca) — troca por `BringWindowToTop` + `FlashWindowEx` (piscar taskbar sem hijack); (b) Nuitka `--force-stdout/stderr-spec` sai de `%TEMP%` pra `%USERPROFILE%\.lancamento-automatico\` — `%TEMP%` é red-flag clássico de dropper; (c) nova seção 4d "AV-safety — checklist de primeira classe" no ARCHITECTURE.md listando TODAS as APIs sensíveis usadas + as que evitamos deliberadamente + checklist antes de adicionar API nova. | `rpa_totvs.py`, `build/build.py`, `ARCHITECTURE.md` |
 
 ---
 
