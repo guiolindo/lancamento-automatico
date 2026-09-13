@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-81 (toolbar em 2 linhas — sem sobreposição das datas)"
+BUILD_MARKER = "build-82 (download automático silencioso — sem modal 'atualização obrigatória')"
 
 
 def main() -> int:

@@ -602,7 +602,15 @@ class MainWindow(QMainWindow):
                 # Sucesso — não precisa mais retry
                 self._btn_atualizar.setText("Atualizar")
                 if info.tem_atualizacao:
-                    self._modal_obrigatorio(info)
+                    # Download automático silencioso — sem popup. Só a
+                    # barra laranja no topo mostra o progresso. Usuário
+                    # continua trabalhando; update aplica na próxima
+                    # abertura.
+                    self._log_line(
+                        f"↓ Nova versão disponível: {info.build_marker_remoto} — "
+                        "baixando em segundo plano"
+                    )
+                    self._updater_bar.iniciar(info)
                 else:
                     self._log_line(f"i Versão local já é a mais recente")
                 return
@@ -634,33 +642,6 @@ class MainWindow(QMainWindow):
                 )
 
         self._rodar_check_em_thread(on_done)
-
-    def _modal_obrigatorio(self, info) -> None:
-        """Mostra modal 'Nova versão disponível — Sim, atualizar' sem
-        botão de dispensar. Único jeito de sair sem atualizar é fechar
-        a janela do Windows (X). Toda vez que abrir volta o aviso."""
-        tam_mb = info.asset_tamanho / (1024 * 1024)
-        box = QMessageBox(self)
-        box.setWindowTitle("Atualização obrigatória")
-        box.setIcon(QMessageBox.Warning)
-        box.setText(
-            "<b>Nova versão do app disponível.</b><br><br>"
-            f"Atual: <code>{info.build_marker_local}</code><br>"
-            f"Nova:  <code>{info.build_marker_remoto}</code><br><br>"
-            "Atualizações podem trazer <b>filial nova, imposto novo ou "
-            "correção crítica</b>. Esse tipo de app não pode ficar "
-            "desatualizado.<br><br>"
-            f"O download tem {tam_mb:.1f} MB e roda em segundo plano — "
-            "você continua trabalhando enquanto baixa. Depois o app "
-            "aplica sozinho na próxima abertura."
-        )
-        botao_sim = box.addButton("Sim, atualizar agora", QMessageBox.AcceptRole)
-        box.setDefaultButton(botao_sim)
-        # Nada de Cancel/Depois — só sai fechando pelo X.
-        box.exec()
-        if box.clickedButton() is botao_sim:
-            self._log_line(f"→ Baixando atualização {info.build_marker_remoto}…")
-            self._updater_bar.iniciar(info)
 
     def _abrir_setup(self, inicial: bool = False) -> None:
         dlg = SetupDialog(self, current_key=self.settings.get("gemini_api_key", ""))
@@ -1447,6 +1428,12 @@ class MainWindow(QMainWindow):
                     f"Você já tá na versão mais recente.\n\nLocal: {info.build_marker_local}",
                 )
                 return
-            self._modal_obrigatorio(info)
+            # Botão manual "Atualizar": também dispara direto, sem
+            # confirmação. Clicar no botão já É a confirmação. O log
+            # e a barra laranja no topo mostram o download acontecendo.
+            self._log_line(
+                f"↓ Baixando atualização {info.build_marker_remoto}…"
+            )
+            self._updater_bar.iniciar(info)
 
         self._rodar_check_em_thread(on_done)
