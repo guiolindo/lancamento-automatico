@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-97 (Orçamento: visão automática — sem calibração manual, template matching do cabeçalho + popups)"
+BUILD_MARKER = "build-98 (fix fluxo Orçamento — +/Autorizar UMA vez no final, depois das 3 abas)"
 
 
 def main() -> int:

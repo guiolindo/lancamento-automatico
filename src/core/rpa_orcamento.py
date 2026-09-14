@@ -1,19 +1,20 @@
 """
-RPA da tela 'Notas Fiscais de Despesa' do TOTVS Orçamento (build-96).
+RPA da tela 'Notas Fiscais de Despesa' do TOTVS Orçamento (build-98).
 
-Fluxo por nota (template `OTIMO` como referência):
+Fluxo por nota (corrigido — user esclareceu que "+" e "Autorizar" são
+UMA vez só no final, depois das 3 abas, não após cada uma):
+
   1. Aba Nota: empresa, nat.despesa, pessoa, número NF, data emissão,
      data lançto, st.doc, modelo, observação fiscal, valor total,
      marca checkbox ICMS.
-  2. Clica em "+" (novo/gravar).
-  3. Se aparecer popup "Aviso" (duplicidade) → duplicidade_regra decide:
+  2. Aba Financeiro (clica aba): observação, radio Vencimento,
+     qtd parcelas, dias entre venc., data 1º venc., Gerar parcelas.
+  3. Aba Contabilização (clica aba): replica valor total nas linhas 1 e 2.
+  4. Clica "+" UMA vez (grava tudo).
+  5. Se popup "Aviso" (duplicidade) → duplicidade_regra:
         - "pular_ja_lancada": OK → F2 → popup Atenção "Sim" → nota
-          marcada como IGNORADA (não erro). Nunca inventar número (é
-          documento fiscal real).
-  4. Aba Financeiro: observação, radio Vencimento, qtd parcelas,
-     dias entre venc., data 1º venc., Gerar parcelas.
-  5. Aba Contabilização: replica valor total nas linhas 1 e 2.
-  6. Clica "+" (grava tudo). Espera. Clica "Autorizar".
+          IGNORADA (nunca inventamos número, é NF real).
+  6. Se não teve popup → clica "Autorizar".
 
 Emergência: tecla END aborta o lote. Mesma pattern do rpa_totvs.
 """
@@ -295,14 +296,18 @@ class RpaOrcamento:
             if self._win is not None:
                 _trazer_para_frente(self._win)
 
+            # Preenche as 3 abas de uma vez, sem clicar em "+" no meio.
             self._preencher_aba_nota(nota)
+            self._preencher_aba_financeiro(nota)
+            self._preencher_aba_contabilizacao(nota)
 
-            self._notificar(nota, "Gravando (+)")
+            # Só AGORA clica "+" uma única vez pra gravar tudo.
+            self._notificar(nota, "Gravando (+ único, final)")
             titulos_antes = self._snapshot_titulos()
             self._clicar("btn_novo_mais")
-            self._sleep("apos_gerar_parcelas_ms", 1200)
+            self._sleep("apos_gerar_parcelas_ms", 1500)
 
-            # Duplicidade — nota já lançada?
+            # Duplicidade — o popup só aparece APÓS o "+".
             popup = self._achar_popup_novo(titulos_antes, ("aviso", "atenção", "atencao"))
             if popup is not None:
                 regra = (self.template.get("regras") or {}).get("duplicidade_regra", "pular_ja_lancada")
@@ -312,21 +317,13 @@ class RpaOrcamento:
                     nota.motivo_ignorado = "já lançada (nota fiscal duplicada)"
                     self._notificar(nota, "IGNORADA — já lançada")
                     return
-                # Outras regras futuras podem virar aqui.
                 raise RuntimeError(
                     f"Duplicidade detectada e regra '{regra}' não implementada. "
                     "Nunca inventamos número de nota fiscal — cancele e verifique manual."
                 )
 
-            # Sem duplicidade — segue pras outras abas.
-            self._preencher_aba_financeiro(nota)
-            self._preencher_aba_contabilizacao(nota)
-
-            # Grava tudo (+) e autoriza.
-            self._notificar(nota, "Salvando (+ final)")
-            self._clicar("btn_novo_mais")
-            self._sleep("apos_confirmar_ms", 5000)
-
+            # Sem duplicidade → gravou com sucesso. Agora Autorizar.
+            self._sleep("apos_confirmar_ms", 3000)
             self._notificar(nota, "Autorizando")
             self._clicar("btn_autorizar")
             self._sleep("apos_confirmar_ms", 2000)
