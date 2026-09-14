@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-99 (Orçamento como página integrada — sem dialog modal, vive dentro do shell com sidebar/topbar)"
+BUILD_MARKER = "build-100 (fix: calibração manual PREVALECE sobre visão automática — antes a visão sobrescrevia mesmo após recalibrar)"
 
 
 def main() -> int:

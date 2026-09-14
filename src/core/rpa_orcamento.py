@@ -371,9 +371,18 @@ class RpaOrcamento:
             log.warning("Popup 'Atenção' esperado após F2 não apareceu — seguindo")
 
     def _clicar_popup_via_visao(self, tipo: str, campo_calib: str, win_popup) -> None:
-        """Tenta detectar o popup via visão (âncora do título) e clica no
-        botão pelo offset conhecido. Se a visão falhar, cai no fluxo antigo
-        (offset calibrado ou centro-inferior)."""
+        """Prioriza calibração manual se o campo estiver calibrado. Só usa
+        visão como fallback (build-100 — respeita o operador). Se a
+        calibração NÃO tem esse campo, tenta detectar via template
+        matching do título do popup."""
+        # 1) Calibração manual do campo — vem primeiro. Se o operador
+        #    calibrou o botão do popup, é aquilo.
+        if campo_calib in self.calibracao.campos:
+            log.info("Popup %s: usando calibração manual (%s)", tipo, campo_calib)
+            self._fechar_popup(campo_calib, win_popup)
+            return
+
+        # 2) Sem calibração manual → visão automática.
         titulo = self.calibracao.titulo_janela or "Orçamento"
         try:
             from .visao_orcamento import resolver_popup_aviso, resolver_popup_atencao
@@ -389,7 +398,7 @@ class RpaOrcamento:
                 return
         except Exception as e:  # noqa: BLE001
             log.warning("Visão do popup '%s' falhou: %s — fallback", tipo, e)
-        # Fallback: calibração salva + click central + Enter
+        # 3) Último recurso: fechar via janela ativa + Enter.
         self._fechar_popup(campo_calib, win_popup)
 
     def _preencher_aba_nota(self, nota: NotaDespesa) -> None:

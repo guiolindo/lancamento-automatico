@@ -138,19 +138,28 @@ class LoteWorker(QObject):
                 return
             self._emit_e_log(">> Modulo rpa_totvs importado")
 
-            # Auto-detecção via visão computacional. Se der certo, preenche
-            # calibracao.campos sem exigir calibração manual do operador.
+            # Fix build-100: se o operador calibrou MANUALMENTE, respeita
+            # ela — a visão automática NÃO sobrescreve mais. Antes ela
+            # forçava por cima e cliques caíam fora quando o template
+            # matching não batia com a resolução do TOTVS real.
             ok_visao = False
             msg_visao = ""
-            try:
-                from ..core.visao_totvs import preencher_calibracao_automatica
-                ok_visao, msg_visao = preencher_calibracao_automatica(self.calibracao)
-                self._emit_e_log(f"[visão] {msg_visao}")
-                if not ok_visao:
-                    self._emit_e_log("[visão] fallback pra calibração manual salva")
-            except BaseException as e:  # noqa: BLE001
-                msg_visao = f"módulo indisponível: {e}"
-                self._emit_e_log(f"[visão] {msg_visao} — usando calibração manual")
+            if self.calibracao.esta_completa():
+                self._emit_e_log(
+                    "[calibração] manual completa — usando ela "
+                    "(visão automática ignorada)"
+                )
+                ok_visao = True
+            else:
+                try:
+                    from ..core.visao_totvs import preencher_calibracao_automatica
+                    ok_visao, msg_visao = preencher_calibracao_automatica(self.calibracao)
+                    self._emit_e_log(f"[visão] {msg_visao}")
+                    if not ok_visao:
+                        self._emit_e_log("[visão] fallback pra calibração manual (incompleta)")
+                except BaseException as e:  # noqa: BLE001
+                    msg_visao = f"módulo indisponível: {e}"
+                    self._emit_e_log(f"[visão] {msg_visao} — usando calibração manual")
 
             # Pré-check com mensagem HUMANA antes de tentar RpaTotvs.
             # Se a visão falhou E não tem calibração manual salva, o
@@ -318,22 +327,31 @@ class LoteOrcamentoWorker(QObject):
                 self.error.emit(f"import rpa_orcamento falhou: {e}")
                 return
 
-            # Auto-detecção visual (build-97). Se a visão baseada em
-            # template matching enxergar o cabeçalho 'Notas Fiscais de
-            # Despesas', ela preenche os 23 campos sozinha e o operador
-            # NÃO precisa calibrar. Fallback pra calibração manual salva
-            # se a visão falhar.
+            # PRIORIDADE (fix build-100): se o operador calibrou MANUALMENTE
+            # e a calibração está completa, RESPEITA ela e PULA a visão.
+            # Antes a visão sobrescrevia sempre, o que fazia cliques cair
+            # em lugar errado quando os offsets template-matching não
+            # batiam com a resolução real do usuário. "Nem recalibrar
+            # resolvia" porque o próximo lote sobrescrevia de novo.
+            # A visão continua como FALLBACK quando não há calibração salva.
             ok_visao = False
             msg_visao = ""
-            try:
-                from ..core.visao_orcamento import preencher_calibracao_automatica as visao_orc
-                ok_visao, msg_visao = visao_orc(self.calibracao)
-                self._emit_e_log(f"[visão orçamento] {msg_visao}")
-                if not ok_visao:
-                    self._emit_e_log("[visão orçamento] fallback pra calibração manual salva")
-            except BaseException as e:  # noqa: BLE001
-                msg_visao = f"módulo indisponível: {e}"
-                self._emit_e_log(f"[visão orçamento] {msg_visao} — usando calibração manual")
+            if self.calibracao.esta_completa():
+                self._emit_e_log(
+                    "[calibração] manual completa — usando ela "
+                    "(visão automática ignorada)"
+                )
+                ok_visao = True  # equivale a "campos prontos"; skip do erro friendly
+            else:
+                try:
+                    from ..core.visao_orcamento import preencher_calibracao_automatica as visao_orc
+                    ok_visao, msg_visao = visao_orc(self.calibracao)
+                    self._emit_e_log(f"[visão orçamento] {msg_visao}")
+                    if not ok_visao:
+                        self._emit_e_log("[visão orçamento] fallback pra calibração manual (incompleta)")
+                except BaseException as e:  # noqa: BLE001
+                    msg_visao = f"módulo indisponível: {e}"
+                    self._emit_e_log(f"[visão orçamento] {msg_visao} — usando calibração manual")
 
             if not ok_visao and not self.calibracao.esta_completa():
                 m_low = (msg_visao or "").lower()
