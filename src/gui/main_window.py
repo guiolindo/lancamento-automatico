@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDateEdit, QFileDialog, QFrame, QGridLayout,
     QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPlainTextEdit,
     QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
-    QVBoxLayout, QWidget
+    QStackedWidget, QVBoxLayout, QWidget
 )
 
 from . import icons as _icons
@@ -23,7 +23,7 @@ from .calibracao_dialog import CalibracaoDialog
 from .depara_dialog import DeParaDialog
 from .hud_execucao import HudExecucao
 from .lote_resumo_dialog import LoteResumoDialog
-from .orcamento_dialog import OrcamentoDialog
+from .orcamento_dialog import OrcamentoPage
 from .preview_table import PreviewTable
 from .widgets import DateEditFast
 from .setup_dialog import SetupDialog
@@ -43,6 +43,7 @@ NAV_ITEMS = [
 
 NOME_SECAO = {
     "dashboard":     "Novo lote",
+    "orcamento":     "Orçamento — Notas Fiscais de Despesa",
     "mapeamento":    "Filiais (De-Para)",
     "configuracoes": "Configurações",
 }
@@ -206,7 +207,16 @@ class MainWindow(QMainWindow):
         lay.addWidget(self._updater_bar)
 
         lay.addWidget(self._montar_topbar())
-        lay.addWidget(self._montar_content(), 1)
+
+        # Stack de páginas — build-99. Antes o conteúdo era único
+        # (dashboard). Orçamento abria dialog modal, que ficou ruim de
+        # UX. Agora vira segunda página do stack e a sidebar troca entre
+        # elas como qualquer nav decente.
+        self._pages = QStackedWidget()
+        self._pages.addWidget(self._montar_content())          # index 0: dashboard
+        self._orcamento_page = OrcamentoPage(self.settings)
+        self._pages.addWidget(self._orcamento_page)            # index 1: orçamento
+        lay.addWidget(self._pages, 1)
 
         return shell
 
@@ -695,12 +705,10 @@ class MainWindow(QMainWindow):
     # ---------------- Ações ----------------
 
     def _trocar_secao(self, chave: str) -> None:
-        # 'mapeamento', 'configuracoes', 'sobre' e 'orcamento' abrem
-        # DIALOG — não são seções separadas. Não devem tirar o 'active'
-        # do dashboard (única tela real). Antes ficava um estado
-        # 'fantasma' onde o ícone lateral marcava selecionado mas o
-        # conteúdo era o dashboard.
-        if chave in ("mapeamento", "configuracoes", "sobre", "orcamento"):
+        # 'mapeamento', 'configuracoes' e 'sobre' abrem DIALOG modal
+        # (sem tela integrada — decisão histórica). 'orcamento' virou
+        # página real do stack no build-99 (era dialog, ficou ruim).
+        if chave in ("mapeamento", "configuracoes", "sobre"):
             if chave == "configuracoes":
                 self._abrir_setup()
             elif chave == "mapeamento":
@@ -710,17 +718,19 @@ class MainWindow(QMainWindow):
                     self._log_line("✓ De-Para atualizado e recarregado")
             elif chave == "sobre":
                 self._abrir_sobre()
-            elif chave == "orcamento":
-                self._abrir_orcamento()
             return
-        # Só troca active pra chaves que são realmente seções distintas
+
+        # Páginas reais do stack.
+        if chave == "orcamento":
+            self._pages.setCurrentIndex(1)
+        else:
+            self._pages.setCurrentIndex(0)
+
         for k, btn in self._nav_buttons.items():
             ativo = (k == chave)
             btn.setProperty("active", ativo)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
-            # Repinta o ícone na cor certa (accent do tema pra ativo,
-            # muted pra inativo)
             item = next((n for n in NAV_ITEMS if n[0] == k), None)
             if item:
                 from .theme import PALETTE_DARK, PALETTE_LIGHT
@@ -728,12 +738,6 @@ class MainWindow(QMainWindow):
                 cor = _p["accent"] if ativo else _p["text_muted"]
                 btn.setIcon(getattr(_icons, item[1])(cor))
         self._lb_secao.setText(NOME_SECAO.get(chave, chave))
-
-    def _abrir_orcamento(self) -> None:
-        """Abre o dialog do módulo Orçamento (Notas Fiscais de Despesa)."""
-        dlg = OrcamentoDialog(self.settings, self)
-        dlg.setStyleSheet(qss(self._tema))
-        dlg.exec()
 
     def _abrir_sobre(self) -> None:
         """Diálogo Sobre — créditos e info da versão."""
@@ -1380,6 +1384,12 @@ class MainWindow(QMainWindow):
                 log.warning("QThread não parou em 2s — terminando forçado")
                 self._thread.terminate()
                 self._thread.wait(1000)
+        # Cancela lote do módulo Orçamento se houver
+        if getattr(self, "_orcamento_page", None) is not None:
+            try:
+                self._orcamento_page.encerrar_threads()
+            except Exception:  # noqa: BLE001
+                pass
 
     # ---------------- Atualizador ----------------
 

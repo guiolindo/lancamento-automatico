@@ -23,7 +23,7 @@ import json
 from datetime import date, datetime
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QEasingCurve, QPropertyAnimation, Qt, QThread, Signal
+from PySide6.QtCore import QDate, Qt, QThread, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QFileDialog, QFrame, QHBoxLayout,
@@ -87,14 +87,16 @@ class ExtratorNfseThread(QThread):
             self.falhou.emit(f"{type(e).__name__}: {e}")
 
 
-class OrcamentoDialog(QDialog):
+class OrcamentoPage(QWidget):
+    """Página do módulo Orçamento — embarcada no main_window como seção,
+    não mais dialog modal (build-99). O user relatou UX ruim: dialog abria
+    janela separada 'a nada com nada'. Agora vive dentro do shell com
+    sidebar + topbar, ganha log integrado e visual coerente."""
     COLS = ["#", "Pág.", "Número NF", "Data Emissão", "Valor (R$)", "Status"]
 
     def __init__(self, settings: SettingsStore, parent=None):
         super().__init__(parent)
         self.settings = settings
-        self.setWindowTitle("Auto Conferi — Orçamento (Notas Fiscais de Despesa)")
-        self.setMinimumSize(1080, 720)
         self.setAcceptDrops(True)
 
         self._pdf_selecionado: Path | None = None
@@ -112,8 +114,9 @@ class OrcamentoDialog(QDialog):
 
     def _montar_ui(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 16)
-        root.setSpacing(14)
+        # Padding coerente com o dashboard (mesmo 24/16 do _montar_content).
+        root.setContentsMargins(24, 16, 24, 16)
+        root.setSpacing(12)
 
         # Cabeçalho
         titulo = QLabel("Notas Fiscais de Despesa — Orçamento")
@@ -227,10 +230,6 @@ class OrcamentoDialog(QDialog):
         )
         self._btn_calibrar.clicked.connect(self._calibrar_tela)
         rod.addWidget(self._btn_calibrar)
-
-        btn_fechar = QPushButton("Fechar")
-        btn_fechar.clicked.connect(self.reject)
-        rod.addWidget(btn_fechar)
 
         self._btn_executar = QPushButton("Executar no TOTVS")
         self._btn_executar.setProperty("brand", True)
@@ -622,22 +621,16 @@ class OrcamentoDialog(QDialog):
         self._lbl_status.setText("Erro — veja o diálogo")
         QMessageBox.critical(self, "Erro no lote Orçamento", msg)
 
-    # ---------- Fade-in ----------
+    # ---------- Ciclo de vida ----------
 
-    def showEvent(self, event) -> None:  # noqa: N802
-        super().showEvent(event)
-        self.setWindowOpacity(0.0)
-        self._fade = QPropertyAnimation(self, b"windowOpacity")
-        self._fade.setDuration(200)
-        self._fade.setStartValue(0.0)
-        self._fade.setEndValue(1.0)
-        self._fade.setEasingCurve(QEasingCurve.InOutQuad)
-        self._fade.start()
-
-    def closeEvent(self, event) -> None:  # noqa: N802
+    def encerrar_threads(self) -> None:
+        """Chamada pelo main_window ao fechar. Cancela lote em curso."""
         if self._worker is not None:
             try:
                 self._worker.cancelar()
             except Exception:  # noqa: BLE001
                 pass
-        super().closeEvent(event)
+
+
+# Compat: código antigo pode importar OrcamentoDialog — apontamos pra Page.
+OrcamentoDialog = OrcamentoPage

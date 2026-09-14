@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-98 (fix fluxo Orçamento — +/Autorizar UMA vez no final, depois das 3 abas)"
+BUILD_MARKER = "build-99 (Orçamento como página integrada — sem dialog modal, vive dentro do shell com sidebar/topbar)"
 
 
 def main() -> int:
