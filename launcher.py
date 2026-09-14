@@ -54,6 +54,39 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 os.environ.setdefault("ABSL_LOGGING_MIN_LOG_LEVEL", "3")
 
 
+# ---------- 2b. Check de rede corporativa (build-92) ----------
+# O app só faz sentido rodando em máquina conectada à rede da empresa
+# (o RPA precisa alcançar o TOTVS/Consinco interno, e a operação inteira
+# é fiscal-corporativa). Fora da rede: aviso claro e sai.
+#
+# Detecção: resolve DNS de '[REDACTED-DOMAIN]' (sufixo DNS da rede). Se
+# resolveu, estamos na rede. Se falhou/timeout, não estamos.
+#
+# Bypass pra dev: env var AUTOCONFERI_DEV=1. Só o dev sabe, não
+# atrapalha operador. Nunca colocar em UI.
+
+REDE_DNS_INTERNO = "[REDACTED-DOMAIN]"
+REDE_TIMEOUT_S = 3.0
+
+def _esta_na_rede_corporativa() -> bool:
+    """True se o DNS interno resolve (rede corporativa ou VPN ativa)."""
+    if os.environ.get("AUTOCONFERI_DEV") == "1":
+        _boot_trace("rede: bypass AUTOCONFERI_DEV=1 — pulando check")
+        return True
+    import socket
+    old_timeout = socket.getdefaulttimeout()
+    try:
+        socket.setdefaulttimeout(REDE_TIMEOUT_S)
+        socket.gethostbyname(REDE_DNS_INTERNO)
+        _boot_trace(f"rede: {REDE_DNS_INTERNO} resolveu — na rede corporativa")
+        return True
+    except (socket.gaierror, socket.timeout, OSError) as e:
+        _boot_trace(f"rede: {REDE_DNS_INTERNO} não resolveu ({type(e).__name__}) — fora da rede")
+        return False
+    finally:
+        socket.setdefaulttimeout(old_timeout)
+
+
 # ---------- 3. Utilitários de log de boot ----------
 def _exe_dir() -> Path:
     if getattr(sys, "frozen", False) or "__compiled__" in globals():
@@ -499,6 +532,22 @@ def _auto_recovery_boot(splash_cb=None) -> bool:
 # ---------- 5. Boot com tracing ----------
 def main() -> int:
     _boot_trace("launcher: início")
+
+    # Check de rede corporativa — antes de qualquer coisa pesada.
+    # Se máquina não tá na rede da empresa, sai com aviso claro.
+    # Nada de import Qt, updater, mutex — tudo isso pode fazer trabalho
+    # que não vai ser usado. Bypass via env var AUTOCONFERI_DEV=1.
+    if not _esta_na_rede_corporativa():
+        _boot_trace("rede corporativa não detectada — abortando")
+        _show_error_dialog(
+            "O Auto Conferi só funciona conectado à rede da Economart "
+            "(intranet [REDACTED-DOMAIN]).\n\n"
+            "O que fazer:\n"
+            "  • Conecte à rede corporativa (cabo/WiFi da empresa), OU\n"
+            "  • Conecte à VPN da Economart\n\n"
+            "Depois abra o aplicativo de novo."
+        )
+        return 2
 
     # Single-instance: se o app já tá aberto, traz a janela pra frente
     # e sai. Evita usuário abrir 5 vezes por engano.

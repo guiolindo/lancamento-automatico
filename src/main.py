@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-91 (ambiguidade LOJA/CD: 2 convenções — Gemini decide pelo contexto)"
+BUILD_MARKER = "build-92 (check rede corporativa: só roda com DNS [REDACTED-DOMAIN] resolvendo)"
 
 
 def main() -> int:
