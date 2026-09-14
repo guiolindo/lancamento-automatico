@@ -54,37 +54,47 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 os.environ.setdefault("ABSL_LOGGING_MIN_LOG_LEVEL", "3")
 
 
-# ---------- 2b. Check de rede corporativa (build-92) ----------
-# O app só faz sentido rodando em máquina conectada à rede da empresa
-# (o RPA precisa alcançar o TOTVS/Consinco interno, e a operação inteira
-# é fiscal-corporativa). Fora da rede: aviso claro e sai.
+# ---------- 2b. Check de rede corporativa (build-94) ----------
+# O app só faz sentido rodando em máquina conectada à rede da empresa.
+# Fora da rede: aviso claro e sai.
 #
-# Detecção: resolve DNS de '[REDACTED-DOMAIN]' (sufixo DNS da rede). Se
-# resolveu, estamos na rede. Se falhou/timeout, não estamos.
+# Estratégia (build-94, sem vazamento do nome do domínio):
+# Windows seta a env var USERDNSDOMAIN quando a máquina está no domínio
+# Active Directory da empresa (via cabo, WiFi corporativo, ou VPN que
+# conecta ao AD). Comparamos o hash SHA-256 desse valor com o hash
+# esperado. Vantagens sobre o método antigo (DNS lookup):
+#   - Zero DNS lookup — instantâneo, zero rede
+#   - Nome do domínio NUNCA aparece no source ou binário — só o hash
+#   - Kaspersky não vê chamada nenhuma
+#   - Nem `strings` no exe nem debug do source revelam o valor
 #
-# Bypass pra dev: env var AUTOCONFERI_DEV=1. Só o dev sabe, não
-# atrapalha operador. Nunca colocar em UI.
+# Para bater no hash sem conhecer o valor, atacante precisa fazer
+# brute-force com wordlist de sufixos de domínio corporativo — finito
+# mas exige trabalho ativo. Boa proteção contra reconhecimento casual.
+#
+# Bypass pra dev: AUTOCONFERI_DEV=1.
 
-REDE_DNS_INTERNO = "[REDACTED-DOMAIN]"
-REDE_TIMEOUT_S = 3.0
+_REDE_SALT = b"AutoConferi/network-check/2026"
+# Hash SHA-256 do sufixo DNS interno (em lowercase) concatenado com o salt.
+# Compute local: sha256(dns_bytes + _REDE_SALT).hexdigest()
+_REDE_HASH_ESPERADO = "33477803de1cc958aa6e36afc0ab3d3a99cb8468965ce7f7a878dfe25e0756ae"
 
 def _esta_na_rede_corporativa() -> bool:
-    """True se o DNS interno resolve (rede corporativa ou VPN ativa)."""
+    """True se o Windows reporta que estamos no domínio AD esperado."""
     if os.environ.get("AUTOCONFERI_DEV") == "1":
         _boot_trace("rede: bypass AUTOCONFERI_DEV=1 — pulando check")
         return True
-    import socket
-    old_timeout = socket.getdefaulttimeout()
-    try:
-        socket.setdefaulttimeout(REDE_TIMEOUT_S)
-        socket.gethostbyname(REDE_DNS_INTERNO)
-        _boot_trace(f"rede: {REDE_DNS_INTERNO} resolveu — na rede corporativa")
-        return True
-    except (socket.gaierror, socket.timeout, OSError) as e:
-        _boot_trace(f"rede: {REDE_DNS_INTERNO} não resolveu ({type(e).__name__}) — fora da rede")
+    import hashlib
+    dominio = os.environ.get("USERDNSDOMAIN", "").strip().lower()
+    if not dominio:
+        _boot_trace("rede: USERDNSDOMAIN vazio — máquina não está em domínio AD")
         return False
-    finally:
-        socket.setdefaulttimeout(old_timeout)
+    h = hashlib.sha256(dominio.encode("utf-8") + _REDE_SALT).hexdigest()
+    if h == _REDE_HASH_ESPERADO:
+        _boot_trace("rede: domínio AD bate — na rede corporativa")
+        return True
+    _boot_trace("rede: domínio AD presente mas não bate — máquina em outro domínio")
+    return False
 
 
 # ---------- 3. Utilitários de log de boot ----------

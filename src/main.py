@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-93 (UI e docs não expõem mais o DNS interno)"
+BUILD_MARKER = "build-94 (check de rede via USERDNSDOMAIN + hash — zero lookup, zero source leak)"
 
 
 def main() -> int:
