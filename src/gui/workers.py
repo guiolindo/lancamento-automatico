@@ -318,14 +318,43 @@ class LoteOrcamentoWorker(QObject):
                 self.error.emit(f"import rpa_orcamento falhou: {e}")
                 return
 
-            if not self.calibracao.esta_completa():
-                faltam = self.calibracao.falta_calibrar()
-                friendly = (
-                    "A calibração da tela Orçamento está incompleta.\n\n"
-                    "Faltam os campos: " + ", ".join(faltam) + "\n\n"
-                    "Abra o TOTVS na tela 'Notas Fiscais de Despesa' "
-                    "(janela 'Orçamento...') e recalibre."
-                )
+            # Auto-detecção visual (build-97). Se a visão baseada em
+            # template matching enxergar o cabeçalho 'Notas Fiscais de
+            # Despesas', ela preenche os 23 campos sozinha e o operador
+            # NÃO precisa calibrar. Fallback pra calibração manual salva
+            # se a visão falhar.
+            ok_visao = False
+            msg_visao = ""
+            try:
+                from ..core.visao_orcamento import preencher_calibracao_automatica as visao_orc
+                ok_visao, msg_visao = visao_orc(self.calibracao)
+                self._emit_e_log(f"[visão orçamento] {msg_visao}")
+                if not ok_visao:
+                    self._emit_e_log("[visão orçamento] fallback pra calibração manual salva")
+            except BaseException as e:  # noqa: BLE001
+                msg_visao = f"módulo indisponível: {e}"
+                self._emit_e_log(f"[visão orçamento] {msg_visao} — usando calibração manual")
+
+            if not ok_visao and not self.calibracao.esta_completa():
+                m_low = (msg_visao or "").lower()
+                if any(k in m_low for k in ("reconhecer", "sumiu", "pygetwindow", "indisponível", "indisponivel")):
+                    friendly = (
+                        "Não achei o TOTVS aberto na tela 'Notas Fiscais de Despesas'.\n\n"
+                        "Antes de executar:\n"
+                        "  1. Abra o TOTVS Orçamento e vá até 'Notas Fiscais "
+                        "de Despesas'.\n"
+                        "  2. Deixe a janela visível (não minimizada).\n"
+                        "  3. Clique em 'Executar no TOTVS' de novo.\n\n"
+                        "Se persistir, use 'Calibrar tela' pra calibração manual."
+                    )
+                else:
+                    faltam = self.calibracao.falta_calibrar()
+                    friendly = (
+                        "A calibração da tela Orçamento está incompleta.\n\n"
+                        "Faltam: " + ", ".join(faltam[:8])
+                        + ("..." if len(faltam) > 8 else "")
+                        + "\n\nUse 'Calibrar tela' no dialog Orçamento."
+                    )
                 self._emit_e_log(f"XX {friendly}")
                 self.error.emit(friendly)
                 return

@@ -467,18 +467,19 @@ class OrcamentoDialog(QDialog):
         self._lbl_resumo.setText(f"{n} nota(s) · {_formatar_moeda(total)}")
 
     def _atualizar_estado_executar(self) -> None:
-        """Habilita o botão Executar se tiver notas prontas E calibração OK."""
+        """Habilita Executar sempre que tiver notas — a visão automática
+        (build-97) tenta preencher os campos sozinha no início do lote, e
+        se falhar, cai na calibração manual salva. Só bloqueia se
+        NENHUM caminho estiver disponível: sem visão E sem calib salva."""
         tem_notas = len(self._notas) > 0
-        calib_ok = self._calibracao.esta_completa()
-        self._btn_executar.setEnabled(tem_notas and calib_ok)
-        if not calib_ok:
-            self._btn_executar.setToolTip(
-                "Calibração da tela Orçamento pendente.\n"
-                "Faltam: " + ", ".join(self._calibracao.falta_calibrar()[:5])
-                + ("..." if len(self._calibracao.falta_calibrar()) > 5 else "")
-            )
-        elif not tem_notas:
+        self._btn_executar.setEnabled(tem_notas)
+        if not tem_notas:
             self._btn_executar.setToolTip("Extraia notas de um PDF primeiro.")
+        elif not self._calibracao.esta_completa():
+            self._btn_executar.setToolTip(
+                "Execução vai tentar auto-detecção visual da tela TOTVS.\n"
+                "Se falhar, use 'Calibrar tela' pra calibrar manualmente."
+            )
         else:
             self._btn_executar.setToolTip(
                 "Executa o lote no TOTVS. Tecla END aborta emergencial."

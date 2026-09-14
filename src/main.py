@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-96 (módulo Orçamento — RPA operacional: aba Nota + duplicidade F2 + Financeiro + Contab + Autorizar)"
+BUILD_MARKER = "build-97 (Orçamento: visão automática — sem calibração manual, template matching do cabeçalho + popups)"
 
 
 def main() -> int:

@@ -352,7 +352,10 @@ class RpaOrcamento:
         """
         import pyautogui
         log.info("Duplicidade — fechando popup 'Aviso'")
-        self._fechar_popup("popup_dupl_ok", popup_aviso)
+        # Build-97: tenta detectar OK do popup via visão (template matching
+        # do texto 'Aviso') pra clicar exatamente no botão em runtime, sem
+        # depender de calibração salva. Fallback pra offset calibrado.
+        self._clicar_popup_via_visao("aviso", "popup_dupl_ok", popup_aviso)
         time.sleep(0.3)
 
         # F2 — borracha (limpa tela)
@@ -365,10 +368,32 @@ class RpaOrcamento:
         popup_atencao = self._achar_popup_novo(titulos_antes_f2, ("atenção", "atencao", "aviso"))
         if popup_atencao is not None:
             log.info("Popup 'Atenção' após F2 — Sim")
-            self._fechar_popup("popup_atencao_sim", popup_atencao)
+            self._clicar_popup_via_visao("atencao", "popup_atencao_sim", popup_atencao)
             time.sleep(0.3)
         else:
             log.warning("Popup 'Atenção' esperado após F2 não apareceu — seguindo")
+
+    def _clicar_popup_via_visao(self, tipo: str, campo_calib: str, win_popup) -> None:
+        """Tenta detectar o popup via visão (âncora do título) e clica no
+        botão pelo offset conhecido. Se a visão falhar, cai no fluxo antigo
+        (offset calibrado ou centro-inferior)."""
+        titulo = self.calibracao.titulo_janela or "Orçamento"
+        try:
+            from .visao_orcamento import resolver_popup_aviso, resolver_popup_atencao
+            r = resolver_popup_aviso(titulo) if tipo == "aviso" else resolver_popup_atencao(titulo)
+            if r is not None and campo_calib in r.campos:
+                import pyautogui
+                x, y = r.campos[campo_calib]
+                log.info("Popup %s: visão OK conf=%.0f%% — clique em (%d,%d)",
+                         tipo, r.confianca * 100, x, y)
+                pyautogui.moveTo(x, y, duration=0.05)
+                pyautogui.click(x, y)
+                time.sleep(0.3)
+                return
+        except Exception as e:  # noqa: BLE001
+            log.warning("Visão do popup '%s' falhou: %s — fallback", tipo, e)
+        # Fallback: calibração salva + click central + Enter
+        self._fechar_popup(campo_calib, win_popup)
 
     def _preencher_aba_nota(self, nota: NotaDespesa) -> None:
         an = self.template.get("aba_nota") or {}
