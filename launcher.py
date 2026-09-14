@@ -540,11 +540,10 @@ def main() -> int:
     if not _esta_na_rede_corporativa():
         _boot_trace("rede corporativa não detectada — abortando")
         _show_error_dialog(
-            "O Auto Conferi só funciona conectado à rede da Economart "
-            "(intranet [REDACTED-DOMAIN]).\n\n"
+            "O Auto Conferi só funciona conectado à rede corporativa.\n\n"
             "O que fazer:\n"
-            "  • Conecte à rede corporativa (cabo/WiFi da empresa), OU\n"
-            "  • Conecte à VPN da Economart\n\n"
+            "  • Conecte à rede da empresa (cabo ou WiFi), OU\n"
+            "  • Conecte à VPN\n\n"
             "Depois abra o aplicativo de novo."
         )
         return 2

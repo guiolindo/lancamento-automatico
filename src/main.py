@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-92 (check rede corporativa: só roda com DNS [REDACTED-DOMAIN] resolvendo)"
+BUILD_MARKER = "build-93 (UI e docs não expõem mais o DNS interno)"
 
 
 def main() -> int:
