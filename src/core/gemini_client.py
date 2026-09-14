@@ -65,17 +65,35 @@ NÃO o texto bruto do documento. Para chegar lá, tente na ordem:
    filial nova que a empresa acabou de abrir e nem existe no catálogo).
    Nesse caso o app cai num fuzzy match depois.
 
-## AMBIGUIDADES CONHECIDAS (LEIA COM ATENÇÃO)
+## AMBIGUIDADES: LOJA vs CD com nome de cidade parecido
 
-Algumas cidades têm LOJA e CD no mesmo lugar. A convenção do relatório é:
+Algumas cidades têm loja física E centro de distribuição com nomes muito
+parecidos (ex.: Feira de Santana loja e CD Feira de Santana; Ribeirao das
+Neves loja e CD Ribeirao das Neves). O relatório usa UMA de duas convenções
+possíveis pra distinguir — e você precisa OLHAR O RELATÓRIO INTEIRO ANTES
+de decidir qual convenção esse relatório específico está usando.
 
-- **"FEIRA DE SANTANA (LOJA)"** → filial 22 (Feira de Santana loja).
-- **"FEIRA DE SANTANA"** (sem qualificador) → filial 201 (CD Feira de Santana).
-  Sim, contra-intuitivo — mas quem escreve o relatório usa "(LOJA)" só quando
-  quer distinguir do CD. Sem sufixo = CD.
+**Convenção A — marca a LOJA:**
+Se aparecer "X (LOJA)" ou "X LOJA" ou "LOJA X" em qualquer linha do relatório,
+então a convenção é marcar explicitamente a loja:
+- "FEIRA DE SANTANA (LOJA)"  → NOME CANÔNICO: "Feira de Santana"
+- "FEIRA DE SANTANA"  (sem qualificador) → NOME CANÔNICO: "CD Feira de Santana"
 
-Vale a mesma regra pra qualquer cidade que aparecer com "(LOJA)" e outra vez
-sem qualificador: com "(LOJA)" = a loja; sem = o CD.
+**Convenção B — marca o CD:**
+Se aparecer "CD X" ou "CD F. DE X" em qualquer linha do relatório, então a
+convenção é marcar explicitamente o CD:
+- "CD FEIRA DE SANTANA" → NOME CANÔNICO: "CD Feira de Santana"
+- "FEIRA DE SANTANA"  (sem qualificador) → NOME CANÔNICO: "Feira de Santana"
+
+**Como escolher:** olhe TODAS as linhas do documento antes de resolver a
+primeira ambiguidade. Se você vir qualquer linha com "(LOJA)" ou "LOJA",
+use convenção A. Se você vir qualquer linha com "CD" na frente, use
+convenção B. As duas convenções não coexistem no mesmo relatório.
+
+**Casos raros:** se aparecer só uma "X" solta e nenhum marcador `(LOJA)`
+nem `CD` no relatório inteiro, e a cidade tem loja+CD no catálogo, devolva
+o texto bruto "X" — o app vai tentar resolver por fuzzy matching ou o
+operador ajusta manualmente.
 
 NÃO invente códigos. Você só precisa devolver o nome canônico; o app resolve
 o código sozinho.

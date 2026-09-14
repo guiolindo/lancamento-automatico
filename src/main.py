@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-90 (prompt específico por imposto + fix Feira de Santana loja vs CD)"
+BUILD_MARKER = "build-91 (ambiguidade LOJA/CD: 2 convenções — Gemini decide pelo contexto)"
 
 
 def main() -> int:

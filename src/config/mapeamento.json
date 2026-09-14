@@ -37,7 +37,7 @@
     "CD_ADM": {
       "descricao": "Multicom Atacado e Varejo - CDs, Comercial e Administrativo",
       "filiais": [
-        {"codigo": 201, "nome": "CD Feira de Santana", "tipo": "CD",  "aliases": ["CD FEIRA DE SANTANA", "CD FEIRA", "FEIRA DE SANTANA", "F DE SANTANA", "FEIRA STA"]},
+        {"codigo": 201, "nome": "CD Feira de Santana", "tipo": "CD",  "aliases": ["CD FEIRA DE SANTANA", "CD FEIRA", "CD F DE SANTANA", "CD FEIRA STA"]},
         {"codigo": 300, "nome": "CD Ribeirao das Neves","tipo": "CD", "aliases": ["CD RIB NEVES", "CD RIB.NEVES", "CD 040", "CD300", "CD 300", "CD RIBEIRAO DAS NEVES"]},
         {"codigo": 301, "nome": "CD Campina Verde",   "tipo": "CD",  "aliases": ["CD CAMPINA VERDE", "CAMPINA VERDE"]},
         {"codigo": 302, "nome": "CD Horti",           "tipo": "CD",  "aliases": ["CD HORTI", "HORTI"]},
