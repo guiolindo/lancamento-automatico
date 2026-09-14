@@ -1,0 +1,36 @@
+{
+  "_comentario": "Templates de fornecedores recorrentes pro módulo Orçamento (Notas Fiscais de Despesa). Cada template define os campos FIXOS do formulário TOTVS Orçamento. Só 3 variáveis por nota: numero_nf, data_emissao, valor. Adicionar fornecedor novo = novo entry aqui.",
+  "titulo_janela_totvs": "Orçamento",
+  "templates": {
+    "OTIMO": {
+      "descricao": "Consórcio Ótimo de Bilhetagem Eletrônica — vale transporte",
+      "aba_nota": {
+        "empresa_codigo": "6",
+        "nat_despesa_codigo": "215",
+        "pessoa_codigo": "36657",
+        "versao_pessoa": "1",
+        "st_doc": "Regular",
+        "modelo": "99",
+        "observacao_fiscal": "**PARA BAIXA**\nVALE TRANSPORTE",
+        "tipo_frete": "0",
+        "marcar_icms": true,
+        "serie": "",
+        "subserie": ""
+      },
+      "aba_financeiro": {
+        "observacao_financeira": "**PARA BAIXA**\nVALE TRANSPORTE",
+        "modo": "vencimento",
+        "quantidade_parcelas": 1,
+        "dias_entre_vencimentos": 1
+      },
+      "aba_contabilizacao": {
+        "replicar_valor_nas_linhas": 2
+      },
+      "regras": {
+        "vencimento_igual_a": "data_lancto",
+        "data_lancto_default": "hoje",
+        "duplicidade_regra": "pular_ja_lancada"
+      }
+    }
+  }
+}

@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-94 (check de rede via USERDNSDOMAIN + hash — zero lookup, zero source leak)"
+BUILD_MARKER = "build-95 (módulo Orçamento — sidebar + dialog + extração Gemini NFS-e)"
 
 
 def main() -> int:

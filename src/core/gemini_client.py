@@ -284,6 +284,105 @@ class GeminiClient:
             log.error("Resposta Gemini não é JSON válido: %s", texto[:500])
             raise
 
+    # ---------- NFS-e (módulo Orçamento, build-95) ----------
+    # Reusa a mesma infra (chave, modelo, transporte REST). PDF de 40+
+    # páginas cabe numa request só — Gemini aceita PDF multi-página
+    # nativamente. Não separamos em arquivo próprio porque no fim é a
+    # mesma stack, só com prompt diferente.
+
+    def extrair_notas_nfse(self, arquivo_pdf: Path) -> list[dict]:
+        """Extrai lista de {pagina, numero, data_emissao, valor} de um PDF
+        com N notas fiscais de serviço (NFS-e / DANFSe). Cada página =
+        1 nota. Zero tolerância a chute: se algo não é legível, campo
+        vem em branco e o app pede revisão manual.
+        """
+        arquivo_pdf = Path(arquivo_pdf)
+        if not arquivo_pdf.exists():
+            raise FileNotFoundError(arquivo_pdf)
+
+        log.info("extrair_notas_nfse: lendo %s", arquivo_pdf.name)
+        with open(arquivo_pdf, "rb") as f:
+            dados = f.read()
+        b64 = base64.standard_b64encode(dados).decode("ascii")
+        log.info("extrair_notas_nfse: %d bytes → base64", len(dados))
+
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": _PROMPT_NFSE},
+                        {"inline_data": {"mime_type": "application/pdf", "data": b64}},
+                    ]
+                }
+            ],
+            "generationConfig": {"response_mime_type": "application/json"},
+        }
+        url = f"{API_BASE}/models/{self._model_name}:generateContent"
+        r = requests.post(url, params={"key": self._api_key}, json=payload, timeout=180)
+        log.info("extrair_notas_nfse: HTTP %s", r.status_code)
+        if r.status_code >= 400:
+            raise RuntimeError(f"Gemini HTTP {r.status_code}: {r.text[:400]}")
+
+        data = r.json()
+        try:
+            texto = data["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError, TypeError) as e:
+            raise RuntimeError(f"Resposta Gemini sem texto: {str(data)[:400]}") from e
+
+        parsed = self._parse_json(texto)
+        notas = parsed.get("notas") or []
+        resultado: list[dict] = []
+        for i, n in enumerate(notas):
+            try:
+                resultado.append({
+                    "pagina": int(n.get("pagina") or (i + 1)),
+                    "numero": str(n.get("numero", "")).strip(),
+                    "data_emissao": str(n.get("data_emissao", "")).strip(),
+                    "valor": float(n.get("valor") or 0.0),
+                })
+            except (TypeError, ValueError) as e:
+                log.warning("extrair_notas_nfse: linha %d inválida (%s): %r", i, e, n)
+                resultado.append({
+                    "pagina": i + 1, "numero": "", "data_emissao": "", "valor": 0.0,
+                })
+        log.info("extrair_notas_nfse: %d notas extraídas", len(resultado))
+        return resultado
+
+
+_PROMPT_NFSE = """Você é um extrator de Notas Fiscais de Serviço eletrônica
+(NFS-e / DANFSe) brasileiras.
+
+Cada página do PDF anexo é UMA NFS-e. Extraia SOMENTE três campos por nota:
+
+1. `numero`: o "Número da NFS-e" (campo padrão do cabeçalho DANFSe, também
+   chamado "Nº NFS-e" ou "Número"). Dígitos apenas.
+   Ex.: "216559", "202528112".
+
+2. `data_emissao`: a "Data e Hora da Emissão da NFS-e" (só a data, no formato
+   "AAAA-MM-DD"). Ex.: "2026-08-19". NÃO confundir com "Data e Hora da
+   Emissão da DPS" (a DPS é o pedido, não a nota).
+
+3. `valor`: o "Valor Total da NFS-e" ou "Valor Líquido da NFS-e" (campo do
+   rodapé). Float com ponto decimal, sem separador de milhar. Ex.: 17.35.
+   Se aparecer "R$ 17,35" → 17.35.
+
+Ignore: chave de acesso, código de tributação, alíquotas, impostos,
+municípios, tomador, prestador — tudo isso o app já tem via template.
+
+Retorne APENAS um JSON válido, sem markdown, sem comentários:
+
+{
+  "notas": [
+    {"pagina": 1, "numero": "216559", "data_emissao": "2026-08-19", "valor": 17.35}
+  ]
+}
+
+Se algum campo estiver ilegível, deixe em branco ("" ou 0.0) — o app pede
+revisão manual. NUNCA invente valores. Melhor vazio que chute.
+
+Se uma página não for NFS-e (capa, folha separadora), pule.
+"""
+
 
 def montar_lancamentos(
     extracao: dict,

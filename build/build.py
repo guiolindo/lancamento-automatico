@@ -109,6 +109,8 @@ def run() -> int:
         f"--output-filename={NOME}.exe",
         # Empacota o mapeamento.json dentro da pasta standalone.
         f"--include-data-files={SRC / 'config' / 'mapeamento.json'}=config/mapeamento.json",
+        # E o mapeamento_orcamento.json (templates do módulo Orçamento, build-95).
+        f"--include-data-files={SRC / 'config' / 'mapeamento_orcamento.json'}=config/mapeamento_orcamento.json",
         # Templates de referência da tela do TOTVS + branding (ícones,
         # wordmark) — a pasta inteira src/assets/ vai pro bundle.
         f"--include-data-dir={SRC / 'assets'}=src/assets",
@@ -166,6 +168,13 @@ def run() -> int:
     if mapeamento_int.exists() and not mapeamento_ext.exists():
         shutil.copy2(mapeamento_int, mapeamento_ext)
         print(f"Copiado: {mapeamento_ext}")
+
+    # Mesmo pattern pro mapeamento_orcamento.json (build-95).
+    orc_ext = destino_pasta / "mapeamento_orcamento.json"
+    orc_int = destino_pasta / "config" / "mapeamento_orcamento.json"
+    if orc_int.exists() and not orc_ext.exists():
+        shutil.copy2(orc_int, orc_ext)
+        print(f"Copiado: {orc_ext}")
 
     # Extrai BUILD_MARKER do src/main.py e escreve build_marker.txt ao
     # lado do exe. O launcher lê esse arquivo pra saber qual versão está

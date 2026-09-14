@@ -23,6 +23,7 @@ from .calibracao_dialog import CalibracaoDialog
 from .depara_dialog import DeParaDialog
 from .hud_execucao import HudExecucao
 from .lote_resumo_dialog import LoteResumoDialog
+from .orcamento_dialog import OrcamentoDialog
 from .preview_table import PreviewTable
 from .widgets import DateEditFast
 from .setup_dialog import SetupDialog
@@ -33,7 +34,8 @@ from .workers import ExtracaoWorker, LoteWorker
 
 # Cada item de nav: (chave, icon_factory_name, rótulo, tooltip)
 NAV_ITEMS = [
-    ("dashboard",     "icon_lote",     "Novo lote", "Preparar e executar novo lote"),
+    ("dashboard",     "icon_lote",     "Novo lote", "Preparar e executar novo lote (impostos sobre folha)"),
+    ("orcamento",     "icon_lote",     "Orçamento", "Notas Fiscais de Despesa — templates de fornecedores recorrentes"),
     ("mapeamento",    "icon_filiais",  "Filiais",   "Editar de-para de filiais"),
     ("configuracoes", "icon_config",   "Config",    "Chave da API e configurações"),
     ("sobre",         "icon_sobre",    "Sobre",     "Sobre o Auto Conferi"),
@@ -693,12 +695,12 @@ class MainWindow(QMainWindow):
     # ---------------- Ações ----------------
 
     def _trocar_secao(self, chave: str) -> None:
-        # 'mapeamento' e 'configuracoes' abrem DIALOG — não são seções
-        # separadas. Não devem tirar o 'active' do dashboard (que é a
-        # única tela real). Antes ficava um estado 'fantasma' onde o
-        # ícone lateral marcava selecionado mas o conteúdo era o
-        # dashboard.
-        if chave in ("mapeamento", "configuracoes", "sobre"):
+        # 'mapeamento', 'configuracoes', 'sobre' e 'orcamento' abrem
+        # DIALOG — não são seções separadas. Não devem tirar o 'active'
+        # do dashboard (única tela real). Antes ficava um estado
+        # 'fantasma' onde o ícone lateral marcava selecionado mas o
+        # conteúdo era o dashboard.
+        if chave in ("mapeamento", "configuracoes", "sobre", "orcamento"):
             if chave == "configuracoes":
                 self._abrir_setup()
             elif chave == "mapeamento":
@@ -708,6 +710,8 @@ class MainWindow(QMainWindow):
                     self._log_line("✓ De-Para atualizado e recarregado")
             elif chave == "sobre":
                 self._abrir_sobre()
+            elif chave == "orcamento":
+                self._abrir_orcamento()
             return
         # Só troca active pra chaves que são realmente seções distintas
         for k, btn in self._nav_buttons.items():
@@ -724,6 +728,12 @@ class MainWindow(QMainWindow):
                 cor = _p["accent"] if ativo else _p["text_muted"]
                 btn.setIcon(getattr(_icons, item[1])(cor))
         self._lb_secao.setText(NOME_SECAO.get(chave, chave))
+
+    def _abrir_orcamento(self) -> None:
+        """Abre o dialog do módulo Orçamento (Notas Fiscais de Despesa)."""
+        dlg = OrcamentoDialog(self.settings, self)
+        dlg.setStyleSheet(qss(self._tema))
+        dlg.exec()
 
     def _abrir_sobre(self) -> None:
         """Diálogo Sobre — créditos e info da versão."""
