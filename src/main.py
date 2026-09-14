@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-89 (novo imposto INSS + regra mes_ref_regra + combo dinâmico)"
+BUILD_MARKER = "build-90 (prompt específico por imposto + fix Feira de Santana loja vs CD)"
 
 
 def main() -> int:

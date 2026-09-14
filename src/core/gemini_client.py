@@ -30,9 +30,9 @@ _MIME_POR_EXTENSAO = {
 }
 
 
-PROMPT_TEMPLATE = """Você é um extrator estruturado de dados de relatórios fiscais brasileiros.
+PROMPT_BASE = """Você é um extrator estruturado de dados de relatórios fiscais brasileiros.
 
-Extraia do documento em anexo TODAS as linhas de filiais e seus valores por tipo de folha.
+Extraia do documento em anexo TODAS as linhas de filiais e seus valores.
 
 ## CATÁLOGO DE FILIAIS (nome canônico ← sinônimos JÁ conhecidos)
 
@@ -55,8 +55,7 @@ NÃO o texto bruto do documento. Para chegar lá, tente na ordem:
      "LEM" → Luis Eduardo Magalhaes; "VDC" → Vitoria da Conquista.
    - Palavra parcial ou truncada: "CTGM" / "CONTAG" → Contagem;
      "L VERDE" / "LN VERDE" → Serra Verde (Linha Verde é o mesmo lugar);
-     "P AFONSO" → Paulo Afonso; "RIB NEVES" → Ribeirao das Neves;
-     "F DE SANTANA" / "F SANTANA" → Feira de Santana.
+     "P AFONSO" → Paulo Afonso; "RIB NEVES" → Ribeirao das Neves.
    - Códigos numéricos: "CD 040", "CD-040", "CD300", "300" → CD Ribeirao das
      Neves (mesmo código TOTVS); "301" → CD Campina Verde; "502" → ADM Barao.
    - Prefixos operacionais: "CD X" é sempre um centro de distribuição;
@@ -66,18 +65,32 @@ NÃO o texto bruto do documento. Para chegar lá, tente na ordem:
    filial nova que a empresa acabou de abrir e nem existe no catálogo).
    Nesse caso o app cai num fuzzy match depois.
 
+## AMBIGUIDADES CONHECIDAS (LEIA COM ATENÇÃO)
+
+Algumas cidades têm LOJA e CD no mesmo lugar. A convenção do relatório é:
+
+- **"FEIRA DE SANTANA (LOJA)"** → filial 22 (Feira de Santana loja).
+- **"FEIRA DE SANTANA"** (sem qualificador) → filial 201 (CD Feira de Santana).
+  Sim, contra-intuitivo — mas quem escreve o relatório usa "(LOJA)" só quando
+  quer distinguir do CD. Sem sufixo = CD.
+
+Vale a mesma regra pra qualquer cidade que aparecer com "(LOJA)" e outra vez
+sem qualificador: com "(LOJA)" = a loja; sem = o CD.
+
 NÃO invente códigos. Você só precisa devolver o nome canônico; o app resolve
 o código sozinho.
 
-## REGRAS GERAIS
+## REGRAS GERAIS DE VALORES
 
 - Ignore linhas de totalização geral (ex.: "TOTAL GERAL").
-- Ignore marcações manuscritas (√, X, riscos, canetadas). Elas NÃO indicam pular linha — extraia sempre tudo.
-- Os valores estão em Real brasileiro (formato "R$ 1.234,56"). Retorne SEMPRE como número (float) sem separador de milhar e com ponto decimal. Ex.: "R$ 45.527,93" -> 45527.93.
+- Ignore marcações manuscritas (√, X, riscos, canetadas). Elas NÃO indicam
+  pular linha — extraia sempre tudo.
+- Os valores estão em Real brasileiro (formato "R$ 1.234,56"). Retorne SEMPRE
+  como número (float) sem separador de milhar e com ponto decimal.
+  Ex.: "R$ 45.527,93" → 45527.93.
 - Uma célula vazia deve virar 0 (zero) ou ser omitida do objeto "valores".
-- Identifique o mês e ano de referência do imposto quando aparecer no relatório (ex.: "IRRF 07/2026" → mes_ref="07", ano_ref="2026"). Se não aparecer, deixe em branco — o app calcula sozinho quando necessário.
-- As colunas esperadas são exatamente: {colunas}. Use esses nomes como chaves em "valores".
-- Se o relatório tem UMA ÚNICA coluna de valor por filial (sem separação por tipo de folha, como INSS), coloque o valor único sob a chave listada em {colunas} (será algo tipo "VALOR").
+
+## FORMATO DA RESPOSTA
 
 Retorne APENAS um JSON válido nesta estrutura, sem markdown, sem comentários:
 
@@ -88,16 +101,93 @@ Retorne APENAS um JSON válido nesta estrutura, sem markdown, sem comentários:
   "linhas": [
     {{
       "filial_documento": "NOME CANÔNICO do catálogo, ou texto do documento se não bater",
-      "valores": {{
-        "ADIANTAMENTO": 45527.93,
-        "FERIAS": 307.34,
-        "MENSAL": 14831.09
-      }},
+      "valores": {{ ... veja regras específicas abaixo ... }},
       "total_filial": 60666.36
     }}
   ]
 }}
+
 """
+
+
+# Regras específicas por imposto (build-90). Cada imposto tem particularidades
+# de layout (colunas por tipo de folha vs coluna única), fonte da referência
+# (extraída do PDF vs calculada da data de emissão), e cabeçalhos típicos.
+# Adicionar imposto novo aqui + entry em mapeamento.json.
+
+PROMPT_IRRF = """## REGRAS ESPECÍFICAS DESTE RELATÓRIO — IRRF
+
+Este é um relatório de **IRRF (Imposto de Renda Retido na Fonte) sobre Folha
+de Pagamento**. Layout típico: uma linha por filial, com MÚLTIPLAS colunas
+separando por tipo de folha.
+
+- Colunas esperadas em "valores": **{colunas}**.
+  Use esses nomes exatos como chaves.
+- Cada filial pode ter valor em uma ou mais colunas simultaneamente.
+- Identifique o mês/ano de referência (ex.: "IRRF 07/2026" → mes_ref="07",
+  ano_ref="2026"). Se não aparecer, deixe em branco.
+
+Exemplo de linha bem extraída:
+```
+{{"filial_documento": "Contagem",
+  "valores": {{"ADIANTAMENTO": 45527.93, "MENSAL": 14831.09}},
+  "total_filial": 60359.02}}
+```
+"""
+
+PROMPT_INSS = """## REGRAS ESPECÍFICAS DESTE RELATÓRIO — INSS
+
+Este é um relatório de **INSS sobre Folha de Pagamento**. Layout típico:
+uma linha por filial, com UMA ÚNICA COLUNA de valor total (sem separação
+por tipo de folha).
+
+- Coluna única: **{colunas}** (só o nome "VALOR").
+  Coloque o valor total da filial sob essa chave.
+- NÃO tente separar por tipo de folha. É sempre um valor consolidado.
+- **NÃO PRECISA identificar mês/ano** de referência no PDF — deixe
+  `mes_ref` e `ano_ref` em BRANCO (`""`). O app calcula automaticamente
+  a competência (mês anterior à data de emissão) na hora de montar a
+  observação. Se você tentar adivinhar, provavelmente vai errar porque
+  o PDF do INSS pode ter datas de mês antigo, atual e futuro
+  simultaneamente (data de emissão do relatório, competência, vencimento).
+
+Exemplo de linha bem extraída:
+```
+{{"filial_documento": "Contagem",
+  "valores": {{"VALOR": 160090.96}},
+  "total_filial": 160090.96}}
+```
+"""
+
+
+PROMPTS_POR_IMPOSTO: dict[str, str] = {
+    "IRRF": PROMPT_IRRF,
+    "INSS": PROMPT_INSS,
+}
+
+
+def _construir_prompt(imposto: Imposto, mapping: MappingRepository) -> str:
+    """Junta o prompt base (catálogo + regras universais) com a seção
+    específica do imposto. Se não houver seção específica, usa um
+    genérico que só menciona as colunas."""
+    especifico_tmpl = PROMPTS_POR_IMPOSTO.get(imposto.chave)
+    if especifico_tmpl is None:
+        log.warning(
+            "Prompt específico não definido pra imposto '%s' — usando fallback genérico",
+            imposto.chave,
+        )
+        especifico_tmpl = (
+            "## REGRAS ESPECÍFICAS DESTE RELATÓRIO — {chave}\n\n"
+            "Colunas esperadas em 'valores': **{{colunas}}**. Use esses nomes exatos como chaves.\n"
+        ).format(chave=imposto.chave)
+
+    especifico = especifico_tmpl.format(colunas=", ".join(imposto.colunas_tipo_folha))
+
+    base = PROMPT_BASE.format(
+        catalogo=_construir_catalogo(mapping),
+        imposto_chave=imposto.chave,
+    )
+    return base + especifico
 
 
 def _construir_catalogo(mapping: MappingRepository) -> str:
@@ -125,11 +215,7 @@ class GeminiClient:
         if not arquivo.exists():
             raise FileNotFoundError(arquivo)
 
-        prompt = PROMPT_TEMPLATE.format(
-            colunas=", ".join(imposto.colunas_tipo_folha),
-            imposto_chave=imposto.chave,
-            catalogo=_construir_catalogo(mapping),
-        )
+        prompt = _construir_prompt(imposto, mapping)
 
         log.info("extrair: lendo arquivo %s", arquivo.name)
         with open(arquivo, "rb") as f:

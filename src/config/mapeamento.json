@@ -25,7 +25,7 @@
         {"codigo": 19, "nome": "Jequie",               "tipo": "LOJA", "aliases": ["JEQUIE", "JEQUIÉ"]},
         {"codigo": 20, "nome": "Luis Eduardo Magalhaes","tipo": "LOJA", "aliases": ["LUIS EDUARDO", "LUIS EDUARDO MAGALHAES", "LEM"]},
         {"codigo": 21, "nome": "Vitoria da Conquista", "tipo": "LOJA", "aliases": ["VITORIA DA CONQUISTA", "VITÓRIA DA CONQUISTA"]},
-        {"codigo": 22, "nome": "Feira de Santana",     "tipo": "LOJA", "aliases": ["FEIRA DE SANTANA"]},
+        {"codigo": 22, "nome": "Feira de Santana",     "tipo": "LOJA", "aliases": ["FEIRA DE SANTANA (LOJA)", "FEIRA DE SANTANA LOJA", "F DE SANTANA (LOJA)", "FEIRA STA (LOJA)"]},
         {"codigo": 23, "nome": "Barreiras",            "tipo": "LOJA", "aliases": ["BARREIRAS"]},
         {"codigo": 25, "nome": "Santo Antonio de Jesus","tipo": "LOJA", "aliases": ["SANTO ANTONIO DE JESUS", "SANTO ANTÔNIO DE JESUS", "SAJ"]},
         {"codigo": 26, "nome": "Itabuna",              "tipo": "LOJA", "aliases": ["ITABUNA"]},
@@ -37,7 +37,7 @@
     "CD_ADM": {
       "descricao": "Multicom Atacado e Varejo - CDs, Comercial e Administrativo",
       "filiais": [
-        {"codigo": 201, "nome": "CD Feira de Santana", "tipo": "CD",  "aliases": ["CD FEIRA DE SANTANA", "CD FEIRA"]},
+        {"codigo": 201, "nome": "CD Feira de Santana", "tipo": "CD",  "aliases": ["CD FEIRA DE SANTANA", "CD FEIRA", "FEIRA DE SANTANA", "F DE SANTANA", "FEIRA STA"]},
         {"codigo": 300, "nome": "CD Ribeirao das Neves","tipo": "CD", "aliases": ["CD RIB NEVES", "CD RIB.NEVES", "CD 040", "CD300", "CD 300", "CD RIBEIRAO DAS NEVES"]},
         {"codigo": 301, "nome": "CD Campina Verde",   "tipo": "CD",  "aliases": ["CD CAMPINA VERDE", "CAMPINA VERDE"]},
         {"codigo": 302, "nome": "CD Horti",           "tipo": "CD",  "aliases": ["CD HORTI", "HORTI"]},
