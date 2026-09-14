@@ -79,3 +79,23 @@ class LinhaExtracao:
     filial_documento: str
     valores: dict[str, float]
     total_filial: Optional[float] = None
+
+
+@dataclass
+class NotaDespesa:
+    """Uma NFS-e a ser lançada no módulo Orçamento (build-96).
+
+    Diferente do Lancamento (impostos sobre folha), aqui os campos fixos
+    saem do template do fornecedor (`mapeamento_orcamento.json`). Só o
+    número, data de emissão e valor variam por nota. `pagina` só serve
+    pra rastreabilidade no PDF de origem.
+    """
+    pagina: int
+    numero: str
+    data_emissao: Optional[date]
+    valor: float
+    data_lancto: date
+    template_chave: str
+    status: StatusLancamento = StatusLancamento.PENDENTE
+    erro: Optional[str] = None
+    motivo_ignorado: Optional[str] = None  # ex: "já lançada"

@@ -8,7 +8,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 from ..core.gemini_client import GeminiClient, montar_lancamentos
 from ..core.logger import log
 from ..core.mapping import MappingRepository
-from ..core.models import Imposto, Lancamento, LinhaExtracao
+from ..core.models import Imposto, Lancamento, LinhaExtracao, NotaDespesa, StatusLancamento
 
 
 class ExtracaoWorker(QObject):
@@ -266,6 +266,136 @@ class LoteWorker(QObject):
     def _on_progress(self, lanc: Lancamento, msg: str) -> None:
         self.log_line.emit(f"  · {lanc.filial_nome}/{lanc.tipo_folha}: {msg}")
         self.lancamento_atualizado.emit(getattr(self, "_i_atual", -1))
+
+
+class LoteOrcamentoWorker(QObject):
+    """Executa o lote do módulo Orçamento (Notas Fiscais de Despesa).
+    Paralelo ao `LoteWorker`, mas usa `RpaOrcamento` + template do fornecedor.
+    """
+    progresso = Signal(int, int, str)         # index, total, mensagem
+    nota_atualizada = Signal(int)             # index
+    finished = Signal(int, int, int)          # sucessos, falhas, ignoradas
+    error = Signal(str)
+    log_line = Signal(str)
+
+    def __init__(
+        self,
+        notas: list[NotaDespesa],
+        template: dict,
+        settings: dict,
+        calibracao,
+        parar_em_falha: bool = False,
+    ):
+        super().__init__()
+        self.notas = notas
+        self.template = template
+        self.settings = settings
+        self.calibracao = calibracao
+        self.parar_em_falha = parar_em_falha
+        self._cancelar = False
+
+    def cancelar(self) -> None:
+        self._cancelar = True
+
+    def _emit_e_log(self, msg: str) -> None:
+        try:
+            log.info(msg)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            self.log_line.emit(msg)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def run(self) -> None:
+        try:
+            self._emit_e_log(">> LoteOrcamentoWorker.run(): iniciando")
+
+            try:
+                from ..core.rpa_orcamento import EmergencyAbortException, RpaOrcamento
+            except BaseException as e:  # noqa: BLE001
+                log.exception("Falha importando rpa_orcamento")
+                self.error.emit(f"import rpa_orcamento falhou: {e}")
+                return
+
+            if not self.calibracao.esta_completa():
+                faltam = self.calibracao.falta_calibrar()
+                friendly = (
+                    "A calibração da tela Orçamento está incompleta.\n\n"
+                    "Faltam os campos: " + ", ".join(faltam) + "\n\n"
+                    "Abra o TOTVS na tela 'Notas Fiscais de Despesa' "
+                    "(janela 'Orçamento...') e recalibre."
+                )
+                self._emit_e_log(f"XX {friendly}")
+                self.error.emit(friendly)
+                return
+
+            try:
+                rpa = RpaOrcamento(
+                    self.settings, self.calibracao, self.template,
+                    on_progress=self._on_progress,
+                )
+            except BaseException as e:  # noqa: BLE001
+                log.exception("Falha instanciando RpaOrcamento")
+                self.error.emit(f"Não consegui preparar a automação:\n\n{e}")
+                return
+
+            self._emit_e_log("-> Conectando à janela Orçamento...")
+            self._emit_e_log("i Tecla END = parada de emergência")
+
+            try:
+                try:
+                    rpa.conectar()
+                except BaseException as e:  # noqa: BLE001
+                    log.exception("Falha em rpa.conectar()")
+                    msg = str(e)
+                    if "não encontrada" in msg or "nao encontrada" in msg:
+                        friendly = (
+                            "A janela 'Orçamento' do TOTVS não apareceu.\n\n"
+                            "Verifique se:\n"
+                            "  • O TOTVS está aberto na tela 'Notas Fiscais de Despesa'\n"
+                            "  • A janela começa com 'Orçamento'\n"
+                            "  • A janela não está minimizada"
+                        )
+                    else:
+                        friendly = f"Não consegui conectar ao TOTVS:\n\n{msg}"
+                    self.error.emit(friendly)
+                    return
+                self._emit_e_log("OK Janela conectada")
+
+                sucessos = falhas = ignoradas = 0
+                total = len(self.notas)
+                for i, nota in enumerate(self.notas):
+                    if self._cancelar:
+                        self._emit_e_log("|| Execução cancelada pelo usuário")
+                        break
+                    self._i_atual = i
+                    self.progresso.emit(i, total, f"Nota #{nota.numero or '(vazio)'} — pág {nota.pagina}")
+                    try:
+                        rpa.lancar(nota)
+                        if nota.status == StatusLancamento.SUCESSO:
+                            sucessos += 1
+                        elif nota.status == StatusLancamento.IGNORADO:
+                            ignoradas += 1
+                    except EmergencyAbortException:
+                        self._emit_e_log("!! EMERGÊNCIA: END pressionada — lote abortado")
+                        break
+                    except Exception as e:  # noqa: BLE001
+                        falhas += 1
+                        self._emit_e_log(f"X Falha nota #{nota.numero}: {e}")
+                        if self.parar_em_falha:
+                            break
+                    self.nota_atualizada.emit(i)
+                self.finished.emit(sucessos, falhas, ignoradas)
+            finally:
+                rpa.encerrar()
+        except Exception as e:  # noqa: BLE001
+            log.exception("Falha no lote Orçamento")
+            self.error.emit(str(e))
+
+    def _on_progress(self, nota: NotaDespesa, msg: str) -> None:
+        self.log_line.emit(f"  · Nota #{nota.numero or '?'}: {msg}")
+        self.nota_atualizada.emit(getattr(self, "_i_atual", -1))
 
 
 def rodar_em_thread(worker: QObject) -> QThread:

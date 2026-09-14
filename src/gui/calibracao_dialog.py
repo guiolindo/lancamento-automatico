@@ -30,15 +30,32 @@ _TODOS_CAMPOS = CAMPOS + CAMPOS_OPCIONAIS
 
 
 class CalibracaoDialog(QDialog):
-    def __init__(self, calibracao: Calibracao, parent=None):
+    def __init__(
+        self,
+        calibracao,
+        parent=None,
+        titulo_janela_default: str = "Operador Financeiro",
+        campos_obrigatorios: list | None = None,
+        campos_opcionais: list | None = None,
+        rotulo_tela: str = "Inclusão de Títulos",
+    ):
         super().__init__(parent)
-        self.setWindowTitle("Calibrar campos do TOTVS")
-        # Título da janela fixo: 'Operador Financeiro'. Sempre.
-        self._calibracao = Calibracao(
-            titulo_janela=calibracao.titulo_janela or "Operador Financeiro",
+        self.setWindowTitle(f"Calibrar campos — {rotulo_tela}")
+        # Título da janela: default 'Operador Financeiro'. Para Orçamento
+        # (build-96) passamos 'Orçamento' como default.
+        self._campos_lista = (campos_obrigatorios or CAMPOS) + (campos_opcionais or CAMPOS_OPCIONAIS)
+        self._campos_opcionais_keys = {c[0] for c in (campos_opcionais or CAMPOS_OPCIONAIS)}
+        # Cria uma cópia do mesmo tipo do objeto de calibração recebido —
+        # funciona pra Calibracao (Operador Financeiro) e CalibracaoOrcamento
+        # (build-96) sem acoplamento.
+        klass = type(calibracao)
+        self._calibracao = klass(
+            titulo_janela=calibracao.titulo_janela or titulo_janela_default,
             campos=dict(calibracao.campos),
             cores=dict(calibracao.cores),
         )
+        self._titulo_janela_default = titulo_janela_default
+        self._rotulo_tela = rotulo_tela
         self._linhas: dict[str, tuple[QLabel, QPushButton]] = {}
 
         # Dialog fica dentro do tamanho da tela disponível (sem barra de tarefas).
@@ -58,7 +75,7 @@ class CalibracaoDialog(QDialog):
         raiz.addWidget(titulo)
 
         instr = QLabel(
-            "<b>1.</b> Abra a tela <b>Inclusão de Títulos</b> do TOTVS (em branco).<br>"
+            f"<b>1.</b> Abra a tela <b>{self._rotulo_tela}</b> do TOTVS (em branco).<br>"
             "<b>2.</b> Para cada linha, clique em <b>Capturar</b> — você tem 3 segundos "
             "para posicionar o mouse sobre o campo do TOTVS.<br>"
             "<b>3.</b> Feche em <b>Salvar</b>."
@@ -78,9 +95,9 @@ class CalibracaoDialog(QDialog):
 
         grid = QGridLayout()
         grid.setSpacing(6)
-        for i, (chave, rotulo, _is_btn) in enumerate(_TODOS_CAMPOS):
+        for i, (chave, rotulo, _is_btn) in enumerate(self._campos_lista):
             lbl_nome = QLabel(rotulo)
-            if chave in ("popup_indicador", "popup_ok"):
+            if chave in self._campos_opcionais_keys:
                 lbl_nome.setProperty("muted", True)
             lbl_pos = QLabel(self._formatar_pos(chave))
             lbl_pos.setMinimumWidth(90)
@@ -144,7 +161,7 @@ class CalibracaoDialog(QDialog):
         self._timer.start(1000)
 
     def _rotulo(self, chave: str) -> str:
-        for k, r, _ in _TODOS_CAMPOS:
+        for k, r, _ in self._campos_lista:
             if k == chave:
                 return r
         return chave
@@ -170,9 +187,9 @@ class CalibracaoDialog(QDialog):
 
         mx, my = pyautogui.position()
 
-        # Auto-detecta a janela do 'Operador Financeiro' (case-insensitive,
-        # substring — casa 'Operador Financeiro (Remoto)' também).
-        titulo = self._calibracao.titulo_janela or "Operador Financeiro"
+        # Auto-detecta a janela (case-insensitive, substring — casa
+        # 'Operador Financeiro (Remoto)' e variantes com sufixos também).
+        titulo = self._calibracao.titulo_janela or self._titulo_janela_default
         janelas = []
         try:
             janelas = [w for w in gw.getAllWindows() if titulo.lower() in (w.title or "").lower()]
@@ -182,10 +199,10 @@ class CalibracaoDialog(QDialog):
         if not janelas:
             QMessageBox.warning(
                 self, "TOTVS não aberto",
-                "Não achei nenhuma janela com 'Operador Financeiro' no título. "
+                f"Não achei nenhuma janela com '{titulo}' no título. "
                 "Abra o TOTVS antes de calibrar.",
             )
-            self._status.setText("TOTVS não aberto — abra o Operador Financeiro e tente de novo")
+            self._status.setText(f"TOTVS não aberto — abra a tela '{titulo}' e tente de novo")
             return
 
         win = janelas[0]
@@ -231,5 +248,5 @@ class CalibracaoDialog(QDialog):
         self._fade.setEasingCurve(QEasingCurve.InOutQuad)
         self._fade.start()
 
-    def calibracao(self) -> Calibracao:
+    def calibracao(self):
         return self._calibracao

@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-95 (módulo Orçamento — sidebar + dialog + extração Gemini NFS-e)"
+BUILD_MARKER = "build-96 (módulo Orçamento — RPA operacional: aba Nota + duplicidade F2 + Financeiro + Contab + Autorizar)"
 
 
 def main() -> int:
