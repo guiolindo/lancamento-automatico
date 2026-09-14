@@ -38,6 +38,11 @@ class Imposto:
     pessoa_nome: str
     observacao_template: str
     colunas_tipo_folha: list[str] = field(default_factory=list)
+    # Regra pra mes_ref/ano_ref que vão pra `observacao_template`.
+    # None (default): usa o que o Gemini extraiu do PDF.
+    # "mes_anterior_emissao": ignora Gemini; usa (data_emissao - 1 mês).
+    #   Usado pelo INSS: emissão 20/07/2026 → observação "REFERENTE A: 06/2026".
+    mes_ref_regra: Optional[str] = None
 
 
 @dataclass

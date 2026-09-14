@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-88 (hotfix: Nuitka %USERPROFILE% inválido — %HOME% no lugar)"
+BUILD_MARKER = "build-89 (novo imposto INSS + regra mes_ref_regra + combo dinâmico)"
 
 
 def main() -> int:

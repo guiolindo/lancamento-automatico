@@ -75,8 +75,9 @@ o código sozinho.
 - Ignore marcações manuscritas (√, X, riscos, canetadas). Elas NÃO indicam pular linha — extraia sempre tudo.
 - Os valores estão em Real brasileiro (formato "R$ 1.234,56"). Retorne SEMPRE como número (float) sem separador de milhar e com ponto decimal. Ex.: "R$ 45.527,93" -> 45527.93.
 - Uma célula vazia deve virar 0 (zero) ou ser omitida do objeto "valores".
-- Identifique o mês e ano de referência do imposto (ex.: "IRRF 07/2026" → mes_ref="07", ano_ref="2026").
+- Identifique o mês e ano de referência do imposto quando aparecer no relatório (ex.: "IRRF 07/2026" → mes_ref="07", ano_ref="2026"). Se não aparecer, deixe em branco — o app calcula sozinho quando necessário.
 - As colunas esperadas são exatamente: {colunas}. Use esses nomes como chaves em "valores".
+- Se o relatório tem UMA ÚNICA coluna de valor por filial (sem separação por tipo de folha, como INSS), coloque o valor único sob a chave listada em {colunas} (será algo tipo "VALOR").
 
 Retorne APENAS um JSON válido nesta estrutura, sem markdown, sem comentários:
 
@@ -199,6 +200,23 @@ def montar_lancamentos(
 
     mes_ref = extracao.get("mes_ref") or ""
     ano_ref = extracao.get("ano_ref") or ""
+
+    # Regra específica por imposto — sobrescreve o que veio do Gemini.
+    # INSS: a observação sempre faz referência ao MÊS ANTERIOR à data
+    # de emissão (competência da folha), independente do que aparecer
+    # no relatório. Ver mapeamento.json: "mes_ref_regra".
+    if imposto.mes_ref_regra == "mes_anterior_emissao":
+        y = data_emissao.year
+        m = data_emissao.month - 1
+        if m == 0:
+            m = 12
+            y -= 1
+        mes_ref = f"{m:02d}"
+        ano_ref = str(y)
+        log.info(
+            "montar_lancamentos: regra 'mes_anterior_emissao' aplicada — "
+            "emissão %s → ref %s/%s", data_emissao, mes_ref, ano_ref,
+        )
 
     lancamentos: list[Lancamento] = []
     nao_resolvidas: list[LinhaExtracao] = []

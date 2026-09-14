@@ -55,6 +55,16 @@
       "pessoa_nome": "SECRETARIA DA RECEITA FEDERAL",
       "observacao_template": "IRRF {mes_ref}/{ano_ref} - {tipo_folha}",
       "colunas_tipo_folha": ["ADIANTAMENTO", "FERIAS", "MENSAL", "RESCISAO"]
+    },
+    "INSS": {
+      "descricao": "INSS sobre Folha de Pagamento",
+      "especie_totvs": "MINSS",
+      "especie_descricao": "INSS S/FOPAG A PAGAR",
+      "pessoa_codigo": 48891,
+      "pessoa_nome": "INSTITUTO NACIONAL DO SEGURO SOCIAL",
+      "observacao_template": "INSS SOBRE FOLHA - REFERENTE A: {mes_ref}/{ano_ref}",
+      "colunas_tipo_folha": ["VALOR"],
+      "mes_ref_regra": "mes_anterior_emissao"
     }
   }
 }

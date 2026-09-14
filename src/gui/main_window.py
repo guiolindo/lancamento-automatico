@@ -339,7 +339,11 @@ class MainWindow(QMainWindow):
 
         row1.addWidget(self._campo_inline("IMPOSTO"))
         self._combo_imposto = QComboBox()
-        self._combo_imposto.addItem("IRRF")
+        # Popular do mapping em vez de hardcode — mapeamento.json vira
+        # a fonte única de "quais impostos o app suporta". Adicionar
+        # imposto novo = editar JSON e o combo já mostra.
+        for chave in sorted(self.mapping.impostos_disponiveis()):
+            self._combo_imposto.addItem(chave)
         self._combo_imposto.setFixedWidth(110)
         row1.addWidget(self._combo_imposto)
 

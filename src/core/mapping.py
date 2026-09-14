@@ -67,6 +67,7 @@ class MappingRepository:
                 pessoa_nome=cfg["pessoa_nome"],
                 observacao_template=cfg["observacao_template"],
                 colunas_tipo_folha=list(cfg.get("colunas_tipo_folha", [])),
+                mes_ref_regra=cfg.get("mes_ref_regra"),
             )
 
         log.info("Mapeamento carregado: %d filiais, %d impostos",
@@ -93,6 +94,10 @@ class MappingRepository:
             return self._impostos[chave]
         except KeyError as exc:
             raise KeyError(f"Imposto '{chave}' não configurado em mapeamento.json") from exc
+
+    def impostos_disponiveis(self) -> list[str]:
+        """Chaves de todos os impostos carregados. Alimenta o combo da UI."""
+        return list(self._impostos.keys())
 
     def resolve_filial(
         self,
