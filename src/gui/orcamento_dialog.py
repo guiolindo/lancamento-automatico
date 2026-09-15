@@ -66,17 +66,22 @@ def _carregar_templates() -> dict:
 
 
 class ExtratorNfseThread(QThread):
-    """Worker thread pro parser Gemini. Não bloqueia UI. Suporta 2 tipos
-    de extração: 'nfse' (NFS-e do OTIMO) e 'dae' (guias ICMS Bahia)."""
-    concluido = Signal(list)   # lista de dicts
+    """Worker thread pro parser Gemini. Suporta NFS-e (com ou sem
+    anotação a caneta) e DAE Bahia."""
+    concluido = Signal(list)
     falhou = Signal(str)
 
-    def __init__(self, pdf: Path, api_key: str, modelo: str, tipo_extracao: str = "nfse"):
+    def __init__(
+        self, pdf: Path, api_key: str, modelo: str,
+        tipo_extracao: str = "nfse",
+        extrair_caneta: bool = False,
+    ):
         super().__init__()
         self._pdf = pdf
         self._api_key = api_key
         self._modelo = modelo
         self._tipo = tipo_extracao
+        self._caneta = extrair_caneta
 
     def run(self) -> None:
         try:
@@ -85,7 +90,7 @@ class ExtratorNfseThread(QThread):
             if self._tipo == "dae":
                 itens = client.extrair_daes(self._pdf)
             else:
-                itens = client.extrair_notas_nfse(self._pdf)
+                itens = client.extrair_notas_nfse(self._pdf, extrair_anotacao_caneta=self._caneta)
             self.concluido.emit(itens)
         except BaseException as e:  # noqa: BLE001
             log.exception("ExtratorNfseThread falhou")
@@ -113,8 +118,9 @@ class OrcamentoPage(QWidget):
     não mais dialog modal (build-99). O user relatou UX ruim: dialog abria
     janela separada 'a nada com nada'. Agora vive dentro do shell com
     sidebar + topbar, ganha log integrado e visual coerente."""
-    COLS_NFSE = ["#", "Pág.", "Número NF", "Data Emissão", "Valor (R$)", "Status"]
-    COLS_DAE  = ["#", "Pág.", "Nº Série DAE", "Filial", "Tipo", "Vencimento", "Valor (R$)", "Status"]
+    COLS_NFSE        = ["#", "Pág.", "Número NF", "Data Emissão", "Valor (R$)", "Status"]
+    COLS_NFSE_CANETA = ["#", "Pág.", "Número NF", "Data", "Emissor", "Caneta (destino)", "Valor (R$)", "Status"]
+    COLS_DAE         = ["#", "Pág.", "Nº Série DAE", "Filial", "Tipo", "Vencimento", "Valor (R$)", "Status"]
 
     def __init__(self, settings: SettingsStore, main_window=None, parent=None):
         super().__init__(parent)
@@ -343,9 +349,12 @@ class OrcamentoPage(QWidget):
         template_chave = self._combo_forn.currentData()
         template = self._templates.get(template_chave) or {}
         tipo_extracao = template.get("tipo_extracao", "nfse")
+        extrair_caneta = bool(template.get("extrair_anotacao_caneta", False))
 
         self._extrator = ExtratorNfseThread(
-            self._pdf_selecionado, api_key, modelo, tipo_extracao=tipo_extracao,
+            self._pdf_selecionado, api_key, modelo,
+            tipo_extracao=tipo_extracao,
+            extrair_caneta=extrair_caneta,
         )
         self._extrator.concluido.connect(self._on_extraido)
         self._extrator.falhou.connect(self._on_falhou)
@@ -373,6 +382,9 @@ class OrcamentoPage(QWidget):
         self._atualizar_estado_executar()
 
     def _converter_nfse(self, notas_dict: list, template_chave: str, data_lancto: date) -> list:
+        template = self._templates.get(template_chave) or {}
+        cnpj_esperado = "".join(c for c in str(template.get("cnpj_esperado", "")) if c.isdigit())
+
         out = []
         for i, n in enumerate(notas_dict):
             data_emi = None
@@ -384,15 +396,73 @@ class OrcamentoPage(QWidget):
                         break
                     except ValueError:
                         pass
-            out.append(NotaDespesa(
+
+            cnpj_prest = str(n.get("cnpj_prestador", "")).strip()
+            cnpj_tom   = str(n.get("cnpj_tomador", "")).strip()
+            anot       = str(n.get("anotacao_caneta", "")).strip()
+
+            # Resolve filial de emissão a partir do CNPJ tomador
+            fil_emi_info = self._cnpjs_filiais.get(cnpj_tom) if cnpj_tom else None
+            fil_emi_cod  = int(fil_emi_info["codigo"]) if fil_emi_info else None
+            fil_emi_nome = fil_emi_info["nome"] if fil_emi_info else ""
+
+            # Fuzzy match do rabisco → filial da caneta
+            fil_cnt_cod, fil_cnt_nome = self._resolver_filial_por_texto(anot) if anot else (None, "")
+
+            nota = NotaDespesa(
                 pagina=int(n.get("pagina", i + 1)),
                 numero=str(n.get("numero", "")).strip(),
                 data_emissao=data_emi,
                 valor=float(n.get("valor") or 0.0),
                 data_lancto=data_lancto,
                 template_chave=template_chave,
-            ))
+                cnpj_prestador=cnpj_prest,
+                cnpj_tomador=cnpj_tom,
+                filial_emissao_codigo=fil_emi_cod,
+                filial_emissao_nome=fil_emi_nome,
+                anotacao_caneta=anot,
+                filial_caneta_codigo=fil_cnt_cod,
+                filial_caneta_nome=fil_cnt_nome,
+            )
+
+            # Validação de CNPJ: se template declara `cnpj_esperado` e a
+            # nota é de outro prestador, marca como IGNORADO e explica.
+            # NÃO tentamos lançar — é fornecedor errado no lote.
+            if cnpj_esperado and cnpj_prest and cnpj_prest != cnpj_esperado:
+                nota.status = StatusLancamento.IGNORADO
+                nota.motivo_ignorado = f"CNPJ do prestador ({cnpj_prest}) não bate com o fornecedor {template_chave}"
+
+            out.append(nota)
         return out
+
+    def _resolver_filial_por_texto(self, texto: str) -> tuple[int | None, str]:
+        """Fuzzy match do texto (rabisco de caneta, tipo 'Luis Eduardo' ou
+        'Juazeiro') contra os nomes das filiais no cnpjs_filiais.json.
+        Devolve (código, nome) da filial mais parecida acima do threshold,
+        ou (None, '') se nada casar com folga."""
+        if not texto or not self._cnpjs_filiais:
+            return None, ""
+        try:
+            from rapidfuzz import fuzz, process
+        except ImportError:
+            log.warning("rapidfuzz indisponível — fuzzy match de filial pulado")
+            return None, ""
+
+        candidatos = [(info["nome"], int(info["codigo"])) for info in self._cnpjs_filiais.values()]
+        nomes = [c[0] for c in candidatos]
+        # token_set_ratio tolera ordem e palavras a mais/menos (ex:
+        # 'Luis Eduardo' bate com 'Luis Eduardo Magalhaes').
+        match = process.extractOne(texto, nomes, scorer=fuzz.token_set_ratio)
+        if not match:
+            return None, ""
+        nome_match, score, idx = match
+        if score < 70:  # threshold folgado — mas não a ponto de aceitar qualquer coisa
+            log.info("Fuzzy caneta: '%s' → melhor '%s' (%.0f) descartado (<70)", texto, nome_match, score)
+            return None, ""
+        codigo = candidatos[idx][1]
+        log.info("Fuzzy caneta: '%s' → '%s' (código %d, score %.0f)",
+                 texto, nome_match, codigo, score)
+        return codigo, nome_match
 
     def _converter_daes(self, daes: list, template_chave: str, data_lancto: date) -> list:
         out = []
@@ -436,13 +506,11 @@ class OrcamentoPage(QWidget):
         )
 
     def _on_template_mudou(self) -> None:
-        """Trocou de fornecedor no combo — se o tipo de extração é
-        diferente, reconfigura o cabeçalho da grid (NFS-e vs DAE)."""
-        tipo = self._tipo_atual()
-        cols = self.COLS_DAE if tipo == "dae" else self.COLS_NFSE
+        """Trocou de fornecedor no combo — reconfigura cabeçalho da grid."""
+        cols = self._layout_atual()
         if cols is not self._cols_atual:
             self._aplicar_colunas(cols)
-        # Ao mudar de template, limpar notas antigas evita confusão
+        # Limpa notas antigas ao mudar de fornecedor pra não misturar
         if self._notas:
             self._notas = []
             self._tabela.setRowCount(0)
@@ -469,12 +537,23 @@ class OrcamentoPage(QWidget):
         tmpl = self._templates.get(chave) or {}
         return tmpl.get("tipo_extracao", "nfse")
 
+    def _layout_atual(self) -> list:
+        """Escolhe o cabeçalho da tabela: NFS-e simples, NFS-e com caneta
+        (Pluxee) ou DAE."""
+        chave = self._combo_forn.currentData() or ""
+        tmpl = self._templates.get(chave) or {}
+        tipo = tmpl.get("tipo_extracao", "nfse")
+        if tipo == "dae":
+            return self.COLS_DAE
+        if tmpl.get("extrair_anotacao_caneta"):
+            return self.COLS_NFSE_CANETA
+        return self.COLS_NFSE
+
     def _fmt_valor(self, v: float) -> str:
         return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
     def _popular_grid(self) -> None:
-        tipo = self._tipo_atual()
-        cols = self.COLS_DAE if tipo == "dae" else self.COLS_NFSE
+        cols = self._layout_atual()
         if cols is not self._cols_atual:
             self._aplicar_colunas(cols)
 
@@ -482,12 +561,13 @@ class OrcamentoPage(QWidget):
         try:
             self._tabela.setRowCount(len(self._notas))
             for i, n in enumerate(self._notas):
-                self._popular_linha(i, n, tipo)
+                self._popular_linha(i, n)
                 self._atualizar_status_celula(i)
         finally:
             self._tabela.blockSignals(False)
 
-    def _popular_linha(self, i: int, n: NotaDespesa, tipo: str) -> None:
+    def _popular_linha(self, i: int, n: NotaDespesa) -> None:
+        cols = self._cols_atual
         it_num = QTableWidgetItem(str(i + 1))
         it_num.setFlags(it_num.flags() & ~Qt.ItemIsEditable)
         it_num.setTextAlignment(Qt.AlignCenter)
@@ -501,26 +581,36 @@ class OrcamentoPage(QWidget):
         # Número
         self._tabela.setItem(i, 2, QTableWidgetItem(n.numero))
 
-        if tipo == "dae":
-            # Filial
+        if cols is self.COLS_DAE:
             fil_txt = f"{n.filial_codigo} — {n.filial_nome}" if n.filial_codigo else "?"
-            it_f = QTableWidgetItem(fil_txt)
-            it_f.setFlags(it_f.flags() & ~Qt.ItemIsEditable)
+            it_f = QTableWidgetItem(fil_txt); it_f.setFlags(it_f.flags() & ~Qt.ItemIsEditable)
             self._tabela.setItem(i, 3, it_f)
-            # Tipo
             tipo_txt = {"regime_normal": "Regime Normal",
                         "adic_fundo_pobreza": "Adic. Fundo Pobreza"}.get(n.tipo_dae or "", "?")
-            it_t = QTableWidgetItem(tipo_txt)
-            it_t.setFlags(it_t.flags() & ~Qt.ItemIsEditable)
+            it_t = QTableWidgetItem(tipo_txt); it_t.setFlags(it_t.flags() & ~Qt.ItemIsEditable)
             self._tabela.setItem(i, 4, it_t)
-            # Vencimento
             venc_txt = n.vencimento_dae.strftime("%d/%m/%Y") if n.vencimento_dae else ""
             self._tabela.setItem(i, 5, QTableWidgetItem(venc_txt))
-            # Valor
             it_val = QTableWidgetItem(self._fmt_valor(n.valor))
             it_val.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self._tabela.setItem(i, 6, it_val)
-        else:
+        elif cols is self.COLS_NFSE_CANETA:
+            data_txt = n.data_emissao.strftime("%d/%m/%Y") if n.data_emissao else ""
+            self._tabela.setItem(i, 3, QTableWidgetItem(data_txt))
+            emi_txt = f"{n.filial_emissao_codigo} — {n.filial_emissao_nome}" if n.filial_emissao_codigo else "?"
+            it_e = QTableWidgetItem(emi_txt); it_e.setFlags(it_e.flags() & ~Qt.ItemIsEditable)
+            self._tabela.setItem(i, 4, it_e)
+            # Coluna caneta editável: mostra "20 — Luis Eduardo…" quando
+            # resolveu, ou o rabisco bruto pra revisão manual quando não.
+            if n.filial_caneta_codigo:
+                cnt_txt = f"{n.filial_caneta_codigo} — {n.filial_caneta_nome}"
+            else:
+                cnt_txt = n.anotacao_caneta or ""
+            self._tabela.setItem(i, 5, QTableWidgetItem(cnt_txt))
+            it_val = QTableWidgetItem(self._fmt_valor(n.valor))
+            it_val.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self._tabela.setItem(i, 6, it_val)
+        else:  # COLS_NFSE simples
             data_txt = n.data_emissao.strftime("%d/%m/%Y") if n.data_emissao else ""
             self._tabela.setItem(i, 3, QTableWidgetItem(data_txt))
             it_val = QTableWidgetItem(self._fmt_valor(n.valor))
@@ -529,41 +619,42 @@ class OrcamentoPage(QWidget):
 
     def _atualizar_status_celula(self, i: int) -> None:
         n = self._notas[i]
+        cols = self._cols_atual
         if n.status == StatusLancamento.SUCESSO:
             txt = "OK"
         elif n.status == StatusLancamento.FALHA:
             txt = f"Falha: {n.erro or ''}"
         elif n.status == StatusLancamento.IGNORADO:
-            txt = f"Já lançada"
+            txt = n.motivo_ignorado or "Ignorada"
         elif n.status == StatusLancamento.EM_ANDAMENTO:
             txt = "Em curso"
         else:
-            if self._tipo_atual() == "dae":
+            if cols is self.COLS_DAE:
                 faltando = (not n.numero) or (n.filial_codigo is None) or (not n.tipo_dae) or (n.valor <= 0)
+            elif cols is self.COLS_NFSE_CANETA:
+                faltando = ((not n.numero) or (n.data_emissao is None) or (n.valor <= 0)
+                            or n.filial_emissao_codigo is None or n.filial_caneta_codigo is None)
             else:
                 faltando = (not n.numero) or (n.data_emissao is None) or (n.valor <= 0)
             txt = "Revisar" if faltando else "Pronta"
         it = QTableWidgetItem(txt)
         it.setFlags(it.flags() & ~Qt.ItemIsEditable)
         it.setTextAlignment(Qt.AlignCenter)
-        # Status vai na ÚLTIMA coluna do layout atual
-        self._tabela.setItem(i, len(self._cols_atual) - 1, it)
+        self._tabela.setItem(i, len(cols) - 1, it)
 
     def _on_item_editado(self, item: QTableWidgetItem) -> None:
-        """Sincroniza edições manuais da grid com self._notas. Só campos
-        editáveis (número, data emissão, valor no NFSe; número, vencimento
-        e valor no DAE)."""
+        """Sincroniza edições manuais da grid com self._notas."""
         row = item.row()
         col = item.column()
         if row >= len(self._notas):
             return
         n = self._notas[row]
         txt = item.text().strip()
-        tipo = self._tipo_atual()
+        cols = self._cols_atual
 
         if col == 2:
             n.numero = txt
-        elif tipo == "dae":
+        elif cols is self.COLS_DAE:
             if col == 5:  # vencimento
                 for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
                     try:
@@ -571,12 +662,12 @@ class OrcamentoPage(QWidget):
                         break
                     except ValueError:
                         pass
-            elif col == 6:  # valor
+            elif col == 6:
                 try:
                     n.valor = float(txt.replace(".", "").replace(",", "."))
                 except ValueError:
                     pass
-        else:
+        elif cols is self.COLS_NFSE_CANETA:
             if col == 3:  # data emissão
                 for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
                     try:
@@ -584,7 +675,30 @@ class OrcamentoPage(QWidget):
                         break
                     except ValueError:
                         pass
-            elif col == 4:  # valor
+            elif col == 5:  # Caneta — refaz fuzzy match ou aceita "codigo — nome" digitado
+                # Se o texto começa com número + separador, extrai código:
+                import re
+                m = re.match(r"^\s*(\d+)\s*[—-]\s*(.*)$", txt)
+                if m:
+                    n.filial_caneta_codigo = int(m.group(1))
+                    n.filial_caneta_nome = m.group(2).strip()
+                else:
+                    n.anotacao_caneta = txt
+                    n.filial_caneta_codigo, n.filial_caneta_nome = self._resolver_filial_por_texto(txt)
+            elif col == 6:
+                try:
+                    n.valor = float(txt.replace(".", "").replace(",", "."))
+                except ValueError:
+                    pass
+        else:  # COLS_NFSE simples
+            if col == 3:
+                for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+                    try:
+                        n.data_emissao = datetime.strptime(txt, fmt).date()
+                        break
+                    except ValueError:
+                        pass
+            elif col == 4:
                 try:
                     n.valor = float(txt.replace(".", "").replace(",", "."))
                 except ValueError:
@@ -623,14 +737,22 @@ class OrcamentoPage(QWidget):
 
     def _executar_lote(self) -> None:
         # Só lança itens com dados válidos e ainda pendentes.
-        tipo = self._tipo_atual()
-        if tipo == "dae":
+        cols = self._cols_atual
+        if cols is self.COLS_DAE:
             pendentes = [
                 (i, n) for i, n in enumerate(self._notas)
                 if n.status == StatusLancamento.PENDENTE
                 and n.numero and n.filial_codigo and n.tipo_dae and n.valor > 0
             ]
-            criterio = "número da DAE, CNPJ resolvido (filial), tipo (regime normal / adic pobreza) e valor"
+            criterio = "número, CNPJ resolvido, tipo e valor"
+        elif cols is self.COLS_NFSE_CANETA:
+            pendentes = [
+                (i, n) for i, n in enumerate(self._notas)
+                if n.status == StatusLancamento.PENDENTE
+                and n.numero and n.data_emissao and n.valor > 0
+                and n.filial_emissao_codigo and n.filial_caneta_codigo
+            ]
+            criterio = "número, data, valor, filial de emissão e filial da caneta"
         else:
             pendentes = [
                 (i, n) for i, n in enumerate(self._notas)

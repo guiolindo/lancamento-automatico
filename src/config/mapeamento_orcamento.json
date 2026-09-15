@@ -4,6 +4,9 @@
   "templates": {
     "OTIMO": {
       "descricao": "Consórcio Ótimo de Bilhetagem Eletrônica — vale transporte",
+      "cnpj_esperado": "",
+      "_cnpj_esperado_help": "Preencha aqui (só dígitos, 14 chars) pra o app rejeitar notas de outros fornecedores no mesmo lote.",
+      "tipo_extracao": "nfse",
       "aba_nota": {
         "empresa_codigo": "6",
         "nat_despesa_codigo": "215",
@@ -30,6 +33,48 @@
         "vencimento_igual_a": "data_lancto",
         "data_lancto_default": "hoje",
         "duplicidade_regra": "pular_ja_lancada"
+      }
+    },
+    "PLUXEE": {
+      "descricao": "Pluxee Frota e Combustível — vale combustível",
+      "cnpj_esperado": "20211412000188",
+      "tipo_extracao": "nfse",
+      "extrair_anotacao_caneta": true,
+      "aba_nota": {
+        "empresa_por_cnpj_tomador": true,
+        "nat_despesa_codigo": "215",
+        "pessoa_codigo": "101132",
+        "versao_pessoa": "1",
+        "st_doc": "Regular",
+        "modelo": "99",
+        "observacao_fiscal_template": "**PARA BAIXA*\nVALE COMBUSTÍVEL - {filial_caneta_nome}",
+        "tipo_frete": "0",
+        "marcar_icms": true,
+        "serie": "",
+        "subserie": ""
+      },
+      "aba_financeiro": {
+        "observacao_financeira_template": "**PARA BAIXA*\nVALE COMBUSTÍVEL - {filial_caneta_nome}",
+        "modo": "vencimento",
+        "quantidade_parcelas": 1,
+        "dias_entre_vencimentos": 1
+      },
+      "aba_contabilizacao": {
+        "linha1": {
+          "trocar_filial_para": "filial_emissao",
+          "preencher_valor": true
+        },
+        "linha2": {
+          "trocar_filial_para": "filial_caneta",
+          "preencher_valor": true
+        }
+      },
+      "regras": {
+        "vencimento_igual_a": "data_lancto",
+        "data_lancto_default": "hoje",
+        "duplicidade_regra": "pular_ja_lancada",
+        "resolver_empresa_por": "cnpj_tomador",
+        "resolver_filial_caneta_por": "fuzzy_match_nome"
       }
     },
     "DAE_ENERGIA": {

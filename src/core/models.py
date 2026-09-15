@@ -92,6 +92,12 @@ class NotaDespesa:
     a observação/descrição (regime_normal | adic_fundo_pobreza); vencimento
     vem do próprio DAE; filial_codigo/filial_nome são resolvidos via
     cnpjs_filiais.json na hora de montar a lista.
+
+    Campos "Pluxee" (build-107): cnpj_prestador valida contra
+    template.cnpj_esperado; cnpj_tomador resolve `filial_emissao_codigo`
+    (empresa da aba Nota + linha 1 da contab); anotacao_caneta resolve
+    `filial_caneta_codigo` (fuzzy match contra cnpjs_filiais.json →
+    linha 2 da contab + string da observação).
     """
     pagina: int
     numero: str
@@ -105,6 +111,14 @@ class NotaDespesa:
     vencimento_dae: Optional[date] = None
     filial_codigo: Optional[int] = None
     filial_nome: Optional[str] = None
+    # Pluxee (nota que endereça 2 filiais — emissão vs caneta)
+    cnpj_prestador: Optional[str] = None
+    cnpj_tomador: Optional[str] = None
+    filial_emissao_codigo: Optional[int] = None
+    filial_emissao_nome: Optional[str] = None
+    anotacao_caneta: Optional[str] = None
+    filial_caneta_codigo: Optional[int] = None
+    filial_caneta_nome: Optional[str] = None
     # Estado
     status: StatusLancamento = StatusLancamento.PENDENTE
     erro: Optional[str] = None

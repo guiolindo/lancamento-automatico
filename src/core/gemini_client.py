@@ -284,37 +284,36 @@ class GeminiClient:
             log.error("Resposta Gemini não é JSON válido: %s", texto[:500])
             raise
 
-    # ---------- NFS-e (módulo Orçamento, build-95) ----------
-    # Reusa a mesma infra (chave, modelo, transporte REST). PDF de 40+
-    # páginas cabe numa request só — Gemini aceita PDF multi-página
-    # nativamente. Não separamos em arquivo próprio porque no fim é a
-    # mesma stack, só com prompt diferente.
+    # ---------- NFS-e (módulo Orçamento, build-95..107) ----------
 
-    def extrair_notas_nfse(self, arquivo_pdf: Path) -> list[dict]:
-        """Extrai lista de {pagina, numero, data_emissao, valor} de um PDF
-        com N notas fiscais de serviço (NFS-e / DANFSe). Cada página =
-        1 nota. Zero tolerância a chute: se algo não é legível, campo
-        vem em branco e o app pede revisão manual.
+    def extrair_notas_nfse(self, arquivo_pdf: Path, extrair_anotacao_caneta: bool = False) -> list[dict]:
+        """Extrai lista de dicts NFS-e do PDF. Cada página = 1 nota.
+
+        Sempre extrai: pagina, numero, data_emissao, valor,
+                       cnpj_prestador (validação client-side), cnpj_tomador
+                       (resolve filial de emissão).
+        Se `extrair_anotacao_caneta=True`: também extrai `anotacao_caneta`
+                       (texto escrito à mão no rosto da nota — Pluxee usa
+                       pra identificar a filial destinatária real).
+
+        Zero tolerância a chute: campo ilegível vem em branco.
         """
         arquivo_pdf = Path(arquivo_pdf)
         if not arquivo_pdf.exists():
             raise FileNotFoundError(arquivo_pdf)
 
-        log.info("extrair_notas_nfse: lendo %s", arquivo_pdf.name)
+        log.info("extrair_notas_nfse: lendo %s (caneta=%s)",
+                 arquivo_pdf.name, extrair_anotacao_caneta)
         with open(arquivo_pdf, "rb") as f:
             dados = f.read()
         b64 = base64.standard_b64encode(dados).decode("ascii")
-        log.info("extrair_notas_nfse: %d bytes → base64", len(dados))
 
+        prompt = _PROMPT_NFSE_COM_CANETA if extrair_anotacao_caneta else _PROMPT_NFSE
         payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": _PROMPT_NFSE},
-                        {"inline_data": {"mime_type": "application/pdf", "data": b64}},
-                    ]
-                }
-            ],
+            "contents": [{"parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": "application/pdf", "data": b64}},
+            ]}],
             "generationConfig": {"response_mime_type": "application/json"},
         }
         url = f"{API_BASE}/models/{self._model_name}:generateContent"
@@ -335,15 +334,19 @@ class GeminiClient:
         for i, n in enumerate(notas):
             try:
                 resultado.append({
-                    "pagina": int(n.get("pagina") or (i + 1)),
-                    "numero": str(n.get("numero", "")).strip(),
-                    "data_emissao": str(n.get("data_emissao", "")).strip(),
-                    "valor": float(n.get("valor") or 0.0),
+                    "pagina":         int(n.get("pagina") or (i + 1)),
+                    "numero":         str(n.get("numero", "")).strip(),
+                    "data_emissao":   str(n.get("data_emissao", "")).strip(),
+                    "valor":          float(n.get("valor") or 0.0),
+                    "cnpj_prestador": "".join(c for c in str(n.get("cnpj_prestador", "")) if c.isdigit()),
+                    "cnpj_tomador":   "".join(c for c in str(n.get("cnpj_tomador", "")) if c.isdigit()),
+                    "anotacao_caneta": str(n.get("anotacao_caneta", "")).strip(),
                 })
             except (TypeError, ValueError) as e:
                 log.warning("extrair_notas_nfse: linha %d inválida (%s): %r", i, e, n)
                 resultado.append({
                     "pagina": i + 1, "numero": "", "data_emissao": "", "valor": 0.0,
+                    "cnpj_prestador": "", "cnpj_tomador": "", "anotacao_caneta": "",
                 })
         log.info("extrair_notas_nfse: %d notas extraídas", len(resultado))
         return resultado
@@ -411,11 +414,10 @@ class GeminiClient:
 _PROMPT_NFSE = """Você é um extrator de Notas Fiscais de Serviço eletrônica
 (NFS-e / DANFSe) brasileiras.
 
-Cada página do PDF anexo é UMA NFS-e. Extraia SOMENTE três campos por nota:
+Cada página do PDF anexo é UMA NFS-e. Extraia por nota:
 
 1. `numero`: o "Número da NFS-e" (campo padrão do cabeçalho DANFSe, também
-   chamado "Nº NFS-e" ou "Número"). Dígitos apenas.
-   Ex.: "216559", "202528112".
+   chamado "Nº NFS-e" ou "Número"). Dígitos apenas. Ex.: "216559".
 
 2. `data_emissao`: a "Data e Hora da Emissão da NFS-e" (só a data, no formato
    "AAAA-MM-DD"). Ex.: "2026-08-19". NÃO confundir com "Data e Hora da
@@ -423,23 +425,61 @@ Cada página do PDF anexo é UMA NFS-e. Extraia SOMENTE três campos por nota:
 
 3. `valor`: o "Valor Total da NFS-e" ou "Valor Líquido da NFS-e" (campo do
    rodapé). Float com ponto decimal, sem separador de milhar. Ex.: 17.35.
-   Se aparecer "R$ 17,35" → 17.35.
 
-Ignore: chave de acesso, código de tributação, alíquotas, impostos,
-municípios, tomador, prestador — tudo isso o app já tem via template.
+4. `cnpj_prestador`: o "CNPJ / CPF" do quadro "Prestador de Serviços" —
+   14 dígitos apenas (sem pontuação). Ex.: "20211412000188" (do texto
+   "20.211.412/0001-88").
+
+5. `cnpj_tomador`: o "CPF/CNPJ" do quadro "Tomador de Serviços" —
+   14 dígitos. É pelo tomador que o app resolve a filial de emissão.
 
 Retorne APENAS um JSON válido, sem markdown, sem comentários:
 
 {
   "notas": [
-    {"pagina": 1, "numero": "216559", "data_emissao": "2026-08-19", "valor": 17.35}
+    {"pagina": 1, "numero": "216559", "data_emissao": "2026-08-19",
+     "valor": 17.35, "cnpj_prestador": "12345678000199",
+     "cnpj_tomador": "28548486000116"}
   ]
 }
 
 Se algum campo estiver ilegível, deixe em branco ("" ou 0.0) — o app pede
 revisão manual. NUNCA invente valores. Melhor vazio que chute.
-
 Se uma página não for NFS-e (capa, folha separadora), pule.
+"""
+
+
+_PROMPT_NFSE_COM_CANETA = """Você é um extrator de Notas Fiscais de Serviço
+eletrônica (NFS-e / DANFSe) brasileiras + ANOTAÇÕES MANUSCRITAS no rosto
+da nota.
+
+Cada página do PDF anexo é UMA NFS-e. Extraia por nota:
+
+1. `numero`: "Número da NFS-e" (dígitos). Ex.: "0841044".
+2. `data_emissao`: "Data Emissão" no formato "AAAA-MM-DD".
+3. `valor`: "Valor Total da Nota" (float, ponto decimal).
+4. `cnpj_prestador`: CNPJ do "Prestador de Serviços" — 14 dígitos.
+5. `cnpj_tomador`: CNPJ do "Tomador de Serviços" — 14 dígitos.
+6. `anotacao_caneta`: texto ESCRITO A CANETA (manuscrito) no corpo da
+   nota — normalmente no meio do papel, em azul ou preto, letra de mão.
+   Costuma ser o NOME DE UMA CIDADE ou LOJA (ex.: "Luis Eduardo",
+   "Juazeiro", "Feira de Santana", "CD Ribeirão"). Ignore assinaturas
+   e carimbos oficiais — só o rabisco/anotação livre. Se não houver
+   rabisco ou não der pra ler, deixe "". NUNCA CHUTE — se estiver
+   embaralhado ou parcialmente coberto, prefira vazio.
+
+Retorne APENAS um JSON válido:
+
+{
+  "notas": [
+    {"pagina": 1, "numero": "0841044", "data_emissao": "2026-01-22",
+     "valor": 1096.63, "cnpj_prestador": "20211412000188",
+     "cnpj_tomador": "28548486000388", "anotacao_caneta": "Luis Eduardo"}
+  ]
+}
+
+NUNCA invente número, CNPJ ou anotação de caneta. Melhor vazio que
+chute. Se uma página não for NFS-e (capa, verso em branco), pule.
 """
 
 

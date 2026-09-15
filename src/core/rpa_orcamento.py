@@ -423,8 +423,11 @@ class RpaOrcamento:
         """
         an = self.template.get("aba_nota") or {}
 
-        # Empresa (fixa ou por CNPJ)
-        if an.get("empresa_por_cnpj") and nota.filial_codigo is not None:
+        # Empresa: fixa OU por CNPJ do documento (DAE) OU por CNPJ do
+        # tomador (Pluxee — cada nota é pra uma filial diferente).
+        if an.get("empresa_por_cnpj_tomador") and nota.filial_emissao_codigo is not None:
+            empresa = str(nota.filial_emissao_codigo)
+        elif an.get("empresa_por_cnpj") and nota.filial_codigo is not None:
             empresa = str(nota.filial_codigo)
         else:
             empresa = str(an.get("empresa_codigo", ""))
@@ -533,13 +536,42 @@ class RpaOrcamento:
         self._sleep("apos_gerar_parcelas_ms", 1000)
 
     def _resolver_texto(self, secao: dict, nota: NotaDespesa, chave_base: str) -> str:
-        """Resolve texto do template: `observacao_fiscal` direto, ou
-        `observacao_por_tipo`/`obs..._por_tipo` como dict tipo→texto pra
-        DAE (regime_normal vs adic_fundo_pobreza)."""
+        """Resolve texto do template. Ordem de precedência:
+
+        1. `<chave>_template`: string com placeholders `{filial_caneta_nome}`,
+           `{filial_emissao_nome}`, `{filial_nome}` — substituídos pelos
+           dados da nota (Pluxee, build-107).
+        2. `<chave>_por_tipo`: dict tipo→texto (DAE regime_normal /
+           adic_fundo_pobreza).
+        3. `<chave>`: string literal fixa (OTIMO).
+        """
+        template_str = secao.get(f"{chave_base}_template")
+        if isinstance(template_str, str):
+            return self._formatar_template(template_str, nota)
+
         por_tipo = secao.get(f"{chave_base}_por_tipo") or secao.get("observacao_por_tipo")
         if isinstance(por_tipo, dict) and nota.tipo_dae:
             return str(por_tipo.get(nota.tipo_dae, ""))
+
         return str(secao.get(chave_base, ""))
+
+    def _formatar_template(self, txt: str, nota: NotaDespesa) -> str:
+        """Substitui placeholders com dados da nota. Usa .format_map com
+        defaultdict pra placeholders desconhecidos não quebrarem tudo."""
+        class _Falta(dict):
+            def __missing__(self, key):
+                return "?"
+        campos = _Falta(
+            filial_nome=nota.filial_nome or "",
+            filial_emissao_nome=nota.filial_emissao_nome or "",
+            filial_caneta_nome=nota.filial_caneta_nome or nota.anotacao_caneta or "?",
+            numero=nota.numero or "",
+        )
+        try:
+            return txt.format_map(campos)
+        except (KeyError, IndexError, ValueError) as e:
+            log.warning("Template inválido %r: %s", txt, e)
+            return txt
 
     def _preencher_aba_contabilizacao(self, nota: NotaDespesa) -> None:
         ac = self.template.get("aba_contabilizacao") or {}
@@ -547,7 +579,7 @@ class RpaOrcamento:
         self._sleep("apos_click_ms", 700)
         valor_txt = f"{nota.valor:.2f}".replace(".", ",")
 
-        # Modo antigo (OTIMO): replicar_valor_nas_linhas: N
+        # Modo simples (OTIMO): replicar_valor_nas_linhas: N
         if "replicar_valor_nas_linhas" in ac:
             n_linhas = int(ac.get("replicar_valor_nas_linhas", 2))
             if n_linhas >= 1:
@@ -556,22 +588,54 @@ class RpaOrcamento:
                 self._preencher("contab_linha2_valor", valor_txt)
             return
 
-        # Modo DAE (build-101): linha1 troca filial + valor,
-        # linha2 troca conta débito + CR + valor.
-        l1 = ac.get("linha1") or {}
-        l2 = ac.get("linha2") or {}
+        # Modo estruturado (DAE, PLUXEE): linha1 + linha2 com regras.
+        self._processar_linha_contab(ac.get("linha1") or {}, "linha1", nota, valor_txt)
+        self._processar_linha_contab(ac.get("linha2") or {}, "linha2", nota, valor_txt)
 
-        if l1.get("trocar_filial_para_da_loja") and nota.filial_codigo is not None:
-            self._preencher("contab_linha1_filial", str(nota.filial_codigo))
-        if l1.get("preencher_valor", True):
-            self._preencher("contab_linha1_valor", valor_txt)
+    def _processar_linha_contab(
+        self, cfg: dict, prefixo: str, nota: NotaDespesa, valor_txt: str,
+    ) -> None:
+        """Aplica a config de UMA linha da aba Contabilização. `prefixo` é
+        'linha1' ou 'linha2' — usado pra achar o campo calibrado
+        (contab_linha1_filial, contab_linha2_conta_debito, etc.).
 
-        if l2.get("conta_debito"):
-            self._preencher("contab_linha2_conta_debito", str(l2["conta_debito"]))
-        if l2.get("cr"):
-            self._preencher("contab_linha2_cr", str(l2["cr"]))
-        if l2.get("preencher_valor", True):
-            self._preencher("contab_linha2_valor", valor_txt)
+        Reconhece:
+        - `trocar_filial_para`: string enum. Opções:
+             'filial_loja'     → nota.filial_codigo (usado pelo DAE)
+             'filial_emissao'  → nota.filial_emissao_codigo (Pluxee)
+             'filial_caneta'   → nota.filial_caneta_codigo (Pluxee)
+          Pra compat com o build-101 aceita também
+             `trocar_filial_para_da_loja: true` (= 'filial_loja').
+        - `conta_debito` / `cr`: strings fixas (DAE — linha 2).
+        - `preencher_valor`: bool (default True).
+        """
+        # Trocar filial
+        alvo = cfg.get("trocar_filial_para")
+        if not alvo and cfg.get("trocar_filial_para_da_loja"):
+            alvo = "filial_loja"
+        if alvo:
+            codigo = None
+            if alvo == "filial_loja":
+                codigo = nota.filial_codigo
+            elif alvo == "filial_emissao":
+                codigo = nota.filial_emissao_codigo
+            elif alvo == "filial_caneta":
+                codigo = nota.filial_caneta_codigo
+            if codigo is not None:
+                self._preencher(f"contab_{prefixo}_filial", str(codigo))
+            else:
+                log.warning("Contab %s: alvo '%s' pediu troca de filial mas "
+                            "nota não tem esse código resolvido — deixando "
+                            "a filial padrão do TOTVS", prefixo, alvo)
+
+        # Colunas técnicas (só linha 2 do DAE hoje)
+        if cfg.get("conta_debito"):
+            self._preencher(f"contab_{prefixo}_conta_debito", str(cfg["conta_debito"]))
+        if cfg.get("cr"):
+            self._preencher(f"contab_{prefixo}_cr", str(cfg["cr"]))
+
+        if cfg.get("preencher_valor", True):
+            self._preencher(f"contab_{prefixo}_valor", valor_txt)
 
     def _notificar(self, nota: NotaDespesa, msg: str) -> None:
         if self.on_progress:
