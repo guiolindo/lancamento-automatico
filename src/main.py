@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-100 (fix: calibração manual PREVALECE sobre visão automática — antes a visão sobrescrevia mesmo após recalibrar)"
+BUILD_MARKER = "build-101 (DAE Bahia — ICMS energia elétrica: template + Gemini extrator + mapping CNPJ→filial + aba Contab linha1 filial/valor e linha2 conta débito/CR/valor)"
 
 
 def main() -> int:

@@ -66,25 +66,46 @@ def _carregar_templates() -> dict:
 
 
 class ExtratorNfseThread(QThread):
-    """Worker thread pro parser Gemini. Não bloqueia UI."""
-    concluido = Signal(list)   # lista de notas
+    """Worker thread pro parser Gemini. Não bloqueia UI. Suporta 2 tipos
+    de extração: 'nfse' (NFS-e do OTIMO) e 'dae' (guias ICMS Bahia)."""
+    concluido = Signal(list)   # lista de dicts
     falhou = Signal(str)
 
-    def __init__(self, pdf: Path, api_key: str, modelo: str):
+    def __init__(self, pdf: Path, api_key: str, modelo: str, tipo_extracao: str = "nfse"):
         super().__init__()
         self._pdf = pdf
         self._api_key = api_key
         self._modelo = modelo
+        self._tipo = tipo_extracao
 
     def run(self) -> None:
         try:
             from ..core.gemini_client import GeminiClient
             client = GeminiClient(self._api_key, self._modelo)
-            notas = client.extrair_notas_nfse(self._pdf)
-            self.concluido.emit(notas)
+            if self._tipo == "dae":
+                itens = client.extrair_daes(self._pdf)
+            else:
+                itens = client.extrair_notas_nfse(self._pdf)
+            self.concluido.emit(itens)
         except BaseException as e:  # noqa: BLE001
             log.exception("ExtratorNfseThread falhou")
             self.falhou.emit(f"{type(e).__name__}: {e}")
+
+
+def _carregar_cnpjs_filiais() -> dict:
+    """Localiza cnpjs_filiais.json — mesma pattern do mapeamento."""
+    import sys
+    candidatos = [
+        Path(sys.argv[0]).resolve().parent / "cnpjs_filiais.json",
+        Path(sys.argv[0]).resolve().parent / "config" / "cnpjs_filiais.json",
+        Path(__file__).resolve().parent.parent / "config" / "cnpjs_filiais.json",
+    ]
+    for c in candidatos:
+        if c.exists():
+            with open(c, "r", encoding="utf-8") as f:
+                return json.load(f).get("cnpjs", {})
+    log.error("cnpjs_filiais.json não encontrado em nenhum caminho")
+    return {}
 
 
 class OrcamentoPage(QWidget):
@@ -92,7 +113,8 @@ class OrcamentoPage(QWidget):
     não mais dialog modal (build-99). O user relatou UX ruim: dialog abria
     janela separada 'a nada com nada'. Agora vive dentro do shell com
     sidebar + topbar, ganha log integrado e visual coerente."""
-    COLS = ["#", "Pág.", "Número NF", "Data Emissão", "Valor (R$)", "Status"]
+    COLS_NFSE = ["#", "Pág.", "Número NF", "Data Emissão", "Valor (R$)", "Status"]
+    COLS_DAE  = ["#", "Pág.", "Nº Série DAE", "Filial", "Tipo", "Vencimento", "Valor (R$)", "Status"]
 
     def __init__(self, settings: SettingsStore, parent=None):
         super().__init__(parent)
@@ -102,6 +124,7 @@ class OrcamentoPage(QWidget):
         self._pdf_selecionado: Path | None = None
         self._extrator: ExtratorNfseThread | None = None
         self._templates = _carregar_templates().get("templates", {})
+        self._cnpjs_filiais = _carregar_cnpjs_filiais()
         self._notas: list[NotaDespesa] = []
         self._calibracao = calib_orc_store.carregar()
         self._worker: LoteOrcamentoWorker | None = None
@@ -147,6 +170,7 @@ class OrcamentoPage(QWidget):
             rot = f"{chave}  ({cfg.get('descricao', '')[:40]})"
             self._combo_forn.addItem(rot, chave)
         self._combo_forn.setMinimumWidth(240)
+        self._combo_forn.currentIndexChanged.connect(self._on_template_mudou)
         r1.addWidget(self._combo_forn)
 
         r1.addSpacing(12)
@@ -191,23 +215,17 @@ class OrcamentoPage(QWidget):
 
         root.addWidget(toolbar)
 
-        # Tabela
+        # Tabela — cabeçalho reconfigurado dinamicamente por template
+        # (NFS-e usa 6 colunas; DAE usa 8 — adiciona Filial / Tipo / Vencimento).
         self._tabela = QTableWidget()
-        self._tabela.setColumnCount(len(self.COLS))
-        self._tabela.setHorizontalHeaderLabels(self.COLS)
         self._tabela.verticalHeader().setVisible(False)
         self._tabela.setAlternatingRowColors(True)
         self._tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._tabela.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
         self._tabela.setShowGrid(False)
         self._tabela.itemChanged.connect(self._on_item_editado)
-        h = self._tabela.horizontalHeader()
-        h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        h.setSectionResizeMode(2, QHeaderView.Stretch)
-        h.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        h.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        h.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self._cols_atual = self.COLS_NFSE
+        self._aplicar_colunas(self.COLS_NFSE)
         root.addWidget(self._tabela, 1)
 
         # Rodapé
@@ -328,31 +346,53 @@ class OrcamentoPage(QWidget):
         )
         modelo = self.settings.get("gemini_model", "gemini-2.5-flash-lite")
 
-        self._extrator = ExtratorNfseThread(self._pdf_selecionado, api_key, modelo)
+        template_chave = self._combo_forn.currentData()
+        template = self._templates.get(template_chave) or {}
+        tipo_extracao = template.get("tipo_extracao", "nfse")
+
+        self._extrator = ExtratorNfseThread(
+            self._pdf_selecionado, api_key, modelo, tipo_extracao=tipo_extracao,
+        )
         self._extrator.concluido.connect(self._on_extraido)
         self._extrator.falhou.connect(self._on_falhou)
         self._extrator.start()
 
-    def _on_extraido(self, notas_dict: list) -> None:
+    def _on_extraido(self, itens: list) -> None:
         self._btn_extrair.setEnabled(True)
         self._btn_extrair.setText("Extrair notas do PDF")
 
-        # Converte pra NotaDespesa
         template_chave = self._combo_forn.currentData() or ""
+        template = self._templates.get(template_chave) or {}
+        tipo_extracao = template.get("tipo_extracao", "nfse")
         data_lancto = self._date_lancto.date().toPython()
+
         self._notas = []
+        if tipo_extracao == "dae":
+            self._notas = self._converter_daes(itens, template_chave, data_lancto)
+        else:
+            self._notas = self._converter_nfse(itens, template_chave, data_lancto)
+
+        self._popular_grid()
+        self._atualizar_resumo()
+        n = len(self._notas)
+        self._lbl_status.setText(
+            f"✓ {n} item(ns) extraído(s). Revise valores duvidosos e clique em Executar."
+        )
+        self._atualizar_estado_executar()
+
+    def _converter_nfse(self, notas_dict: list, template_chave: str, data_lancto: date) -> list:
+        out = []
         for i, n in enumerate(notas_dict):
             data_emi = None
             data_txt = str(n.get("data_emissao", "")).strip()
             if data_txt:
-                try:
-                    data_emi = datetime.strptime(data_txt, "%Y-%m-%d").date()
-                except ValueError:
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
                     try:
-                        data_emi = datetime.strptime(data_txt, "%d/%m/%Y").date()
+                        data_emi = datetime.strptime(data_txt, fmt).date()
+                        break
                     except ValueError:
                         pass
-            self._notas.append(NotaDespesa(
+            out.append(NotaDespesa(
                 pagina=int(n.get("pagina", i + 1)),
                 numero=str(n.get("numero", "")).strip(),
                 data_emissao=data_emi,
@@ -360,14 +400,38 @@ class OrcamentoPage(QWidget):
                 data_lancto=data_lancto,
                 template_chave=template_chave,
             ))
+        return out
 
-        self._popular_grid()
-        self._atualizar_resumo()
-        n = len(self._notas)
-        self._lbl_status.setText(
-            f"✓ {n} nota(s) extraída(s). Revise valores duvidosos e clique em Executar."
-        )
-        self._atualizar_estado_executar()
+    def _converter_daes(self, daes: list, template_chave: str, data_lancto: date) -> list:
+        out = []
+        for i, d in enumerate(daes):
+            venc = None
+            venc_txt = str(d.get("vencimento", "")).strip()
+            if venc_txt:
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+                    try:
+                        venc = datetime.strptime(venc_txt, fmt).date()
+                        break
+                    except ValueError:
+                        pass
+            cnpj = str(d.get("cnpj", "")).strip()
+            filial_info = self._cnpjs_filiais.get(cnpj)
+            filial_codigo = int(filial_info["codigo"]) if filial_info else None
+            filial_nome = filial_info["nome"] if filial_info else ""
+            out.append(NotaDespesa(
+                pagina=int(d.get("pagina", i + 1)),
+                numero=str(d.get("numero_serie", "")).strip(),
+                data_emissao=None,  # DAE não tem emissão explícita — RPA usa data_lancto
+                valor=float(d.get("valor") or 0.0),
+                data_lancto=data_lancto,
+                template_chave=template_chave,
+                cnpj=cnpj,
+                tipo_dae=str(d.get("tipo", "")).strip() or None,
+                vencimento_dae=venc,
+                filial_codigo=filial_codigo,
+                filial_nome=filial_nome,
+            ))
+        return out
 
     def _on_falhou(self, msg: str) -> None:
         self._btn_extrair.setEnabled(True)
@@ -380,35 +444,97 @@ class OrcamentoPage(QWidget):
             "(scan borrado, girado, etc.) e se não excede ~18 MB."
         )
 
+    def _on_template_mudou(self) -> None:
+        """Trocou de fornecedor no combo — se o tipo de extração é
+        diferente, reconfigura o cabeçalho da grid (NFS-e vs DAE)."""
+        tipo = self._tipo_atual()
+        cols = self.COLS_DAE if tipo == "dae" else self.COLS_NFSE
+        if cols is not self._cols_atual:
+            self._aplicar_colunas(cols)
+        # Ao mudar de template, limpar notas antigas evita confusão
+        if self._notas:
+            self._notas = []
+            self._tabela.setRowCount(0)
+            self._atualizar_resumo()
+            self._atualizar_estado_executar()
+
+    def _aplicar_colunas(self, cols: list) -> None:
+        """Reconfigura o cabeçalho da tabela pro layout do tipo atual
+        (NFS-e ou DAE). Chamado no início e sempre que o template selecionado
+        muda de tipo_extracao."""
+        self._cols_atual = cols
+        self._tabela.setColumnCount(len(cols))
+        self._tabela.setHorizontalHeaderLabels(cols)
+        h = self._tabela.horizontalHeader()
+        # coluna # e Pág. compactas; última (Status) compacta; resto stretch
+        for i in range(len(cols)):
+            if i in (0, 1, len(cols) - 1):
+                h.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+            else:
+                h.setSectionResizeMode(i, QHeaderView.Stretch)
+
+    def _tipo_atual(self) -> str:
+        chave = self._combo_forn.currentData() or ""
+        tmpl = self._templates.get(chave) or {}
+        return tmpl.get("tipo_extracao", "nfse")
+
+    def _fmt_valor(self, v: float) -> str:
+        return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
     def _popular_grid(self) -> None:
+        tipo = self._tipo_atual()
+        cols = self.COLS_DAE if tipo == "dae" else self.COLS_NFSE
+        if cols is not self._cols_atual:
+            self._aplicar_colunas(cols)
+
         self._tabela.blockSignals(True)
         try:
             self._tabela.setRowCount(len(self._notas))
             for i, n in enumerate(self._notas):
-                it_num = QTableWidgetItem(str(i + 1))
-                it_num.setFlags(it_num.flags() & ~Qt.ItemIsEditable)
-                it_num.setTextAlignment(Qt.AlignCenter)
-                self._tabela.setItem(i, 0, it_num)
-
-                it_pag = QTableWidgetItem(str(n.pagina))
-                it_pag.setFlags(it_pag.flags() & ~Qt.ItemIsEditable)
-                it_pag.setTextAlignment(Qt.AlignCenter)
-                self._tabela.setItem(i, 1, it_pag)
-
-                self._tabela.setItem(i, 2, QTableWidgetItem(n.numero))
-
-                data_txt = n.data_emissao.strftime("%d/%m/%Y") if n.data_emissao else ""
-                self._tabela.setItem(i, 3, QTableWidgetItem(data_txt))
-
-                it_val = QTableWidgetItem(
-                    f"{n.valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                )
-                it_val.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                self._tabela.setItem(i, 4, it_val)
-
+                self._popular_linha(i, n, tipo)
                 self._atualizar_status_celula(i)
         finally:
             self._tabela.blockSignals(False)
+
+    def _popular_linha(self, i: int, n: NotaDespesa, tipo: str) -> None:
+        it_num = QTableWidgetItem(str(i + 1))
+        it_num.setFlags(it_num.flags() & ~Qt.ItemIsEditable)
+        it_num.setTextAlignment(Qt.AlignCenter)
+        self._tabela.setItem(i, 0, it_num)
+
+        it_pag = QTableWidgetItem(str(n.pagina))
+        it_pag.setFlags(it_pag.flags() & ~Qt.ItemIsEditable)
+        it_pag.setTextAlignment(Qt.AlignCenter)
+        self._tabela.setItem(i, 1, it_pag)
+
+        # Número
+        self._tabela.setItem(i, 2, QTableWidgetItem(n.numero))
+
+        if tipo == "dae":
+            # Filial
+            fil_txt = f"{n.filial_codigo} — {n.filial_nome}" if n.filial_codigo else "?"
+            it_f = QTableWidgetItem(fil_txt)
+            it_f.setFlags(it_f.flags() & ~Qt.ItemIsEditable)
+            self._tabela.setItem(i, 3, it_f)
+            # Tipo
+            tipo_txt = {"regime_normal": "Regime Normal",
+                        "adic_fundo_pobreza": "Adic. Fundo Pobreza"}.get(n.tipo_dae or "", "?")
+            it_t = QTableWidgetItem(tipo_txt)
+            it_t.setFlags(it_t.flags() & ~Qt.ItemIsEditable)
+            self._tabela.setItem(i, 4, it_t)
+            # Vencimento
+            venc_txt = n.vencimento_dae.strftime("%d/%m/%Y") if n.vencimento_dae else ""
+            self._tabela.setItem(i, 5, QTableWidgetItem(venc_txt))
+            # Valor
+            it_val = QTableWidgetItem(self._fmt_valor(n.valor))
+            it_val.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self._tabela.setItem(i, 6, it_val)
+        else:
+            data_txt = n.data_emissao.strftime("%d/%m/%Y") if n.data_emissao else ""
+            self._tabela.setItem(i, 3, QTableWidgetItem(data_txt))
+            it_val = QTableWidgetItem(self._fmt_valor(n.valor))
+            it_val.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self._tabela.setItem(i, 4, it_val)
 
     def _atualizar_status_celula(self, i: int) -> None:
         n = self._notas[i]
@@ -421,38 +547,58 @@ class OrcamentoPage(QWidget):
         elif n.status == StatusLancamento.EM_ANDAMENTO:
             txt = "⋯ em curso"
         else:
-            faltando = (not n.numero) or (n.data_emissao is None) or (n.valor <= 0)
+            if self._tipo_atual() == "dae":
+                faltando = (not n.numero) or (n.filial_codigo is None) or (not n.tipo_dae) or (n.valor <= 0)
+            else:
+                faltando = (not n.numero) or (n.data_emissao is None) or (n.valor <= 0)
             txt = "Revisar" if faltando else "Pronta"
         it = QTableWidgetItem(txt)
         it.setFlags(it.flags() & ~Qt.ItemIsEditable)
         it.setTextAlignment(Qt.AlignCenter)
-        self._tabela.setItem(i, 5, it)
+        # Status vai na ÚLTIMA coluna do layout atual
+        self._tabela.setItem(i, len(self._cols_atual) - 1, it)
 
     def _on_item_editado(self, item: QTableWidgetItem) -> None:
-        """Aceita edições manuais em número, data e valor. Mantém `self._notas`
-        em sincronia com a grid — o worker lê `self._notas`, não a grid."""
+        """Sincroniza edições manuais da grid com self._notas. Só campos
+        editáveis (número, data emissão, valor no NFSe; número, vencimento
+        e valor no DAE)."""
         row = item.row()
         col = item.column()
         if row >= len(self._notas):
             return
         n = self._notas[row]
         txt = item.text().strip()
+        tipo = self._tipo_atual()
+
         if col == 2:
             n.numero = txt
-        elif col == 3:
-            try:
-                n.data_emissao = datetime.strptime(txt, "%d/%m/%Y").date()
-            except ValueError:
+        elif tipo == "dae":
+            if col == 5:  # vencimento
+                for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+                    try:
+                        n.vencimento_dae = datetime.strptime(txt, fmt).date()
+                        break
+                    except ValueError:
+                        pass
+            elif col == 6:  # valor
                 try:
-                    n.data_emissao = datetime.strptime(txt, "%Y-%m-%d").date()
+                    n.valor = float(txt.replace(".", "").replace(",", "."))
                 except ValueError:
-                    n.data_emissao = None
-        elif col == 4:
-            try:
-                normalizado = txt.replace(".", "").replace(",", ".")
-                n.valor = float(normalizado)
-            except ValueError:
-                pass
+                    pass
+        else:
+            if col == 3:  # data emissão
+                for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+                    try:
+                        n.data_emissao = datetime.strptime(txt, fmt).date()
+                        break
+                    except ValueError:
+                        pass
+            elif col == 4:  # valor
+                try:
+                    n.valor = float(txt.replace(".", "").replace(",", "."))
+                except ValueError:
+                    pass
+
         self._tabela.blockSignals(True)
         try:
             self._atualizar_status_celula(row)
@@ -487,18 +633,27 @@ class OrcamentoPage(QWidget):
     # ---------- Execução do lote ----------
 
     def _executar_lote(self) -> None:
-        # Só lança notas com dados válidos e não já processadas
-        pendentes = [
-            (i, n) for i, n in enumerate(self._notas)
-            if n.status == StatusLancamento.PENDENTE
-            and n.numero and n.data_emissao and n.valor > 0
-        ]
+        # Só lança itens com dados válidos e ainda pendentes.
+        tipo = self._tipo_atual()
+        if tipo == "dae":
+            pendentes = [
+                (i, n) for i, n in enumerate(self._notas)
+                if n.status == StatusLancamento.PENDENTE
+                and n.numero and n.filial_codigo and n.tipo_dae and n.valor > 0
+            ]
+            criterio = "número da DAE, CNPJ resolvido (filial), tipo (regime normal / adic pobreza) e valor"
+        else:
+            pendentes = [
+                (i, n) for i, n in enumerate(self._notas)
+                if n.status == StatusLancamento.PENDENTE
+                and n.numero and n.data_emissao and n.valor > 0
+            ]
+            criterio = "número, data de emissão e valor"
         if not pendentes:
             QMessageBox.information(
                 self, "Nada pra lançar",
-                "Não há notas pendentes com dados completos.\n\n"
-                "Preencha número, data de emissão e valor pra cada linha "
-                "'Revisar' antes de executar."
+                f"Não há itens pendentes com dados completos.\n\n"
+                f"Preencha {criterio} pra cada linha 'Revisar' antes de executar."
             )
             return
 

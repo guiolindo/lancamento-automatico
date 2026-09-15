@@ -403,18 +403,31 @@ class RpaOrcamento:
 
     def _preencher_aba_nota(self, nota: NotaDespesa) -> None:
         an = self.template.get("aba_nota") or {}
-        self._preencher("empresa",       str(an.get("empresa_codigo", "")))
+
+        # Empresa: fixo do template OU vem do CNPJ (DAE).
+        if an.get("empresa_por_cnpj") and nota.filial_codigo is not None:
+            empresa = str(nota.filial_codigo)
+        else:
+            empresa = str(an.get("empresa_codigo", ""))
+        self._preencher("empresa",       empresa)
+
         self._preencher("nat_despesa",   str(an.get("nat_despesa_codigo", "")))
         self._sleep("apos_especie_ms", 600)
         self._preencher("pessoa",        str(an.get("pessoa_codigo", "")))
         self._sleep("apos_pessoa_ms", 800)
         self._preencher("nota_fiscal",   str(nota.numero))
-        if nota.data_emissao is not None:
-            self._preencher("data_emissao",  nota.data_emissao.strftime("%d/%m/%Y"))
+        # Data emissão: por padrão = data_emissao da nota; pra DAE, o
+        # template diz "data_lancto" (não tem emissão explícita no DAE).
+        regras = self.template.get("regras") or {}
+        emi_regra = regras.get("data_emissao_regra")
+        if emi_regra == "data_lancto":
+            self._preencher("data_emissao", nota.data_lancto.strftime("%d/%m/%Y"))
+        elif nota.data_emissao is not None:
+            self._preencher("data_emissao", nota.data_emissao.strftime("%d/%m/%Y"))
         self._preencher("data_lancto",   nota.data_lancto.strftime("%d/%m/%Y"))
         self._preencher("st_doc",        str(an.get("st_doc", "Regular")))
         self._preencher("modelo",        str(an.get("modelo", "")))
-        self._digitar_multilinha("observacao_fiscal", str(an.get("observacao_fiscal", "")))
+        self._digitar_multilinha("observacao_fiscal", self._resolver_texto(an, nota, "observacao_fiscal"))
         valor_txt = f"{nota.valor:.2f}".replace(".", ",")
         self._preencher("valor_total_nf", valor_txt)
         self._marcar_checkbox_se_necessario("check_icms", bool(an.get("marcar_icms", False)))
@@ -423,25 +436,60 @@ class RpaOrcamento:
         af = self.template.get("aba_financeiro") or {}
         self._clicar("aba_financeiro")
         self._sleep("apos_click_ms", 700)
-        self._digitar_multilinha("observacao_financeira", str(af.get("observacao_financeira", "")))
+        self._digitar_multilinha("observacao_financeira", self._resolver_texto(af, nota, "observacao_financeira"))
         # Radio Vencimento (modo)
         self._clicar("radio_vencimento")
         self._preencher("qtd_parcelas", str(af.get("quantidade_parcelas", 1)))
         self._preencher("dias_entre_venc", str(af.get("dias_entre_vencimentos", 1)))
-        # Vencimento = data_lancto (regra do template OTIMO)
-        self._preencher("data_vencimento", nota.data_lancto.strftime("%d/%m/%Y"))
+        # Vencimento: default = data_lancto; DAE usa vencimento_dae.
+        venc_regra = af.get("vencimento_igual_a") or "data_lancto"
+        if venc_regra == "vencimento_dae" and nota.vencimento_dae is not None:
+            venc = nota.vencimento_dae
+        else:
+            venc = nota.data_lancto
+        self._preencher("data_vencimento", venc.strftime("%d/%m/%Y"))
         self._clicar("btn_gerar")
         self._sleep("apos_gerar_parcelas_ms", 1000)
+
+    def _resolver_texto(self, secao: dict, nota: NotaDespesa, chave_base: str) -> str:
+        """Resolve texto do template: `observacao_fiscal` direto, ou
+        `observacao_por_tipo`/`obs..._por_tipo` como dict tipo→texto pra
+        DAE (regime_normal vs adic_fundo_pobreza)."""
+        por_tipo = secao.get(f"{chave_base}_por_tipo") or secao.get("observacao_por_tipo")
+        if isinstance(por_tipo, dict) and nota.tipo_dae:
+            return str(por_tipo.get(nota.tipo_dae, ""))
+        return str(secao.get(chave_base, ""))
 
     def _preencher_aba_contabilizacao(self, nota: NotaDespesa) -> None:
         ac = self.template.get("aba_contabilizacao") or {}
         self._clicar("aba_contabilizacao")
         self._sleep("apos_click_ms", 700)
-        n_linhas = int(ac.get("replicar_valor_nas_linhas", 2))
         valor_txt = f"{nota.valor:.2f}".replace(".", ",")
-        if n_linhas >= 1:
+
+        # Modo antigo (OTIMO): replicar_valor_nas_linhas: N
+        if "replicar_valor_nas_linhas" in ac:
+            n_linhas = int(ac.get("replicar_valor_nas_linhas", 2))
+            if n_linhas >= 1:
+                self._preencher("contab_linha1_valor", valor_txt)
+            if n_linhas >= 2:
+                self._preencher("contab_linha2_valor", valor_txt)
+            return
+
+        # Modo DAE (build-101): linha1 troca filial + valor,
+        # linha2 troca conta débito + CR + valor.
+        l1 = ac.get("linha1") or {}
+        l2 = ac.get("linha2") or {}
+
+        if l1.get("trocar_filial_para_da_loja") and nota.filial_codigo is not None:
+            self._preencher("contab_linha1_filial", str(nota.filial_codigo))
+        if l1.get("preencher_valor", True):
             self._preencher("contab_linha1_valor", valor_txt)
-        if n_linhas >= 2:
+
+        if l2.get("conta_debito"):
+            self._preencher("contab_linha2_conta_debito", str(l2["conta_debito"]))
+        if l2.get("cr"):
+            self._preencher("contab_linha2_cr", str(l2["cr"]))
+        if l2.get("preencher_valor", True):
             self._preencher("contab_linha2_valor", valor_txt)
 
     def _notificar(self, nota: NotaDespesa, msg: str) -> None:

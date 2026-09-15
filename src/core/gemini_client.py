@@ -348,6 +348,65 @@ class GeminiClient:
         log.info("extrair_notas_nfse: %d notas extraídas", len(resultado))
         return resultado
 
+    # ---------- DAE Bahia (build-101) ----------
+
+    def extrair_daes(self, arquivo_pdf: Path) -> list[dict]:
+        """Extrai lista de DAEs (guias ICMS Bahia) de um PDF. Cada DAE
+        vira {pagina, numero_serie, cnpj, tipo, valor, vencimento, referencia}.
+        Deduplicação de vias é responsabilidade do prompt (retornar 1 por
+        Nº de série único).
+        """
+        arquivo_pdf = Path(arquivo_pdf)
+        if not arquivo_pdf.exists():
+            raise FileNotFoundError(arquivo_pdf)
+
+        log.info("extrair_daes: lendo %s", arquivo_pdf.name)
+        with open(arquivo_pdf, "rb") as f:
+            dados = f.read()
+        b64 = base64.standard_b64encode(dados).decode("ascii")
+
+        payload = {
+            "contents": [{"parts": [
+                {"text": _PROMPT_DAE},
+                {"inline_data": {"mime_type": "application/pdf", "data": b64}},
+            ]}],
+            "generationConfig": {"response_mime_type": "application/json"},
+        }
+        url = f"{API_BASE}/models/{self._model_name}:generateContent"
+        r = requests.post(url, params={"key": self._api_key}, json=payload, timeout=180)
+        log.info("extrair_daes: HTTP %s", r.status_code)
+        if r.status_code >= 400:
+            raise RuntimeError(f"Gemini HTTP {r.status_code}: {r.text[:400]}")
+
+        data = r.json()
+        try:
+            texto = data["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError, TypeError) as e:
+            raise RuntimeError(f"Resposta Gemini sem texto: {str(data)[:400]}") from e
+
+        parsed = self._parse_json(texto)
+        daes = parsed.get("daes") or []
+        resultado: list[dict] = []
+        for i, d in enumerate(daes):
+            try:
+                resultado.append({
+                    "pagina":       int(d.get("pagina") or (i + 1)),
+                    "numero_serie": str(d.get("numero_serie", "")).strip(),
+                    "cnpj":         "".join(c for c in str(d.get("cnpj", "")) if c.isdigit()),
+                    "tipo":         str(d.get("tipo", "")).strip(),
+                    "valor":        float(d.get("valor") or 0.0),
+                    "vencimento":   str(d.get("vencimento", "")).strip(),
+                    "referencia":   str(d.get("referencia", "")).strip(),
+                })
+            except (TypeError, ValueError) as e:
+                log.warning("extrair_daes: linha %d inválida (%s): %r", i, e, d)
+                resultado.append({
+                    "pagina": i + 1, "numero_serie": "", "cnpj": "",
+                    "tipo": "", "valor": 0.0, "vencimento": "", "referencia": "",
+                })
+        log.info("extrair_daes: %d DAE(s) extraída(s)", len(resultado))
+        return resultado
+
 
 _PROMPT_NFSE = """Você é um extrator de Notas Fiscais de Serviço eletrônica
 (NFS-e / DANFSe) brasileiras.
@@ -381,6 +440,71 @@ Se algum campo estiver ilegível, deixe em branco ("" ou 0.0) — o app pede
 revisão manual. NUNCA invente valores. Melhor vazio que chute.
 
 Se uma página não for NFS-e (capa, folha separadora), pule.
+"""
+
+
+# ---------- DAE Bahia (build-101) ----------
+
+_PROMPT_DAE = """Você é um extrator de DAE (Documento de Arrecadação Estadual)
+da Secretaria da Fazenda da Bahia — a guia usada pra pagar ICMS sobre
+energia elétrica.
+
+Cada página do PDF pode conter UMA ou DUAS DAEs iguais (via + via —
+2 canhotos do mesmo documento). NÃO conte a mesma DAE duas vezes:
+extraia UMA linha por documento único (identificado pelo "Nº de série
+/ Nosso Número"). Se aparecer 2 vias do mesmo Nº de série, retorne
+apenas 1 entrada.
+
+Se a mesma página tem 2 DAEs DIFERENTES (Nº de série diferente),
+extraia AS DUAS.
+
+Campos por DAE:
+
+1. `numero_serie`: o "Nº DE SÉRIE / NOSSO NÚMERO" (dígitos apenas).
+   Ex.: "1962122751", "1962123053".
+
+2. `cnpj`: o "CNPJ / CPF" do contribuinte (14 dígitos apenas, sem
+   pontuação). Ex.: "28548486001007" (do texto "28.548.486/0010-07").
+
+3. `tipo`: qual imposto é. Olhe o campo "ESPECIFICAÇÃO DA RECEITA":
+     - Se contém "REGIME NORMAL"       → devolva "regime_normal"
+     - Se contém "ADIC FUNDO POBREZA"
+       ou "ADIC. FUNDO POBREZA"
+       ou "FUNDO POBREZA"              → devolva "adic_fundo_pobreza"
+     - Caso contrário devolva ""       (o app pede revisão manual)
+
+4. `valor`: o "TOTAL A RECOLHER" (ou "VALOR PRINCIPAL" se total não
+   estiver visível). Float com ponto decimal. Ex.: 8845.61, 862.99.
+
+5. `vencimento`: a "DATA DE VENCIMENTO" no formato "AAAA-MM-DD".
+   Ex.: "2026-09-30" (do texto "30/09/2026").
+
+6. `referencia`: o campo "REFERÊNCIA" (mês/ano da competência).
+   Formato "MM/AAAA". Ex.: "07/2026". Só pra rastreabilidade.
+
+Ignore: número da NF de energia mencionada em Informações
+Complementares, código de município, códigos de barras — o app só
+precisa dos 6 campos acima.
+
+Retorne APENAS um JSON válido, sem markdown, sem comentários:
+
+{
+  "daes": [
+    {
+      "pagina": 1,
+      "numero_serie": "1962122751",
+      "cnpj": "28548486001007",
+      "tipo": "regime_normal",
+      "valor": 8845.61,
+      "vencimento": "2026-09-30",
+      "referencia": "07/2026"
+    }
+  ]
+}
+
+Se algum campo estiver ilegível, deixe em branco ("" ou 0.0) — o app
+pede revisão manual. NUNCA invente valores nem CNPJ. Melhor vazio que
+chute (documento fiscal).
 """
 
 

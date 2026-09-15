@@ -83,12 +83,15 @@ class LinhaExtracao:
 
 @dataclass
 class NotaDespesa:
-    """Uma NFS-e a ser lançada no módulo Orçamento (build-96).
+    """Uma NFS-e ou DAE a ser lançada no módulo Orçamento.
 
-    Diferente do Lancamento (impostos sobre folha), aqui os campos fixos
-    saem do template do fornecedor (`mapeamento_orcamento.json`). Só o
-    número, data de emissão e valor variam por nota. `pagina` só serve
-    pra rastreabilidade no PDF de origem.
+    Campos "core" (NFS-e OTIMO, build-96): pagina, numero, data_emissao,
+    valor, data_lancto, template_chave.
+
+    Campos "DAE" (build-101): cnpj identifica a filial; tipo_dae escolhe
+    a observação/descrição (regime_normal | adic_fundo_pobreza); vencimento
+    vem do próprio DAE; filial_codigo/filial_nome são resolvidos via
+    cnpjs_filiais.json na hora de montar a lista.
     """
     pagina: int
     numero: str
@@ -96,6 +99,13 @@ class NotaDespesa:
     valor: float
     data_lancto: date
     template_chave: str
+    # DAE-only
+    cnpj: Optional[str] = None
+    tipo_dae: Optional[str] = None       # "regime_normal" | "adic_fundo_pobreza"
+    vencimento_dae: Optional[date] = None
+    filial_codigo: Optional[int] = None
+    filial_nome: Optional[str] = None
+    # Estado
     status: StatusLancamento = StatusLancamento.PENDENTE
     erro: Optional[str] = None
     motivo_ignorado: Optional[str] = None  # ex: "já lançada"

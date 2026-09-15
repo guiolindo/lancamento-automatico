@@ -111,6 +111,8 @@ def run() -> int:
         f"--include-data-files={SRC / 'config' / 'mapeamento.json'}=config/mapeamento.json",
         # E o mapeamento_orcamento.json (templates do módulo Orçamento, build-95).
         f"--include-data-files={SRC / 'config' / 'mapeamento_orcamento.json'}=config/mapeamento_orcamento.json",
+        # cnpjs_filiais.json — mapeamento CNPJ→filial (DAE, build-101).
+        f"--include-data-files={SRC / 'config' / 'cnpjs_filiais.json'}=config/cnpjs_filiais.json",
         # Templates de referência da tela do TOTVS + branding (ícones,
         # wordmark) — a pasta inteira src/assets/ vai pro bundle.
         f"--include-data-dir={SRC / 'assets'}=src/assets",
@@ -175,6 +177,13 @@ def run() -> int:
     if orc_int.exists() and not orc_ext.exists():
         shutil.copy2(orc_int, orc_ext)
         print(f"Copiado: {orc_ext}")
+
+    # cnpjs_filiais.json (build-101).
+    cnpj_ext = destino_pasta / "cnpjs_filiais.json"
+    cnpj_int = destino_pasta / "config" / "cnpjs_filiais.json"
+    if cnpj_int.exists() and not cnpj_ext.exists():
+        shutil.copy2(cnpj_int, cnpj_ext)
+        print(f"Copiado: {cnpj_ext}")
 
     # Extrai BUILD_MARKER do src/main.py e escreve build_marker.txt ao
     # lado do exe. O launcher lê esse arquivo pra saber qual versão está

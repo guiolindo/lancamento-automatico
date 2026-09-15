@@ -31,6 +31,54 @@
         "data_lancto_default": "hoje",
         "duplicidade_regra": "pular_ja_lancada"
       }
+    },
+    "DAE_ENERGIA": {
+      "descricao": "DAE Bahia — ICMS sobre energia elétrica (regime normal + adic fundo pobreza)",
+      "tipo_extracao": "dae",
+      "aba_nota": {
+        "empresa_por_cnpj": true,
+        "nat_despesa_codigo": "180",
+        "pessoa_codigo": "83387",
+        "versao_pessoa": "1",
+        "st_doc": "Regular",
+        "modelo": "99",
+        "tipo_frete": "0",
+        "marcar_icms": true,
+        "serie": "",
+        "subserie": "",
+        "observacao_por_tipo": {
+          "regime_normal": "ICMS REGIME NORMAL - ENERGIA ELÉTRICA",
+          "adic_fundo_pobreza": "ICMS ADIC FUNDO POBREZA - ENERGIA ELÉTRICA"
+        }
+      },
+      "aba_financeiro": {
+        "observacao_por_tipo": {
+          "regime_normal": "ICMS REGIME NORMAL - ENERGIA ELÉTRICA",
+          "adic_fundo_pobreza": "ICMS ADIC FUNDO POBREZA - ENERGIA ELÉTRICA"
+        },
+        "modo": "vencimento",
+        "quantidade_parcelas": 1,
+        "dias_entre_vencimentos": 1,
+        "vencimento_igual_a": "vencimento_dae"
+      },
+      "aba_contabilizacao": {
+        "linha1": {
+          "trocar_filial_para_da_loja": true,
+          "preencher_valor": true
+        },
+        "linha2": {
+          "conta_debito": "330115018",
+          "cr": "141007",
+          "preencher_valor": true
+        }
+      },
+      "regras": {
+        "vencimento_igual_a": "vencimento_dae",
+        "data_emissao_regra": "data_lancto",
+        "data_lancto_default": "hoje",
+        "duplicidade_regra": "pular_ja_lancada",
+        "resolver_filial_por": "cnpj"
+      }
     }
   }
 }

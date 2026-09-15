@@ -66,8 +66,14 @@ CAMPOS_OFFSET_ANCHOR: dict[str, tuple[int, int]] = {
     "data_vencimento":       (830, 284),
     "btn_gerar":             (280, 284),
     # ---- Aba Contabilização (posições válidas quando ela está ativa) ----
-    "contab_linha1_valor":   (890, 221),
-    "contab_linha2_valor":   (890, 240),
+    # Colunas medidas em aba_contabilizacao_branco.png: Filial ~x=220,
+    # Conta Débito ~x=270, CR (após Débito/COD/CR/GC) ~x=430,
+    # Valor ~x=910. Linhas: 1 @ y=283, 2 @ y=302 (~19px de altura).
+    "contab_linha1_filial":        (200, 221),
+    "contab_linha1_valor":         (890, 221),
+    "contab_linha2_conta_debito":  (250, 240),
+    "contab_linha2_cr":            (410, 240),
+    "contab_linha2_valor":         (890, 240),
 }
 
 # Popup Aviso (duplicidade) — offsets do âncora "Aviso".
