@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-107 (Pluxee vale combustível — validação CNPJ + anotação de caneta via Gemini + 2 filiais por nota, emissão e destino)"
+BUILD_MARKER = "build-108 (fix access violation no clipboard — argtypes/restype nos ctypes + aliases de filial pro fuzzy da caneta reconhecer Linha Verde=Serra Verde, Luis Eduardo=20 etc.)"
 
 
 def main() -> int:

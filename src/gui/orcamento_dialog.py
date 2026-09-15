@@ -436,10 +436,14 @@ class OrcamentoPage(QWidget):
         return out
 
     def _resolver_filial_por_texto(self, texto: str) -> tuple[int | None, str]:
-        """Fuzzy match do texto (rabisco de caneta, tipo 'Luis Eduardo' ou
-        'Juazeiro') contra os nomes das filiais no cnpjs_filiais.json.
-        Devolve (código, nome) da filial mais parecida acima do threshold,
-        ou (None, '') se nada casar com folga."""
+        """Fuzzy match do texto (rabisco de caneta) contra nome canônico
+        E aliases de cada filial no cnpjs_filiais.json.
+
+        Ex.: 'Linha Verde' bateria mal contra 'Serra Verde' (score ~50)
+        se procurasse só o nome — mas 'Linha Verde' aparece como alias
+        da filial 16 e casa em 100 no alias. Retornamos o nome canônico
+        pra observação/UI sempre.
+        """
         if not texto or not self._cnpjs_filiais:
             return None, ""
         try:
@@ -448,21 +452,36 @@ class OrcamentoPage(QWidget):
             log.warning("rapidfuzz indisponível — fuzzy match de filial pulado")
             return None, ""
 
-        candidatos = [(info["nome"], int(info["codigo"])) for info in self._cnpjs_filiais.values()]
-        nomes = [c[0] for c in candidatos]
-        # token_set_ratio tolera ordem e palavras a mais/menos (ex:
-        # 'Luis Eduardo' bate com 'Luis Eduardo Magalhaes').
-        match = process.extractOne(texto, nomes, scorer=fuzz.token_set_ratio)
+        # Constrói lista de (chave_de_match, código, nome_canonico).
+        # Cada filial contribui com 1 entrada pelo nome + N pelos aliases.
+        entries: list[tuple[str, int, str]] = []
+        for info in self._cnpjs_filiais.values():
+            nome_can = str(info.get("nome", "")).strip()
+            codigo = int(info.get("codigo", 0))
+            if nome_can:
+                entries.append((nome_can, codigo, nome_can))
+            for alias in info.get("aliases", []) or []:
+                a = str(alias).strip()
+                if a:
+                    entries.append((a, codigo, nome_can))
+
+        chaves = [e[0] for e in entries]
+        # WRatio > token_set_ratio pra desambiguar loja vs CD com nome
+        # parecido (ex.: 'CD Rib Neves' precisa preferir 'CD Rib Neves'
+        # do CD Ribeirão das Neves ao invés de matchar só 'Rib Neves' da
+        # loja Ribeirão das Neves).
+        match = process.extractOne(texto, chaves, scorer=fuzz.WRatio)
         if not match:
             return None, ""
-        nome_match, score, idx = match
-        if score < 70:  # threshold folgado — mas não a ponto de aceitar qualquer coisa
-            log.info("Fuzzy caneta: '%s' → melhor '%s' (%.0f) descartado (<70)", texto, nome_match, score)
+        chave_match, score, idx = match
+        if score < 70:
+            log.info("Fuzzy caneta: '%s' → melhor '%s' (%.0f) descartado (<70)",
+                     texto, chave_match, score)
             return None, ""
-        codigo = candidatos[idx][1]
-        log.info("Fuzzy caneta: '%s' → '%s' (código %d, score %.0f)",
-                 texto, nome_match, codigo, score)
-        return codigo, nome_match
+        codigo, nome_can = entries[idx][1], entries[idx][2]
+        log.info("Fuzzy caneta: '%s' → '%s' → %s (código %d, score %.0f)",
+                 texto, chave_match, nome_can, codigo, score)
+        return codigo, nome_can
 
     def _converter_daes(self, daes: list, template_chave: str, data_lancto: date) -> list:
         out = []
