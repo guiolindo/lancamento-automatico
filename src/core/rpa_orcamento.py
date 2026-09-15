@@ -1,20 +1,27 @@
 """
-RPA da tela 'Notas Fiscais de Despesa' do TOTVS Orçamento (build-98).
+RPA da tela 'Notas Fiscais de Despesa' do TOTVS Orçamento (build-103).
 
-Fluxo por nota (corrigido — user esclareceu que "+" e "Autorizar" são
-UMA vez só no final, depois das 3 abas, não após cada uma):
+Fluxo por nota:
 
-  1. Aba Nota: empresa, nat.despesa, pessoa, número NF, data emissão,
-     data lançto, st.doc, modelo, observação fiscal, valor total,
-     marca checkbox ICMS.
-  2. Aba Financeiro (clica aba): observação, radio Vencimento,
-     qtd parcelas, dias entre venc., data 1º venc., Gerar parcelas.
-  3. Aba Contabilização (clica aba): replica valor total nas linhas 1 e 2.
-  4. Clica "+" UMA vez (grava tudo).
-  5. Se popup "Aviso" (duplicidade) → duplicidade_regra:
-        - "pular_ja_lancada": OK → F2 → popup Atenção "Sim" → nota
-          IGNORADA (nunca inventamos número, é NF real).
-  6. Se não teve popup → clica "Autorizar".
+  1. Aba Nota — cabeçalho: empresa, nat.despesa, pessoa.
+  2. Aba Nota — digita **Nº Nota Fiscal** e **verifica duplicidade
+     JÁ AQUI**. O TOTVS valida esse campo no OnLeaveFocus e mostra
+     popup "Aviso" imediatamente — não precisa esperar o "+".
+     Se popup aparecer:
+        - `duplicidade_regra: pular_ja_lancada` → OK → F2 → popup
+          Atenção "Sim" → nota IGNORADA (nunca inventamos número,
+          é NF real).
+  3. Sem popup → continua aba Nota (datas, obs, valor, ICMS).
+  4. Aba Financeiro (clica aba): obs, radio Vencimento, qtd parcelas,
+     dias entre venc., data 1º venc., Gerar parcelas.
+  5. Aba Contabilização (clica aba): linha1 (troca filial no DAE +
+     valor) e linha2 (troca conta débito/CR no DAE + valor); no
+     modo simples OTIMO, replica valor em N linhas.
+  6. Segunda verificação de duplicidade — snapshot antes do "+" +
+     click + snapshot depois. Cinturão + suspensório (o TOTVS
+     pode revalidar).
+  7. "+" UMA vez (grava tudo).
+  8. Clica "Autorizar".
 
 Emergência: tecla END aborta o lote. Mesma pattern do rpa_totvs.
 """
@@ -296,33 +303,33 @@ class RpaOrcamento:
             if self._win is not None:
                 _trazer_para_frente(self._win)
 
-            # Preenche as 3 abas de uma vez, sem clicar em "+" no meio.
-            self._preencher_aba_nota(nota)
+            # 1) Cabeçalho + Nota Fiscal → check imediato de duplicidade.
+            #    TOTVS mostra popup Aviso NO ONBLUR do campo Nota Fiscal,
+            #    antes mesmo de a gente clicar "+". Se ignorarmos aqui, o
+            #    resto do preenchimento cai por cima do popup (bug reportado).
+            if self._checar_duplicidade_apos_nota_fiscal(nota):
+                return  # nota ficou IGNORADA
+
+            # 2) Sem duplicidade → completa aba Nota (datas, obs, valor, ICMS).
+            self._completar_aba_nota(nota)
+
+            # 3) Abas Financeiro + Contabilização.
             self._preencher_aba_financeiro(nota)
             self._preencher_aba_contabilizacao(nota)
 
-            # Só AGORA clica "+" uma única vez pra gravar tudo.
+            # 4) Segunda verificação (cinturão + suspensório) — snapshot ANTES
+            #    do "+" pra detectar popup que apareça depois.
             self._notificar(nota, "Gravando (+ único, final)")
             titulos_antes = self._snapshot_titulos()
             self._clicar("btn_novo_mais")
             self._sleep("apos_gerar_parcelas_ms", 1500)
 
-            # Duplicidade — o popup só aparece APÓS o "+".
             popup = self._achar_popup_novo(titulos_antes, ("aviso", "atenção", "atencao"))
             if popup is not None:
-                regra = (self.template.get("regras") or {}).get("duplicidade_regra", "pular_ja_lancada")
-                if regra == "pular_ja_lancada":
-                    self._tratar_duplicidade(popup, titulos_antes)
-                    nota.status = StatusLancamento.IGNORADO
-                    nota.motivo_ignorado = "já lançada (nota fiscal duplicada)"
-                    self._notificar(nota, "IGNORADA — já lançada")
+                if self._resolver_duplicidade(popup, titulos_antes, nota):
                     return
-                raise RuntimeError(
-                    f"Duplicidade detectada e regra '{regra}' não implementada. "
-                    "Nunca inventamos número de nota fiscal — cancele e verifique manual."
-                )
 
-            # Sem duplicidade → gravou com sucesso. Agora Autorizar.
+            # 5) Sem duplicidade → gravou com sucesso. Agora Autorizar.
             self._sleep("apos_confirmar_ms", 3000)
             self._notificar(nota, "Autorizando")
             self._clicar("btn_autorizar")
@@ -401,24 +408,57 @@ class RpaOrcamento:
         # 3) Último recurso: fechar via janela ativa + Enter.
         self._fechar_popup(campo_calib, win_popup)
 
-    def _preencher_aba_nota(self, nota: NotaDespesa) -> None:
+    def _checar_duplicidade_apos_nota_fiscal(self, nota: NotaDespesa) -> bool:
+        """Preenche cabeçalho da aba Nota (empresa, nat.despesa, pessoa) +
+        campo Nota Fiscal e VERIFICA se o TOTVS já sinalizou duplicidade.
+
+        Retorna True se a nota virou IGNORADA (duplicidade tratada) — o
+        chamador deve parar o fluxo. False se pode seguir preenchendo.
+        """
         an = self.template.get("aba_nota") or {}
 
-        # Empresa: fixo do template OU vem do CNPJ (DAE).
+        # Empresa (fixa ou por CNPJ)
         if an.get("empresa_por_cnpj") and nota.filial_codigo is not None:
             empresa = str(nota.filial_codigo)
         else:
             empresa = str(an.get("empresa_codigo", ""))
-        self._preencher("empresa",       empresa)
+        self._preencher("empresa", empresa)
 
-        self._preencher("nat_despesa",   str(an.get("nat_despesa_codigo", "")))
+        self._preencher("nat_despesa", str(an.get("nat_despesa_codigo", "")))
         self._sleep("apos_especie_ms", 600)
-        self._preencher("pessoa",        str(an.get("pessoa_codigo", "")))
+        self._preencher("pessoa", str(an.get("pessoa_codigo", "")))
         self._sleep("apos_pessoa_ms", 800)
-        self._preencher("nota_fiscal",   str(nota.numero))
-        # Data emissão: por padrão = data_emissao da nota; pra DAE, o
-        # template diz "data_lancto" (não tem emissão explícita no DAE).
+
+        # Snapshot ANTES de digitar a NF — o popup Aviso costuma nascer
+        # aqui no OnLeaveFocus do campo (o TOTVS valida unicidade).
+        titulos_antes = self._snapshot_titulos()
+
+        self._preencher("nota_fiscal", str(nota.numero))
+        # Força OnLeaveFocus: Tab dispara a validação do TOTVS mesmo se o
+        # próximo campo não for o Série (o robô já vai clicar em outro
+        # campo depois, mas Tab garante que a validação rode ANTES de
+        # tentarmos qualquer outro click).
+        import pyautogui
+        pyautogui.press("tab")
+        self._sleep("apos_selectall_ms", 1000)
+
+        # Deu popup?
+        popup = self._achar_popup_novo(titulos_antes, ("aviso", "atenção", "atencao"))
+        if popup is not None:
+            log.info(
+                "Popup Aviso detectado LOGO após digitar Nota Fiscal — duplicidade cedo"
+            )
+            return self._resolver_duplicidade(popup, titulos_antes, nota)
+        return False
+
+    def _completar_aba_nota(self, nota: NotaDespesa) -> None:
+        """Preenche o restante da aba Nota (assumindo cabeçalho + NF já OK,
+        sem duplicidade)."""
+        an = self.template.get("aba_nota") or {}
         regras = self.template.get("regras") or {}
+
+        # Data emissão: por padrão = data_emissao da nota; pra DAE,
+        # `data_emissao_regra: data_lancto` porque não há emissão no DAE.
         emi_regra = regras.get("data_emissao_regra")
         if emi_regra == "data_lancto":
             self._preencher("data_emissao", nota.data_lancto.strftime("%d/%m/%Y"))
@@ -431,6 +471,41 @@ class RpaOrcamento:
         valor_txt = f"{nota.valor:.2f}".replace(".", ",")
         self._preencher("valor_total_nf", valor_txt)
         self._marcar_checkbox_se_necessario("check_icms", bool(an.get("marcar_icms", False)))
+
+    def _resolver_duplicidade(self, popup, titulos_antes: set, nota: NotaDespesa) -> bool:
+        """Dispatcher da regra `duplicidade_regra` do template. Retorna
+        True se tratou (nota virou IGNORADA), False se não é caso da
+        regra (deixa o caller decidir). Levanta RuntimeError se a regra
+        for desconhecida — nunca inventamos número de NF."""
+        regra = (self.template.get("regras") or {}).get("duplicidade_regra", "pular_ja_lancada")
+        if regra == "pular_ja_lancada":
+            self._tratar_duplicidade(popup, titulos_antes)
+            nota.status = StatusLancamento.IGNORADO
+            nota.motivo_ignorado = "já lançada (nota fiscal duplicada)"
+            self._notificar(nota, "IGNORADA — já lançada")
+            return True
+        raise RuntimeError(
+            f"Duplicidade detectada e regra '{regra}' não implementada. "
+            "Nunca inventamos número de nota fiscal — cancele e verifique manual."
+        )
+
+    # Compat: alguém pode ter chamado `_preencher_aba_nota` — mantemos o
+    # nome apontando pra função que preserva o comportamento antigo
+    # (sem check cedo), pra testes/scripts. Fluxo real usa
+    # _checar_duplicidade_apos_nota_fiscal + _completar_aba_nota.
+    def _preencher_aba_nota(self, nota: NotaDespesa) -> None:
+        an = self.template.get("aba_nota") or {}
+        if an.get("empresa_por_cnpj") and nota.filial_codigo is not None:
+            empresa = str(nota.filial_codigo)
+        else:
+            empresa = str(an.get("empresa_codigo", ""))
+        self._preencher("empresa", empresa)
+        self._preencher("nat_despesa", str(an.get("nat_despesa_codigo", "")))
+        self._sleep("apos_especie_ms", 600)
+        self._preencher("pessoa", str(an.get("pessoa_codigo", "")))
+        self._sleep("apos_pessoa_ms", 800)
+        self._preencher("nota_fiscal", str(nota.numero))
+        self._completar_aba_nota(nota)
 
     def _preencher_aba_financeiro(self, nota: NotaDespesa) -> None:
         af = self.template.get("aba_financeiro") or {}

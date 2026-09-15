@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-102 (docs — README/ARCHITECTURE/DECISIONS atualizadas: módulo Orçamento, DAE Bahia, calibração manual prevalece)"
+BUILD_MARKER = "build-103 (fix Orçamento — detecta duplicidade LOGO após Nota Fiscal, antes do +; robô parava clicando por cima do popup)"
 
 
 def main() -> int:
