@@ -204,21 +204,27 @@ class RpaOrcamento:
         self._check_abort()
         valor_up = valor.upper() if isinstance(valor, str) else str(valor)
         import pyautogui
+        from .keyboard_utils import digitar_texto
         self._clicar(campo)
         pyautogui.press("backspace", presses=12, interval=0.002)
         pyautogui.press("delete", presses=12, interval=0.002)
         self._sleep("apos_selectall_ms")
         _capslock_off()
         intervalo = float(self._delays.get("intervalo_digitacao_s", 0.003))
-        pyautogui.typewrite(valor_up, interval=intervalo)
+        # digitar_texto usa typewrite pra ASCII puro e clipboard+Ctrl+V
+        # pra strings com acentos (build-105). Antes o typewrite ignorava
+        # caracteres não-ASCII silenciosamente — "ELÉTRICA" virava
+        # "ELTRICA" no TOTVS.
+        digitar_texto(valor_up, intervalo_ascii=intervalo)
         self._sleep("entre_campos_ms")
 
     def _digitar_multilinha(self, campo: str, texto: str) -> None:
-        """Preenche uma observação que pode ter \\n. Cada linha é digitada
-        e Enter separa. Necessário porque `typewrite` não interpreta \\n
-        como Enter dependendo do layout."""
+        """Preenche uma observação que pode ter \\n. Cada linha vai
+        separada por Enter — `typewrite` (e o clipboard) não interpretam
+        \\n como Enter dependendo do layout."""
         self._check_abort()
         import pyautogui
+        from .keyboard_utils import digitar_texto
         self._clicar(campo)
         pyautogui.press("backspace", presses=30, interval=0.002)
         pyautogui.press("delete", presses=30, interval=0.002)
@@ -230,7 +236,7 @@ class RpaOrcamento:
             if i > 0:
                 pyautogui.press("enter")
                 time.sleep(0.05)
-            pyautogui.typewrite(linha, interval=intervalo)
+            digitar_texto(linha, intervalo_ascii=intervalo)
         self._sleep("entre_campos_ms")
 
     def _marcar_checkbox_se_necessario(self, campo: str, marcar: bool) -> None:

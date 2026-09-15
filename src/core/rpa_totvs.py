@@ -305,13 +305,16 @@ class RpaTotvs:
         valor_up = valor.upper() if isinstance(valor, str) else str(valor)
         log.info("preencher %s = %r", campo, valor_up)
         import pyautogui
+        from .keyboard_utils import digitar_texto
         self._clicar(campo)
         pyautogui.press("backspace", presses=12, interval=0.002)
         pyautogui.press("delete", presses=12, interval=0.002)
         self._sleep("apos_selectall_ms")
         _capslock_off()  # defesa: usuário pode ter apertado Caps entre lançamentos
         intervalo = float(self._delays.get("intervalo_digitacao_s", 0.003))
-        pyautogui.typewrite(valor_up, interval=intervalo)
+        # ASCII vai por typewrite (rápido); acentos vão por clipboard+Ctrl+V.
+        # Ver keyboard_utils.digitar_texto pra motivo (build-105).
+        digitar_texto(valor_up, intervalo_ascii=intervalo)
         self._sleep("entre_campos_ms")
 
     # ---------- popup de duplicidade ----------

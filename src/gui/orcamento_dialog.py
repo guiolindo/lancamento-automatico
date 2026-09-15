@@ -152,11 +152,7 @@ class OrcamentoPage(QWidget):
         titulo.setStyleSheet("font-size: 20px; font-weight: 700; letter-spacing: -0.3px;")
         root.addWidget(titulo)
 
-        sub = QLabel(
-            "Escolha o fornecedor, arraste um PDF com as notas (ou clique em "
-            "'Selecionar PDF') e clique em 'Extrair'. Só 3 campos por nota mudam "
-            "— o resto vem do template."
-        )
+        sub = QLabel("Templates por fornecedor. Extraia do PDF e execute no TOTVS.")
         sub.setStyleSheet("color: #94A3B8; font-size: 12px;")
         sub.setWordWrap(True)
         root.addWidget(sub)
@@ -248,9 +244,8 @@ class OrcamentoPage(QWidget):
         self._btn_calibrar = QPushButton("Calibrar tela")
         self._btn_calibrar.setProperty("ghost", True)
         self._btn_calibrar.setToolTip(
-            "Calibrar posições dos campos da tela 'Notas Fiscais de Despesa'.\n"
-            "Necessário na primeira execução — o TOTVS roda em RemoteApp e "
-            "precisa saber onde cada campo está na tela."
+            "Marcar a posição de cada campo na tela 'Notas Fiscais de Despesa' "
+            "manualmente. Rede de segurança caso a detecção automática erre."
         )
         self._btn_calibrar.clicked.connect(self._calibrar_tela)
         rod.addWidget(self._btn_calibrar)
@@ -312,14 +307,10 @@ class OrcamentoPage(QWidget):
             resp = QMessageBox.warning(
                 self,
                 "PDF muito grande",
-                f"O PDF tem {tam_mb:.1f} MB, mas o limite do Gemini "
-                f"por request é ~{PDF_MAX_MB_INLINE} MB.\n\n"
-                "Compacte o PDF antes de mandar. Opções rápidas:\n"
-                "  • smallpdf.com/compress-pdf\n"
-                "  • ilovepdf.com/compress_pdf\n\n"
-                "Escolha 'Compressão recomendada' (não a extrema — pode "
-                "perder legibilidade). Depois arraste o PDF compactado aqui.\n\n"
-                "Continuar mesmo assim? (vai falhar com erro do Gemini)",
+                f"O PDF tem {tam_mb:.1f} MB. Limite do Gemini: {PDF_MAX_MB_INLINE} MB.\n\n"
+                "Compacte antes (smallpdf.com/compress-pdf ou ilovepdf.com) e "
+                "arraste o compactado aqui.\n\n"
+                "Continuar mesmo assim?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
@@ -327,10 +318,10 @@ class OrcamentoPage(QWidget):
                 return
 
         self._pdf_selecionado = caminho
-        self._lbl_pdf.setText(f"📄 {caminho.name}  ({tam_mb:.1f} MB)")
+        self._lbl_pdf.setText(f"{caminho.name}  ({tam_mb:.1f} MB)")
         self._btn_extrair.setEnabled(True)
         self.settings.set("ultima_pasta_upload", str(caminho.parent))
-        self._lbl_status.setText(f"PDF pronto pra extrair — {caminho.name}")
+        self._lbl_status.setText(f"{caminho.name} · clique Extrair.")
 
     def _extrair(self) -> None:
         if self._pdf_selecionado is None:
@@ -339,17 +330,14 @@ class OrcamentoPage(QWidget):
         if not api_key:
             QMessageBox.warning(
                 self, "Chave ausente",
-                "Configure a chave da API Gemini antes de extrair.\n\n"
-                "Clique em Config na barra lateral do app."
+                "Configure a chave da API Gemini em Config."
             )
             return
 
         self._btn_extrair.setEnabled(False)
         self._btn_extrair.setText("Extraindo…")
         self._btn_executar.setEnabled(False)
-        self._lbl_status.setText(
-            "🤖 Enviando PDF pro Gemini — 1 request só, mesmo com 40 páginas…"
-        )
+        self._lbl_status.setText("Enviando PDF pro Gemini…")
         modelo = self.settings.get("gemini_model", "gemini-2.5-flash-lite")
 
         template_chave = self._combo_forn.currentData()
@@ -381,9 +369,7 @@ class OrcamentoPage(QWidget):
         self._popular_grid()
         self._atualizar_resumo()
         n = len(self._notas)
-        self._lbl_status.setText(
-            f"✓ {n} item(ns) extraído(s). Revise valores duvidosos e clique em Executar."
-        )
+        self._lbl_status.setText(f"{n} lançamentos prontos.")
         self._atualizar_estado_executar()
 
     def _converter_nfse(self, notas_dict: list, template_chave: str, data_lancto: date) -> list:
@@ -442,12 +428,11 @@ class OrcamentoPage(QWidget):
     def _on_falhou(self, msg: str) -> None:
         self._btn_extrair.setEnabled(True)
         self._btn_extrair.setText("Extrair notas do PDF")
-        self._lbl_status.setText("❌ Falha na extração — veja o log")
+        self._lbl_status.setText("Falha na extração.")
         QMessageBox.critical(
             self, "Falha na extração",
-            f"Não consegui extrair as notas do PDF:\n\n{msg}\n\n"
-            "Se o problema persistir, verifique se o PDF está legível "
-            "(scan borrado, girado, etc.) e se não excede ~18 MB."
+            f"{msg}\n\n"
+            "Confira se o PDF está legível e abaixo de 18 MB."
         )
 
     def _on_template_mudou(self) -> None:
@@ -545,13 +530,13 @@ class OrcamentoPage(QWidget):
     def _atualizar_status_celula(self, i: int) -> None:
         n = self._notas[i]
         if n.status == StatusLancamento.SUCESSO:
-            txt = "✓ OK"
+            txt = "OK"
         elif n.status == StatusLancamento.FALHA:
-            txt = f"✗ {n.erro or 'Falha'}"
+            txt = f"Falha: {n.erro or ''}"
         elif n.status == StatusLancamento.IGNORADO:
-            txt = f"⊘ {n.motivo_ignorado or 'Ignorada'}"
+            txt = f"Já lançada"
         elif n.status == StatusLancamento.EM_ANDAMENTO:
-            txt = "⋯ em curso"
+            txt = "Em curso"
         else:
             if self._tipo_atual() == "dae":
                 faltando = (not n.numero) or (n.filial_codigo is None) or (not n.tipo_dae) or (n.valor <= 0)
@@ -625,16 +610,14 @@ class OrcamentoPage(QWidget):
         tem_notas = len(self._notas) > 0
         self._btn_executar.setEnabled(tem_notas)
         if not tem_notas:
-            self._btn_executar.setToolTip("Extraia notas de um PDF primeiro.")
+            self._btn_executar.setToolTip("Extraia um PDF antes.")
         elif not self._calibracao.esta_completa():
             self._btn_executar.setToolTip(
-                "Execução vai tentar auto-detecção visual da tela TOTVS.\n"
-                "Se falhar, use 'Calibrar tela' pra calibrar manualmente."
+                "Vai tentar detectar os campos por visão. Se falhar, "
+                "use 'Calibrar tela'."
             )
         else:
-            self._btn_executar.setToolTip(
-                "Executa o lote no TOTVS. Tecla END aborta emergencial."
-            )
+            self._btn_executar.setToolTip("END aborta o lote.")
 
     # ---------- Execução do lote ----------
 
@@ -658,8 +641,7 @@ class OrcamentoPage(QWidget):
         if not pendentes:
             QMessageBox.information(
                 self, "Nada pra lançar",
-                f"Não há itens pendentes com dados completos.\n\n"
-                f"Preencha {criterio} pra cada linha 'Revisar' antes de executar."
+                f"Preencha {criterio} nas linhas marcadas 'Revisar'."
             )
             return
 
@@ -674,12 +656,10 @@ class OrcamentoPage(QWidget):
 
         resp = QMessageBox.question(
             self,
-            "Confirmar execução",
-            f"Lançar {len(pendentes)} nota(s) no TOTVS usando o template "
-            f"'{template_chave}'?\n\n"
-            "• Duplicadas serão IGNORADAS (nunca inventamos número).\n"
-            "• Tecla END aborta o lote a qualquer momento.\n"
-            "• O TOTVS deve estar aberto na tela 'Notas Fiscais de Despesa'.",
+            "Executar lote",
+            f"Lançar {len(pendentes)} nota(s) com o template '{template_chave}'?\n\n"
+            "Duplicadas ficam IGNORADAS. END aborta. "
+            "Deixe o TOTVS aberto em 'Notas Fiscais de Despesa'.",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -710,7 +690,7 @@ class OrcamentoPage(QWidget):
         self._btn_executar.setEnabled(False)
         self._btn_extrair.setEnabled(False)
         self._btn_cancelar.setVisible(True)
-        self._lbl_status.setText("Executando… (END = emergência)")
+        self._lbl_status.setText("Executando. END aborta.")
 
         # Multi-monitor: se a janela do Auto Conferi está na MESMA tela do
         # TOTVS, o main_window move ela pra outra tela pra o operador ver
@@ -743,7 +723,7 @@ class OrcamentoPage(QWidget):
             calib_orc_store.salvar(self._calibracao)
             self._atualizar_estado_executar()
             self._lbl_status.setText(
-                f"✓ Calibração salva ({len(self._calibracao.campos)} campos)."
+                f"Calibração salva ({len(self._calibracao.campos)} campos)."
             )
 
     def _cancelar_lote(self) -> None:
@@ -789,11 +769,9 @@ class OrcamentoPage(QWidget):
         )
         QMessageBox.information(
             self, "Lote concluído",
-            f"Lote finalizado:\n\n"
-            f"  ✓ Sucesso: {sucessos}\n"
-            f"  ✗ Falhas: {falhas}\n"
-            f"  ⊘ Ignoradas (já lançadas): {ignoradas}\n\n"
-            "Notas com falha ficam na grid pra você conferir e refazer manualmente."
+            f"Sucesso: {sucessos}\n"
+            f"Falhas:  {falhas}\n"
+            f"Já lançadas: {ignoradas}"
         )
 
     def _on_erro_worker(self, msg: str) -> None:
@@ -801,7 +779,7 @@ class OrcamentoPage(QWidget):
         self._btn_extrair.setEnabled(True)
         self._btn_cancelar.setVisible(False)
         self._restaurar_janela()
-        self._lbl_status.setText("Erro — veja o diálogo")
+        self._lbl_status.setText("Erro.")
         QMessageBox.critical(self, "Erro no lote Orçamento", msg)
 
     # ---------- Ciclo de vida ----------

@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-104 (Orçamento: offsets visão reescritos com calibração real do user + auto-move MainWindow em multi-monitor)"
+BUILD_MARKER = "build-105 (fix acentos — clipboard+Ctrl+V pra strings com acento no lugar do typewrite que sumia com 'é'; textos da UI enxutos)"
 
 
 def main() -> int:
