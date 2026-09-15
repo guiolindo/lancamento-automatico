@@ -37,53 +37,58 @@ from typing import Optional
 
 # Offsets (dx, dy) do TOP-LEFT de cada campo/botão em relação ao TOP-LEFT
 # do âncora 'Notas Fiscais de Despesas' (anchor_header.png).
-# Todas as coords foram medidas na captura `aba_nota_branco.png` (1024x820,
-# janela TOTVS a partir de x=0) com o âncora em (20, 62).
+#
+# Build-104: valores REESCRITOS a partir da calibração real do usuário
+# (`calibracao_orcamento.json`) subtraindo o offset do âncora dentro da
+# janela (20, 62). Meus valores anteriores tinham 2 erros grosseiros:
+# (a) toda a aba Financeiro estava com Y errado em ~+132px (radio/qtd/
+# dias/data/btn_gerar caiam ~130px acima da linha real dos campos);
+# (b) `observacao_financeira` estava com X errado em ~-209px.
+# Corrigidos + demais campos ajustados por pixels pra bater com o
+# calibrado do usuário.
 CAMPOS_OFFSET_ANCHOR: dict[str, tuple[int, int]] = {
-    # ---- Toolbar (topo, y=+43) ----
-    "btn_novo_mais":         (67, 43),
-    "btn_autorizar":         (555, 43),
-    # ---- Abas (linha de abas, y=+79) ----
-    "aba_financeiro":        (111, 79),
-    "aba_contabilizacao":    (182, 79),
-    # ---- Aba Nota (padrão) ----
-    "empresa":               (330, 119),
+    # ---- Toolbar (topo) ----
+    "btn_novo_mais":         (73, 46),
+    "btn_autorizar":         (569, 45),
+    # ---- Abas ----
+    "aba_financeiro":        (110, 78),
+    "aba_contabilizacao":    (175, 78),
+    # ---- Aba Nota ----
+    "empresa":               (285, 117),
     "nat_despesa":           (90, 141),
     "pessoa":                (120, 162),
     "nota_fiscal":           (120, 183),
-    "st_doc":                (480, 183),
-    "modelo":                (90, 205),
+    "st_doc":                (513, 181),
+    "modelo":                (92, 208),
     "data_emissao":          (700, 128),
-    "data_lancto":           (700, 142),
-    "observacao_fiscal":     (860, 148),
-    "valor_total_nf":        (130, 329),
-    "check_icms":            (30, 408),
-    # ---- Aba Financeiro (posições válidas quando ela está ativa) ----
-    "observacao_financeira": (620, 253),
-    "radio_vencimento":      (340, 284),
-    "qtd_parcelas":          (527, 284),
-    "dias_entre_venc":       (680, 284),
-    "data_vencimento":       (830, 284),
-    "btn_gerar":             (280, 284),
-    # ---- Aba Contabilização (posições válidas quando ela está ativa) ----
-    # Colunas medidas em aba_contabilizacao_branco.png: Filial ~x=220,
-    # Conta Débito ~x=270, CR (após Débito/COD/CR/GC) ~x=430,
-    # Valor ~x=910. Linhas: 1 @ y=283, 2 @ y=302 (~19px de altura).
-    "contab_linha1_filial":        (200, 221),
-    "contab_linha1_valor":         (890, 221),
-    "contab_linha2_conta_debito":  (250, 240),
-    "contab_linha2_cr":            (410, 240),
-    "contab_linha2_valor":         (890, 240),
+    "data_lancto":           (688, 152),
+    "observacao_fiscal":     (859, 144),
+    "valor_total_nf":        (114, 330),
+    "check_icms":            (20, 407),
+    # ---- Aba Financeiro ----
+    "observacao_financeira": (411, 253),
+    "radio_vencimento":      (311, 419),
+    "qtd_parcelas":          (525, 417),
+    "dias_entre_venc":       (676, 416),
+    "data_vencimento":       (823, 418),
+    "btn_gerar":             (280, 416),
+    # ---- Aba Contabilização ----
+    "contab_linha1_filial":        (205, 223),
+    "contab_linha1_valor":         (900, 220),
+    "contab_linha2_conta_debito":  (288, 242),
+    "contab_linha2_cr":            (419, 241),
+    "contab_linha2_valor":         (895, 240),
 }
 
-# Popup Aviso (duplicidade) — offsets do âncora "Aviso".
+# Popup Aviso (duplicidade) — offsets do âncora "Aviso" (build-104
+# corrige com base na calibração real do usuário).
 POPUP_AVISO_OFFSET: dict[str, tuple[int, int]] = {
-    "popup_dupl_ok": (205, 127),
+    "popup_dupl_ok": (244, 107),
 }
 
 # Popup Atenção (pós-F2 confirmar descartar) — offsets do âncora "Atenção!".
 POPUP_ATENCAO_OFFSET: dict[str, tuple[int, int]] = {
-    "popup_atencao_sim": (120, 135),
+    "popup_atencao_sim": (138, 124),
 }
 
 CONFIANCA_MINIMA = 0.70

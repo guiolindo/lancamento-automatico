@@ -214,7 +214,7 @@ class MainWindow(QMainWindow):
         # elas como qualquer nav decente.
         self._pages = QStackedWidget()
         self._pages.addWidget(self._montar_content())          # index 0: dashboard
-        self._orcamento_page = OrcamentoPage(self.settings)
+        self._orcamento_page = OrcamentoPage(self.settings, main_window=self)
         self._pages.addWidget(self._orcamento_page)            # index 1: orçamento
         lay.addWidget(self._pages, 1)
 

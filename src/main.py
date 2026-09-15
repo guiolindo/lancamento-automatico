@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-103 (fix Orçamento — detecta duplicidade LOGO após Nota Fiscal, antes do +; robô parava clicando por cima do popup)"
+BUILD_MARKER = "build-104 (Orçamento: offsets visão reescritos com calibração real do user + auto-move MainWindow em multi-monitor)"
 
 
 def main() -> int:

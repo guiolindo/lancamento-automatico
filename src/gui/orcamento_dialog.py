@@ -116,9 +116,15 @@ class OrcamentoPage(QWidget):
     COLS_NFSE = ["#", "Pág.", "Número NF", "Data Emissão", "Valor (R$)", "Status"]
     COLS_DAE  = ["#", "Pág.", "Nº Série DAE", "Filial", "Tipo", "Vencimento", "Valor (R$)", "Status"]
 
-    def __init__(self, settings: SettingsStore, parent=None):
+    def __init__(self, settings: SettingsStore, main_window=None, parent=None):
         super().__init__(parent)
         self.settings = settings
+        # main_window opcional — quando presente, o Orçamento reusa a
+        # lógica de "detectar tela do TOTVS e mover pra outra" +
+        # "restaurar após lote" que já existia no dashboard. Antes o
+        # Orçamento ignorava isso e o usuário reportou que a janela do
+        # app não saía da tela do TOTVS durante a execução.
+        self._main_window = main_window
         self.setAcceptDrops(True)
 
         self._pdf_selecionado: Path | None = None
@@ -706,6 +712,18 @@ class OrcamentoPage(QWidget):
         self._btn_cancelar.setVisible(True)
         self._lbl_status.setText("Executando… (END = emergência)")
 
+        # Multi-monitor: se a janela do Auto Conferi está na MESMA tela do
+        # TOTVS, o main_window move ela pra outra tela pra o operador ver
+        # o que está acontecendo (user reportou build-104). Em mono-monitor
+        # a lógica atual do main_window devolve geometry pra HUD; aqui
+        # não usamos HUD (o log já vive dentro da própria página do
+        # Orçamento), mas a chamada é idempotente e só move se precisar.
+        if self._main_window is not None:
+            try:
+                self._main_window._preparar_janela_para_execucao()
+            except Exception:  # noqa: BLE001
+                log.exception("Falha preparando janela pro lote Orçamento")
+
         self._thread = rodar_em_thread(self._worker)
 
     def _calibrar_tela(self) -> None:
@@ -751,11 +769,20 @@ class OrcamentoPage(QWidget):
         finally:
             self._tabela.blockSignals(False)
 
+    def _restaurar_janela(self) -> None:
+        """Volta a MainWindow pra tela/estado de antes do lote."""
+        if self._main_window is not None:
+            try:
+                self._main_window._restaurar_janela_pos_lote()
+            except Exception:  # noqa: BLE001
+                log.exception("Falha restaurando janela pós-lote Orçamento")
+
     def _on_finished_worker(self, sucessos: int, falhas: int, ignoradas: int) -> None:
         self._btn_executar.setEnabled(True)
         self._btn_extrair.setEnabled(True)
         self._btn_cancelar.setEnabled(True)
         self._btn_cancelar.setVisible(False)
+        self._restaurar_janela()
         total = sucessos + falhas + ignoradas
         self._lbl_status.setText(
             f"Concluído — {sucessos} OK · {falhas} falhas · {ignoradas} ignoradas (de {total})"
@@ -773,6 +800,7 @@ class OrcamentoPage(QWidget):
         self._btn_executar.setEnabled(True)
         self._btn_extrair.setEnabled(True)
         self._btn_cancelar.setVisible(False)
+        self._restaurar_janela()
         self._lbl_status.setText("Erro — veja o diálogo")
         QMessageBox.critical(self, "Erro no lote Orçamento", msg)
 
