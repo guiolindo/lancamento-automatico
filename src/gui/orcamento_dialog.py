@@ -466,14 +466,25 @@ class OrcamentoPage(QWidget):
                     entries.append((a, codigo, nome_can))
 
         chaves = [e[0] for e in entries]
-        # WRatio > token_set_ratio pra desambiguar loja vs CD com nome
-        # parecido (ex.: 'CD Rib Neves' precisa preferir 'CD Rib Neves'
-        # do CD Ribeirão das Neves ao invés de matchar só 'Rib Neves' da
-        # loja Ribeirão das Neves).
-        match = process.extractOne(texto, chaves, scorer=fuzz.WRatio)
-        if not match:
+        # WRatio como scorer base + reranking pra desambiguar LOJA vs CD.
+        # O TOTVS tem várias filiais cujo CD compartilha nome com uma loja
+        # (Feira de Santana vs CD Feira de Santana, Ribeirão das Neves
+        # vs CD Ribeirão das Neves). Se o texto escrito à mão tem "CD",
+        # queremos preferir a filial que TAMBÉM tem "CD"; se não tem,
+        # queremos a loja. WRatio sozinho errava (ex.: 'cd feira de
+        # santana' dava score 80 pra 'Feira de Santana' e 79 pro CD).
+        tem_cd_texto = self._tem_cd_prefix(texto)
+        candidatos_scored: list[tuple[str, float, int]] = []
+        for chave, score, idx in process.extract(texto, chaves, scorer=fuzz.WRatio, limit=10):
+            nome_can = entries[idx][2]
+            eh_cd_alvo = self._tem_cd_prefix(nome_can)
+            # Boost se prefixo bate, penalidade se cruza (LOJA<->CD)
+            ajuste = +15 if tem_cd_texto == eh_cd_alvo else -20
+            candidatos_scored.append((chave, min(100.0, max(0.0, score + ajuste)), idx))
+        if not candidatos_scored:
             return None, ""
-        chave_match, score, idx = match
+        candidatos_scored.sort(key=lambda x: -x[1])
+        chave_match, score, idx = candidatos_scored[0]
         if score < 70:
             log.info("Fuzzy caneta: '%s' → melhor '%s' (%.0f) descartado (<70)",
                      texto, chave_match, score)
@@ -482,6 +493,13 @@ class OrcamentoPage(QWidget):
         log.info("Fuzzy caneta: '%s' → '%s' → %s (código %d, score %.0f)",
                  texto, chave_match, nome_can, codigo, score)
         return codigo, nome_can
+
+    @staticmethod
+    def _tem_cd_prefix(texto: str) -> bool:
+        """True se o texto começa com 'CD' seguido de espaço/pontuação
+        (case-insensitive). 'CDX' não conta — precisa ser palavra."""
+        t = texto.strip().lower()
+        return t.startswith("cd ") or t == "cd" or t.startswith("cd-") or t.startswith("cd.")
 
     def _converter_daes(self, daes: list, template_chave: str, data_lancto: date) -> list:
         out = []
