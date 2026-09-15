@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-105 (fix acentos — clipboard+Ctrl+V pra strings com acento no lugar do typewrite que sumia com 'é'; textos da UI enxutos)"
+BUILD_MARKER = "build-106 (docs atualizadas builds 103-105 + Sobre reescrito com os 2 módulos)"
 
 
 def main() -> int:

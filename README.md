@@ -291,6 +291,8 @@ src/
     rpa_orcamento.py           automação da tela Notas Fiscais de Despesa
     visao_totvs.py             detecção pixel-perfect de campos (Operador Financeiro)
     visao_orcamento.py         detecção pixel-perfect (Orçamento) — mesma pattern
+    keyboard_utils.py          digita texto no TOTVS — ASCII via typewrite, com
+                               acento via clipboard+Ctrl+V (typewrite ignora acento)
     updater.py                 check GitHub Releases + download + SHA256 + extract p/ _next/
   gui/
     theme.py                   QSS + PALETTE_DARK/PALETTE_LIGHT (verde-fisco dark + azul SAP light)

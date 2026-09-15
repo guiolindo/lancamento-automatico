@@ -699,6 +699,10 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 99 | **Orçamento vira página integrada**: era `QDialog` modal (janela separada "a nada com nada", sem log, sem topbar). Agora `OrcamentoPage(QWidget)` embarcada em `QStackedWidget` no shell — sidebar troca entre `dashboard` (index 0) e `orcamento` (index 1) como qualquer nav decente. Herda topbar/breadcrumb/tema do main_window. `_encerrar_threads` propaga cancelamento pra página do Orçamento. Alias `OrcamentoDialog` mantido pra backcompat. | `main_window.py`, `orcamento_dialog.py` |
 | 100 | **Fix crítico — calibração manual PREVALECE sobre visão automática**: bug reportado — botão Empresa (e mais um monte) clicava totalmente fora e "nem recalibrar resolvia". Causa: no início de cada lote, `preencher_calibracao_automatica` SOBRESCREVIA `calibracao.campos` com offsets calculados por template matching. Se esses offsets não batiam exatamente com a resolução real do TOTVS do usuário, todos os cliques caíam fora, e como sobrescrevia toda vez, recalibrar não adiantava. Fix em 3 lugares: `LoteOrcamentoWorker.run` e `LoteWorker.run` só chamam visão se calibração está INCOMPLETA; `RpaOrcamento._clicar_popup_via_visao` prioriza campo calibrado do popup, visão vira segundo recurso. | `workers.py`, `rpa_orcamento.py` |
 | 101 | **DAE Bahia (ICMS energia elétrica)**: novo tipo de documento no módulo Orçamento. Template `DAE_ENERGIA` cobre `regime_normal` e `adic_fundo_pobreza` (Gemini identifica pelo campo "Especificação da Receita"). Novo `cnpjs_filiais.json` (31 CNPJs Multicom) — resolve empresa por CNPJ. Prompt `_PROMPT_DAE` deduplica vias (2 canhotos com mesmo Nº série = 1 entrada). Aba Contabilização suporta 2 modos: simples (OTIMO — replica valor em N linhas) e complexo (DAE — linha1 troca filial + valor, linha2 troca conta débito 330115018 + CR 141007 + valor). +3 campos calibráveis (`contab_linha1_filial`, `contab_linha2_conta_debito`, `contab_linha2_cr`). Grid dinâmico (NFS-e 6 cols vs DAE 8 cols com Filial/Tipo/Vencimento). `NotaDespesa` ganha campos `cnpj/tipo_dae/vencimento_dae/filial_codigo/filial_nome`. | `mapeamento_orcamento.json`, `cnpjs_filiais.json` (novo), `models.py`, `gemini_client.py`, `rpa_orcamento.py`, `calibracao_orcamento.py`, `visao_orcamento.py`, `orcamento_dialog.py`, `build.py` |
+| 102 | Docs sync (README + ARCHITECTURE + DECISIONS) cobrindo builds 95..101 — nada de código. | `*.md` |
+| 103 | **Fix duplicidade Orçamento** — detecta LOGO após digitar Nota Fiscal, não só depois do "+". O TOTVS valida o campo Nota Fiscal no OnLeaveFocus e mostra o popup Aviso na hora; o robô ignorava e seguia clicando por cima. Novo fluxo: cabeçalho aba Nota → digita NF + Tab pra forçar OnLeaveFocus → sleep 1s → verifica popup novo. Se apareceu: `_resolver_duplicidade` (OK+F2+Sim → IGNORADA). Segunda verificação antes do "+" fica como cinturão+suspensório. | `rpa_orcamento.py` |
+| 104 | **Offsets da visão do Orçamento reescritos** com a calibração real do usuário. Meus valores anteriores tinham 2 erros grosseiros: toda a aba Financeiro estava com Y +132px errado e `observacao_financeira` com X −209px. Recalculei todos os 26 campos + 2 popups subtraindo (20, 62) — posição do âncora "Notas Fiscais de Despesas" dentro da janela — de cada coordenada window-relative dele. Além disso, `OrcamentoPage` agora recebe `main_window=self` e chama `_preparar_janela_para_execucao()`/`_restaurar_janela_pos_lote()` — auto-move a MainWindow pra outra tela em multi-monitor, mesma pattern do Novo Lote. | `visao_orcamento.py`, `orcamento_dialog.py`, `main_window.py` |
+| 105 | **Fix acentos ignorados**: `pyautogui.typewrite` só sabe digitar ASCII — qualquer char não-ASCII (é/ê/ç/á…) é ignorado silenciosamente. "ELÉTRICA" saía "ELTRICA" no TOTVS. Novo `keyboard_utils.digitar_texto(texto)` decide por caractere: ASCII vai por typewrite (rápido), string com acento vai por clipboard Win32 (`OpenClipboard`/`SetClipboardData` via ctypes puro — sem dep nova) + `Ctrl+V`, salvando e restaurando o clipboard atual. Aplicado em `rpa_totvs._preencher` e `rpa_orcamento._preencher`/`_digitar_multilinha`. Também: textos do Orçamento enxutos ("🤖 Enviando… — 1 request só", "✓ N item(ns) extraído(s). Revise…" etc. cortados) — removida a "cara de IA". Sobre reescrito com os 2 módulos e o BUILD_MARKER. | `keyboard_utils.py` (novo), `rpa_totvs.py`, `rpa_orcamento.py`, `orcamento_dialog.py`, `main_window.py` |
 
 ---
 
@@ -788,6 +792,25 @@ Coisas que vão pegar contribuidor novo (humano ou IA) de surpresa:
     `gemini_client.py` orienta a devolver 1 entrada por Nº série
     único. Se você editar o prompt, teste antes com um PDF real —
     se o Gemini duplicar, o lote lança tudo 2 vezes.
+15. **TOTVS Orçamento valida Nota Fiscal no OnLeaveFocus** — não
+    precisa clicar "+" pra o popup Aviso de duplicidade aparecer.
+    Ele nasce assim que o cursor sai do campo Nota Fiscal (Tab, ou
+    click em outro campo). Consequência: qualquer fluxo que preencha
+    a NF e siga em frente sem checar popup ANTES vai clicar por
+    cima do popup e tudo dá errado. Ver `RpaOrcamento
+    ._checar_duplicidade_apos_nota_fiscal` (build-103) — snapshot
+    antes da NF, digita + Tab, sleep 1s, procura popup novo. Se
+    editar o RPA, preserve esse check point.
+16. **`pyautogui.typewrite` só sabe ASCII** — qualquer caractere
+    fora de a-z, A-Z, 0-9 e pontuação padrão de teclado US é
+    **ignorado silenciosamente** (sem warning, sem erro). Digitando
+    "ELÉTRICA" o TOTVS recebe "ELTRICA". Igual pra ç, ê, á, ó, ó
+    acentuados, "&", "~", etc. Fix universal está em
+    `src/core/keyboard_utils.py::digitar_texto` — decide por char e
+    manda ASCII por typewrite ou string com acento por clipboard
+    Win32 + Ctrl+V. Sempre use `digitar_texto` no lugar de
+    `pyautogui.typewrite` em código que preenche campos de nota,
+    observação ou qualquer texto vindo de template.
 
 ---
 

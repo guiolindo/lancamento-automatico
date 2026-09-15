@@ -747,15 +747,28 @@ class MainWindow(QMainWindow):
         box.setIcon(QMessageBox.Information)
         box.setTextFormat(Qt.RichText)
         box.setText(
-            "<h3 style='margin:0 0 6px 0'>Auto Conferi</h3>"
-            "<p style='color:#888;margin:0'>Automação de lançamento fiscal · "
-            "integração para TOTVS/Consinco</p>"
-            "<br><br>"
-            f"<b>Versão:</b> <code>{BUILD_MARKER}</code><br>"
-            "<b>Produzido por:</b> Guilherme Júnio<br>"
+            "<h3 style='margin:0 0 4px 0'>Auto Conferi</h3>"
+            "<p style='color:#888;margin:0 0 12px 0'>Automação fiscal para TOTVS/Consinco.</p>"
+
+            "<p style='margin:0 0 4px 0'><b>Novo lote</b> — Inclusão de Títulos "
+            "(Operador Financeiro):</p>"
+            "<p style='color:#888;margin:0 0 10px 0'>IRRF (folha, férias, rescisão, "
+            "adiantamento) e INSS. Gemini lê o relatório; robô lança linha por linha "
+            "com detecção de duplicidade e retry.</p>"
+
+            "<p style='margin:0 0 4px 0'><b>Orçamento</b> — Notas Fiscais de "
+            "Despesa:</p>"
+            "<p style='color:#888;margin:0 0 12px 0'>Templates por fornecedor. "
+            "Ótimo (vale-transporte, NFS-e) e DAE Bahia (ICMS energia). "
+            "Preenche as 3 abas do form e clica Autorizar; duplicidade fica "
+            "IGNORADA, número da NF não é inventado.</p>"
+
+            f"<p style='margin:0'><b>Versão:</b> <code>{BUILD_MARKER}</code></p>"
+            "<p style='margin:2px 0 0 0'><b>Autor:</b> Guilherme Júnio</p>"
             "<br>"
-            "<p style='color:#888;font-size:11px'>App portátil sem instalação · "
-            "roda sem admin · atualiza automaticamente pelo GitHub.</p>"
+            "<p style='color:#888;font-size:11px;margin:0'>"
+            "END aborta o lote a qualquer momento.<br>"
+            "Portátil, roda sem admin, atualiza sozinho pelo GitHub.</p>"
         )
         box.setStandardButtons(QMessageBox.Ok)
         box.exec()

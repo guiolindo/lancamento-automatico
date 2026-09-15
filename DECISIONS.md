@@ -220,6 +220,54 @@ errado é problema real. Melhor o usuário conferir manualmente.
 
 ---
 
+## 8. Digitação de acentos: clipboard + Ctrl+V ✅ (build-105)
+
+**Contexto**: bug em prod — "ao lançar notas que têm acentos, ele
+simplesmente ignora a letra com acento. Elétrica vira eltrica." Causa:
+`pyautogui.typewrite` só sabe digitar ASCII básico (envia virtual keys
+do teclado US-ANSI). Qualquer char fora disso — é, ê, ç, á, à, ó etc.
+— é **ignorado silenciosamente**, sem warning, sem erro.
+
+**Opções consideradas:**
+
+- **A**: substituir `pyautogui.typewrite` por `keyboard.write(str)` da
+  lib `keyboard` — suporta unicode via WM_UNICHAR. Mas puxa dep nova,
+  e ela é famosa por trigger de AV corporativo (ela usa
+  `SetWindowsHookEx(WH_KEYBOARD_LL)` — hook de teclado global, padrão
+  clássico de keylogger — build-86 documenta que a gente EVITA esse
+  padrão).
+- **B**: `pyperclip.copy(texto)` + `pyautogui.hotkey('ctrl','v')`.
+  Simples, mas dep nova (só clipboard, ~200 linhas).
+- **C**: clipboard via ctypes puro (Win32 `OpenClipboard` /
+  `SetClipboardData(CF_UNICODETEXT)`) + `pyautogui.hotkey('ctrl','v')`.
+
+**Escolhida — C**. Sem dep nova (o app já tem `ctypes` da stdlib),
+sem hook de teclado global (AV concern), e `Ctrl+V` é sequência
+mainstream que Zoom/Slack/Chrome mandam o tempo todo — zero AV
+flag no perfil heurístico.
+
+**Detalhes de implementação:**
+
+- `src/core/keyboard_utils.py::digitar_texto(texto)` decide por char:
+  - `texto.encode("ascii")` sem exceção → `pyautogui.typewrite`
+    (rápido, sem tocar clipboard).
+  - Erro → caminho clipboard: salva o clipboard atual do usuário
+    (`GetClipboardData(CF_UNICODETEXT)`), coloca o texto novo com
+    `SetClipboardData(CF_UNICODETEXT)`, manda `Ctrl+V`, sleep 80ms,
+    **restaura o clipboard anterior**.
+- `OpenClipboard` pode falhar transiente (outro processo — Zoom,
+  screenshot — segurou por milissegundos). Retry 5×, 50ms cada,
+  antes de desistir.
+- Fallback: se o clipboard falhar completamente, cai no typewrite
+  puro (perde acento, mas grava o resto — melhor que travar).
+
+Aplicado em `rpa_totvs._preencher` e `rpa_orcamento._preencher` +
+`_digitar_multilinha`. Todo lugar novo que precise digitar strings de
+template no TOTVS deve usar `digitar_texto` e NUNCA
+`pyautogui.typewrite` direto.
+
+---
+
 ## Convenções do projeto
 
 Registradas aqui pra IA/contribuidor novo não precisar adivinhar.
