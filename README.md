@@ -17,12 +17,44 @@ dentro de VM via RemoteApp (Auto Sky), onde a janela aparece com sufixo
 > (`LancamentoAutomatico-portatil.zip`) mantêm o nome antigo por
 > compatibilidade com o updater embarcado em builds já distribuídos.
 
-## Impostos suportados
+## Módulos
+
+O app tem **dois módulos** na sidebar, cada um automatizando uma tela
+diferente do TOTVS:
+
+### 1. Novo lote (Operador Financeiro / Inclusão de Títulos)
+
+Guias/resumos de impostos sobre folha de pagamento.
 
 | Imposto | Status |
 | ------- | ------ |
 | IRRF (folha, férias, rescisão, adiantamento) | ✅ funcionando |
-| ICMS ST, INSS, ISS, PIS/COFINS | 🕓 roadmap — adicionar em `mapeamento.json` |
+| INSS (folha, coluna única, ref = mês anterior à emissão) | ✅ funcionando |
+| ICMS ST, ISS, PIS/COFINS | 🕓 roadmap — adicionar em `mapeamento.json` |
+
+### 2. Orçamento (Notas Fiscais de Despesa)
+
+Automatiza o form **Notas Fiscais de Despesa** do módulo Orçamento do
+TOTVS. Cada fornecedor recorrente vira um **template** em
+`mapeamento_orcamento.json` que define TODOS os campos fixos do form; só
+3–6 variáveis por documento (número, data, valor, etc.) mudam por lote.
+
+| Fornecedor / documento | Status | Extração via Gemini |
+| ---------------------- | ------ | ------------------- |
+| Ótimo (Consórcio de Bilhetagem — vale-transporte, NFS-e) | ✅ | Multi-página, 3 campos por nota |
+| DAE Bahia — ICMS sobre energia elétrica (regime normal + adic fundo pobreza) | ✅ | Resolve empresa por CNPJ, identifica tipo automaticamente |
+| Outros fornecedores recorrentes | 🕓 roadmap — novo entry em `mapeamento_orcamento.json` |
+
+Fluxo idêntico ao módulo principal:
+1. Combo → escolhe fornecedor.
+2. Arrasta PDF (pode ter várias notas na mesma folha — Gemini deduplica).
+3. Extrai → grid mostra 1 linha por documento; edições manuais aceitas.
+4. Executar → RPA preenche as 3 abas (Nota / Financeiro / Contabilização),
+   clica "+" **uma vez no final**, trata popup de duplicidade (`OK` → `F2`
+   borracha → `Sim` → nota marcada IGNORADA — nunca inventa número), e
+   clica "Autorizar".
+
+Detalhes técnicos em [ARCHITECTURE.md → Módulo Orçamento](ARCHITECTURE.md).
 
 ## Fluxo de uso
 
@@ -164,8 +196,9 @@ nenhuma modificação em pastas protegidas.
 
 | Arquivo | Conteúdo |
 | ------- | -------- |
-| `settings.json` | Chave Gemini, modelo, delays da automação, config RPA |
-| `calibracao.json` | Posições dos 11 campos do TOTVS (relativas à janela) e cor RGB do popup |
+| `settings.json` | Chave Gemini (cifrada via DPAPI), modelo, delays da automação, config RPA |
+| `calibracao.json` | Posições dos 11 campos do TOTVS Operador Financeiro (relativas à janela) e cor RGB do popup |
+| `calibracao_orcamento.json` | Posições dos 25 campos da tela Notas Fiscais de Despesa (aba Nota + Financeiro + Contabilização + popups Aviso/Atenção) |
 | `lancamento.log` | Log da execução |
 | `boot_trace.log` | Trace de inicialização (para depurar crash em startup) |
 | `startup_error.log` | Stacktrace se o boot morrer com exceção não tratada |
@@ -181,7 +214,9 @@ Ao lado do `.exe` (pasta portátil):
 
 | Arquivo | Papel |
 | ------- | ----- |
-| `mapeamento.json` | De-para de filiais e configurações por imposto — **editável pelo usuário final sem recompilar** |
+| `mapeamento.json` | De-para de filiais e configurações por imposto (Novo lote) — **editável pelo usuário final sem recompilar** |
+| `mapeamento_orcamento.json` | Templates de fornecedores do módulo Orçamento (OTIMO, DAE_ENERGIA, …) — **editável pelo usuário** |
+| `cnpjs_filiais.json` | Mapa CNPJ→filial (usado por documentos que endereçam pelo CNPJ, como o DAE Bahia) — **editável** |
 | `_next/` | Pasta temporária do updater. Só existe entre "download pronto" e "próximo boot aplica". |
 | `_next/READY` | Marker JSON que sinaliza pro launcher aplicar o update no próximo boot |
 | `*.exe.old` | Cópia do .exe antigo, deixada pra trás após swap. Removida no boot seguinte. |
@@ -202,44 +237,81 @@ JSON — sem recompilar.
 Na UI existe também um dialog "De-Para" (menu lateral) que edita o mesmo
 arquivo com validação.
 
+## Adicionando um fornecedor novo ao módulo Orçamento
+
+Cada fornecedor é um entry em `mapeamento_orcamento.json` com 3 seções:
+`aba_nota`, `aba_financeiro`, `aba_contabilizacao` + um bloco `regras`.
+Modos suportados:
+
+- **Simples (tipo OTIMO)**: fornecedor único por template, obs fiscal
+  fixa, campos empresa/nat.despesa/pessoa fixos, aba Contabilização só
+  replica o valor em N linhas.
+- **Por CNPJ (tipo DAE)**: cada documento é endereçado a uma filial
+  diferente identificada por CNPJ. `empresa_por_cnpj: true` faz o app
+  resolver a filial pela tabela `cnpjs_filiais.json`. A observação pode
+  variar por `tipo` do documento (ex.: `regime_normal` vs
+  `adic_fundo_pobreza`) via `observacao_por_tipo`. Aba Contabilização
+  aceita `linha1.trocar_filial_para_da_loja` + `linha2.conta_debito` /
+  `linha2.cr` fixos.
+
+Depois de editar, extrator do Gemini precisa saber como ler esse tipo
+de PDF — pra tipos totalmente novos, adicionar prompt em
+`src/core/gemini_client.py` e ligar via `tipo_extracao` no template.
+
 ## Estrutura do repositório
 
 ```
-launcher.py               entrypoint Nuitka (single-instance, apply update, error dialog)
+launcher.py                    entrypoint Nuitka (single-instance, apply update, error dialog)
 src/
-  main.py                 boot do app PySide6 (splash IMEDIATO, depois imports pesados)
-                          contém BUILD_MARKER — string que identifica a versão
-  config/mapeamento.json  de-para de filiais (embutido no build)
-  assets/branding/        logos do Auto Conferi em 8 tamanhos (16..512 px)
+  main.py                      boot do app PySide6 (splash IMEDIATO, depois imports pesados)
+                               contém BUILD_MARKER — string que identifica a versão
+  config/
+    mapeamento.json            de-para de filiais + impostos (Novo lote)
+    mapeamento_orcamento.json  templates de fornecedores (Orçamento)
+    cnpjs_filiais.json         mapa CNPJ → filial (usado por DAE Bahia e afins)
+  assets/
+    branding/                  logos do Auto Conferi em 8 tamanhos (16..512 px)
+    totvs_reference/           templates de visão computacional
+      *.png                    âncoras do Operador Financeiro (child + popup)
+      orcamento/               âncoras da tela Notas Fiscais de Despesa
+        anchor_header.png      "Notas Fiscais de Despesas" (âncora principal)
+        anchor_popup_aviso.png título do popup de duplicidade
+        anchor_popup_atencao.png título do popup pós-F2
+        aba_*.png              capturas de referência (3 abas × preenchida/branca)
   core/
-    models.py             dataclasses (Lancamento, Filial, Imposto)
-    logger.py             log com UTF-8 seguro
-    mapping.py            loader + fuzzy match de filiais
-    settings_store.py     settings.json + migração de modelo
-    calibracao.py         calibracao.json (11 pontos + cor popup)
-    gemini_client.py      chamada REST v1beta + parser
-    rpa_totvs.py          automação da janela Operador Financeiro
-    visao_totvs.py        detecção pixel-perfect de campos
-    updater.py            check GitHub Releases + download + SHA256 + extract p/ _next/
+    models.py                  dataclasses (Lancamento, Filial, Imposto, NotaDespesa)
+    logger.py                  log com UTF-8 seguro + rotation 5MB × 3
+    mapping.py                 loader + fuzzy match de filiais
+    settings_store.py          settings.json + migração de modelo
+    secret_store.py            DPAPI para cifrar chave Gemini
+    calibracao.py              calibracao.json Operador Financeiro (11 pontos)
+    calibracao_orcamento.py    calibracao_orcamento.json (25 pontos: 3 abas + popups)
+    gemini_client.py           chamada REST v1beta + prompts (IRRF / INSS / NFS-e / DAE)
+    rpa_totvs.py               automação da janela Operador Financeiro
+    rpa_orcamento.py           automação da tela Notas Fiscais de Despesa
+    visao_totvs.py             detecção pixel-perfect de campos (Operador Financeiro)
+    visao_orcamento.py         detecção pixel-perfect (Orçamento) — mesma pattern
+    updater.py                 check GitHub Releases + download + SHA256 + extract p/ _next/
   gui/
-    theme.py              QSS + PALETTE_DARK/PALETTE_LIGHT (índigo #3B82F6 + teal #14B8A6)
-    icons.py              ícones vetoriais QPainter (não depende de font emoji)
-    splash.py             AutoConferiSplash — splash inicial com logo animada
-    updater_bar.py        barra laranja no topo com estado do updater
-    hud_execucao.py       HUD flutuante top-right (só em mono-monitor durante lote)
-    setup_dialog.py       primeiro uso (API key)
-    calibracao_dialog.py  captura das posições no TOTVS
-    depara_dialog.py      editor do mapeamento.json
-    workers.py            QThread p/ extração e p/ execução do lote
-    preview_table.py      tabela de revisão
-    main_window.py        janela principal (single-screen operacional)
+    theme.py                   QSS + PALETTE_DARK/PALETTE_LIGHT (verde-fisco dark + azul SAP light)
+    icons.py                   ícones vetoriais QPainter (não depende de font emoji)
+    splash.py                  AutoConferiSplash — splash inicial com logo animada
+    updater_bar.py             barra laranja no topo com estado do updater
+    hud_execucao.py            HUD flutuante top-right (só em mono-monitor durante lote)
+    setup_dialog.py            primeiro uso (API key)
+    calibracao_dialog.py       captura das posições no TOTVS — parametrizável pros 2 módulos
+    depara_dialog.py           editor do mapeamento.json
+    orcamento_dialog.py        OrcamentoPage — página integrada ao main_window (não dialog)
+    workers.py                 QThreads (extração + execução do lote — Novo lote e Orçamento)
+    preview_table.py           tabela de revisão do Novo lote
+    main_window.py             janela principal (QStackedWidget: dashboard + orçamento)
 build/
-  build.py                script Nuitka (portátil, anti-AV)
-  app.ico                 ícone do .exe (bump de file-version força cache do Explorer a atualizar)
+  build.py                     script Nuitka (portátil, anti-AV)
+  app.ico                      ícone do .exe (bump de file-version força cache do Explorer a atualizar)
 .github/workflows/
-  build-exe.yml           CI Windows → rolling release 'latest' + tag v* p/ release oficial
-ARCHITECTURE.md           contrato interno (updater ↔ launcher, workflow, race conditions, changelog)
-DECISIONS.md              log de decisões (histórico do que foi discutido e implementado)
+  build-exe.yml                CI Windows → rolling release 'latest' + tag v* p/ release oficial
+ARCHITECTURE.md                contrato interno (updater ↔ launcher, workflow, race conditions, changelog)
+DECISIONS.md                   log de decisões (histórico do que foi discutido e implementado)
 ```
 
 ## Se ainda assim o antivírus reclamar

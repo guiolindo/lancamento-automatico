@@ -481,6 +481,139 @@ mais neutra.
 
 ---
 
+## 4e. Módulo Orçamento (build-95..101)
+
+Segundo módulo do app, **paralelo** ao Novo Lote — vive numa página do
+`QStackedWidget` do main_window (build-99, era dialog modal antes).
+Automatiza a tela **Notas Fiscais de Despesa** do TOTVS Orçamento, com
+templates por fornecedor.
+
+### 4e.1 Arquitetura por camadas
+
+```
+┌───────────────────────────────────────────────────────┐
+│ mapeamento_orcamento.json                             │
+│   templates por fornecedor (OTIMO, DAE_ENERGIA, ...)  │
+│   define 3 abas + regras (dedup, resolver_filial_por) │
+└───────────────────────────────────────────────────────┘
+                     │
+                     ▼
+┌───────────────────────────────────────────────────────┐
+│ gemini_client.py                                       │
+│   extrair_notas_nfse(pdf)  ← NFS-e simples             │
+│   extrair_daes(pdf)        ← DAE Bahia (dedup vias)    │
+└───────────────────────────────────────────────────────┘
+                     │
+                     ▼
+┌───────────────────────────────────────────────────────┐
+│ orcamento_dialog.py::OrcamentoPage                     │
+│   Grid dinâmico (6 cols NFS-e / 8 cols DAE)            │
+│   Converte dict do Gemini → NotaDespesa                │
+│   Resolve CNPJ→filial via cnpjs_filiais.json           │
+└───────────────────────────────────────────────────────┘
+                     │
+                     ▼
+┌───────────────────────────────────────────────────────┐
+│ workers.py::LoteOrcamentoWorker                        │
+│   Prioridade: calibração manual > visão automática     │
+│   Fallback: visao_orcamento.preencher_calibracao_...   │
+└───────────────────────────────────────────────────────┘
+                     │
+                     ▼
+┌───────────────────────────────────────────────────────┐
+│ rpa_orcamento.py::RpaOrcamento                         │
+│   Preenche aba Nota + Financeiro + Contabilização      │
+│   Clica "+" UMA vez no final                           │
+│   Trata popup Aviso (dupl) → F2 → popup Atenção Sim   │
+│   Clica "Autorizar"                                    │
+└───────────────────────────────────────────────────────┘
+```
+
+### 4e.2 Fluxo por nota
+
+Ordem fixa, validada com o user (build-98):
+
+1. Preenche **aba Nota** (empresa, nat.despesa, pessoa, NF, datas, obs,
+   valor, ICMS).
+2. Preenche **aba Financeiro** (obs, radio Vencimento, qtd parcelas,
+   dias entre venc., data 1º venc., Gerar parcelas).
+3. Preenche **aba Contabilização** — 2 modos:
+   - **Simples (OTIMO)**: `replicar_valor_nas_linhas: N` — só replica o
+     valor em N linhas da tabela.
+   - **Complexo (DAE)**: `linha1.trocar_filial_para_da_loja` + valor;
+     `linha2.conta_debito` (código fixo) + `linha2.cr` (código fixo) +
+     valor.
+4. Clica **"+"** UMA vez (grava tudo).
+5. Se aparece popup **"Aviso"** (nota duplicada):
+   - Fecha popup (OK) → `F2` (borracha = limpar tela) → popup **"Atenção"**
+     (descartar alterações) → clica `Sim` → nota marca `IGNORADA`.
+   - **Nunca inventa número** — é documento fiscal real.
+6. Sem duplicidade → clica **"Autorizar"** → nota marca `SUCESSO`.
+
+### 4e.3 Prioridade de calibração (build-100)
+
+Bug crítico do build-97: a visão automática sobrescrevia
+`calibracao.campos` a cada início de lote, o que fazia cliques do
+usuário calibrado caírem em lugar errado — e "nem recalibrar resolvia"
+porque o próximo lote sobrescrevia de novo.
+
+Correção: **calibração manual completa PREVALECE**. Se
+`calibracao.esta_completa()` retorna `True`, a visão é PULADA.
+
+```python
+if self.calibracao.esta_completa():
+    log("[calibração] manual completa — usando ela (visão ignorada)")
+else:
+    ok, msg = preencher_calibracao_automatica(self.calibracao)
+```
+
+Mesmo comportamento aplicado no LoteWorker do Operador Financeiro.
+
+### 4e.4 Resolução de filial por CNPJ (DAE)
+
+Documentos como o DAE Bahia endereçam cada guia a uma filial específica
+pelo CNPJ. Fluxo:
+
+1. Gemini extrai `cnpj` (14 dígitos) por documento.
+2. `_converter_daes` faz lookup em `self._cnpjs_filiais[cnpj]`.
+3. Popula `NotaDespesa.filial_codigo` e `filial_nome`.
+4. Grid mostra `filial_codigo — filial_nome` (ex.: `17 — Paulo Afonso`).
+5. RPA usa `nota.filial_codigo` como valor pro campo Empresa da aba Nota
+   E pra troca de filial na linha 1 da aba Contabilização.
+
+Se o CNPJ não bater na tabela: `filial_codigo = None` → linha marca
+"Revisar" e não vai pro lote.
+
+`cnpjs_filiais.json` é embarcado no bundle e copiado pro root da pasta
+portátil (usuário pode adicionar filial nova sem recompilar).
+
+### 4e.5 Prompts Gemini
+
+`gemini_client.py::_PROMPT_NFSE` extrai NFS-e simples (número, data,
+valor). `_PROMPT_DAE` (build-101) tem 2 responsabilidades a mais:
+
+- **Dedup de vias**: DAE tem 2 canhotos (via + via) no mesmo papel;
+  prompt orienta a devolver 1 linha por `Nº de série` único.
+- **Classificação de tipo**: lê o campo "Especificação da Receita" e
+  classifica em `regime_normal` / `adic_fundo_pobreza` — a observação
+  final é normalizada pelo template
+  (`observacao_por_tipo[tipo]`).
+
+### 4e.6 Popups em runtime
+
+Diferente da tela principal do TOTVS, os popups do Orçamento só existem
+DURANTE a execução. `RpaOrcamento._clicar_popup_via_visao` tenta 3
+caminhos em ordem:
+
+1. Se campo calibrado manualmente (`popup_dupl_ok` / `popup_atencao_sim`)
+   → clica pelo offset salvo. **Prioridade absoluta** (build-100).
+2. Senão → visão em runtime: template matching do título do popup
+   (`anchor_popup_aviso.png` ou `anchor_popup_atencao.png`) + offset
+   conhecido do botão.
+3. Último recurso → ativa janela do popup (via `pygetwindow`) + `Enter`.
+
+---
+
 ## 5. Empacotamento Nuitka
 
 Ver comentários em `build/build.py` — mas o essencial:
@@ -559,6 +692,13 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 92 | Check de rede corporativa no launcher: se o DNS interno não resolve em 3s, o app sai com aviso "Conecte à rede corporativa ou VPN". Roda ANTES de mutex/updater/Qt — falha rápido, sem trabalho perdido. Bypass pra dev: `AUTOCONFERI_DEV=1`. Zero AV concern (`socket.gethostbyname` é chamada DNS padrão que Chrome/Windows/Outlook fazem centenas por dia). | `launcher.py` |
 | 93 | MessageBox e BUILD_MARKER (release notes públicas) não mencionam mais o nome específico do domínio interno. Mensagem ao usuário fica genérica ("rede corporativa" em vez de citar o domínio). O nome ainda vivia no código-fonte nesse build — mudança completa no 94. | `launcher.py`, `main.py` |
 | 94 | Check de rede reescrito: em vez de DNS lookup (que exigia ter o nome do domínio em plain text no source), agora lê `USERDNSDOMAIN` (env var que o Windows seta quando a máquina está no domínio Active Directory) e compara SHA-256 do valor + salt com um hash conhecido. Vantagens: (a) zero DNS lookup — instantâneo, zero rede, Kaspersky nem enxerga; (b) nome do domínio NUNCA aparece no source ou binário — só o hash de 64 hex; (c) `strings` no exe não vaza nada; (d) pra reverter, atacante precisa brute-force com wordlist de sufixos corporativos. Requer que a máquina esteja no domínio AD (todas as máquinas da empresa estão). Bypass `AUTOCONFERI_DEV=1` mantido. Ver também: histórico foi reescrito depois desse build pra remover menções antigas ao domínio. | `launcher.py`, `main.py` |
+| 95 | **Módulo Orçamento — v0**: sidebar + `OrcamentoDialog` (ainda modal) + extração de NFS-e via Gemini (`extrair_notas_nfse`, prompt `_PROMPT_NFSE` multi-página em 1 request). Template `OTIMO` (Consórcio Ótimo — vale-transporte) em `mapeamento_orcamento.json`. Botão "Executar" desabilitado — RPA vem no 96. | `orcamento_dialog.py` (novo), `mapeamento_orcamento.json` (novo), `gemini_client.py` |
+| 96 | **Módulo Orçamento — RPA operacional**: `rpa_orcamento.py` (novo, mesma pattern do `rpa_totvs.py`: hotkey END, SetForegroundWindow limpo, popup snapshot-diff). Fluxo: aba Nota → aba Financeiro → aba Contabilização → `+` UMA vez → popup Aviso? OK+F2+Sim → IGNORADA; senão Autorizar. `NotaDespesa` dataclass. `calibracao_orcamento.py` (novo — 23 campos). `LoteOrcamentoWorker`. Grid editável (número/data/valor). Size check no drop de PDF (>18MB → orienta compactar via Smallpdf/iLovePDF — sem embutir PyMuPDF). `CalibracaoDialog` generalizado (parametriza CAMPOS + título). | `rpa_orcamento.py`, `calibracao_orcamento.py`, `models.py`, `workers.py`, `orcamento_dialog.py`, `calibracao_dialog.py` |
+| 97 | **Módulo Orçamento — visão automática**: `visao_orcamento.py` (novo — mesma pattern do `visao_totvs.py`). 9 screenshots de referência em `src/assets/totvs_reference/orcamento/` + 3 âncoras recortados (`anchor_header`, `anchor_popup_aviso`, `anchor_popup_atencao`) — todos casam com confiança 1.000 no teste sanity. Offsets dos 23 campos + 2 popups medidos em `aba_nota_branco.png`. `LoteOrcamentoWorker` roda visão antes do fallback manual; `RpaOrcamento._tratar_duplicidade` detecta os popups em runtime via `resolver_popup_aviso/atencao` (o popup só existe DURANTE a execução). Botão Executar habilita com só notas prontas — não exige mais calibração manual. | `visao_orcamento.py` (novo), `assets/totvs_reference/orcamento/` |
+| 98 | **Fix ordem do fluxo Orçamento**: user esclareceu que "+" e "Autorizar" são UMA vez no FINAL, depois das 3 abas — não após cada aba. Antes: preenchia aba Nota → clicava "+" (pra detectar duplicidade), depois preenchia Financeiro+Contab → "+" de novo → Autorizar. Agora: 3 abas primeiro, "+" UMA vez pra gravar tudo, e SÓ ENTÃO detecta popup. Match o comportamento real do TOTVS. | `rpa_orcamento.py` |
+| 99 | **Orçamento vira página integrada**: era `QDialog` modal (janela separada "a nada com nada", sem log, sem topbar). Agora `OrcamentoPage(QWidget)` embarcada em `QStackedWidget` no shell — sidebar troca entre `dashboard` (index 0) e `orcamento` (index 1) como qualquer nav decente. Herda topbar/breadcrumb/tema do main_window. `_encerrar_threads` propaga cancelamento pra página do Orçamento. Alias `OrcamentoDialog` mantido pra backcompat. | `main_window.py`, `orcamento_dialog.py` |
+| 100 | **Fix crítico — calibração manual PREVALECE sobre visão automática**: bug reportado — botão Empresa (e mais um monte) clicava totalmente fora e "nem recalibrar resolvia". Causa: no início de cada lote, `preencher_calibracao_automatica` SOBRESCREVIA `calibracao.campos` com offsets calculados por template matching. Se esses offsets não batiam exatamente com a resolução real do TOTVS do usuário, todos os cliques caíam fora, e como sobrescrevia toda vez, recalibrar não adiantava. Fix em 3 lugares: `LoteOrcamentoWorker.run` e `LoteWorker.run` só chamam visão se calibração está INCOMPLETA; `RpaOrcamento._clicar_popup_via_visao` prioriza campo calibrado do popup, visão vira segundo recurso. | `workers.py`, `rpa_orcamento.py` |
+| 101 | **DAE Bahia (ICMS energia elétrica)**: novo tipo de documento no módulo Orçamento. Template `DAE_ENERGIA` cobre `regime_normal` e `adic_fundo_pobreza` (Gemini identifica pelo campo "Especificação da Receita"). Novo `cnpjs_filiais.json` (31 CNPJs Multicom) — resolve empresa por CNPJ. Prompt `_PROMPT_DAE` deduplica vias (2 canhotos com mesmo Nº série = 1 entrada). Aba Contabilização suporta 2 modos: simples (OTIMO — replica valor em N linhas) e complexo (DAE — linha1 troca filial + valor, linha2 troca conta débito 330115018 + CR 141007 + valor). +3 campos calibráveis (`contab_linha1_filial`, `contab_linha2_conta_debito`, `contab_linha2_cr`). Grid dinâmico (NFS-e 6 cols vs DAE 8 cols com Filial/Tipo/Vencimento). `NotaDespesa` ganha campos `cnpj/tipo_dae/vencimento_dae/filial_codigo/filial_nome`. | `mapeamento_orcamento.json`, `cnpjs_filiais.json` (novo), `models.py`, `gemini_client.py`, `rpa_orcamento.py`, `calibracao_orcamento.py`, `visao_orcamento.py`, `orcamento_dialog.py`, `build.py` |
 
 ---
 
@@ -623,6 +763,31 @@ Coisas que vão pegar contribuidor novo (humano ou IA) de surpresa:
     `RuntimeError: Please destroy the QApplication singleton before
     creating a new`. Corrigido no build-80. Todo lugar que cria
     QApplication no projeto deve usar o pattern `.instance() or ...`.
+12. **Visão automática NUNCA sobrescreve calibração manual completa**
+    — build-100. `preencher_calibracao_automatica` (tanto em
+    `visao_totvs.py` quanto `visao_orcamento.py`) muta
+    `calibracao.campos` in-place. Se o worker chamar essa função
+    sem checar `esta_completa()` antes, ela apaga silenciosamente a
+    calibração que o usuário calibrou à mão, e o próximo lote
+    sobrescreve de novo — "nem recalibrar resolve". O pattern
+    correto em qualquer worker que faça RPA da tela do TOTVS:
+    `if calibracao.esta_completa(): usa ela; else: chama visão`.
+    O mesmo vale pra popups em runtime (`RpaOrcamento
+    ._clicar_popup_via_visao`): calibração manual do campo do popup
+    tem prioridade sobre `resolver_popup_aviso/atencao`.
+13. **`+` do Orçamento é UMA vez no final** — build-98. É tentador
+    clicar "+" cedo (só depois da aba Nota) pra detectar duplicidade
+    antes de preencher Financeiro e Contabilização. O TOTVS NÃO
+    aceita: se você clica "+" com só a aba Nota preenchida, ele
+    ainda grava, mas as próximas abas não têm o registro pai. O
+    fluxo real: preenche as 3 abas, clica "+" UMA vez, e SÓ ENTÃO
+    o TOTVS decide se é dupl (mostra popup Aviso) ou gravou OK.
+    Autorizar vem depois disso.
+14. **DAE tem 2 vias por documento** — o mesmo Nº de série aparece
+    2× no PDF (canhoto + canhoto). O prompt `_PROMPT_DAE` do
+    `gemini_client.py` orienta a devolver 1 entrada por Nº série
+    único. Se você editar o prompt, teste antes com um PDF real —
+    se o Gemini duplicar, o lote lança tudo 2 vezes.
 
 ---
 

@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-101 (DAE Bahia — ICMS energia elétrica: template + Gemini extrator + mapping CNPJ→filial + aba Contab linha1 filial/valor e linha2 conta débito/CR/valor)"
+BUILD_MARKER = "build-102 (docs — README/ARCHITECTURE/DECISIONS atualizadas: módulo Orçamento, DAE Bahia, calibração manual prevalece)"
 
 
 def main() -> int:

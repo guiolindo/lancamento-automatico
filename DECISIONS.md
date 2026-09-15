@@ -125,6 +125,101 @@ antigo em mãos, e ao tentar baixar recebiam 404.
 
 ---
 
+## 5. Módulo Orçamento: dialog modal vs página integrada ✅ página (build-99)
+
+**Contexto**: novo módulo (build-95) implementado inicialmente como
+`QDialog` modal — clicar em "Orçamento" na sidebar abria uma janela
+Qt separada. Fácil de implementar, mas ficava "a nada com nada": sem
+topbar, sem breadcrumb, sem log integrado, cada tema/tamanho tinha
+que ser resetado, e visualmente parecia outra aplicação.
+
+**Opções consideradas:**
+
+- **Manter como dialog modal** (status quo, simples).
+- **Página real embarcada** via `QStackedWidget`, sidebar troca de
+  índice como qualquer nav.
+
+**Escolhida**: página real. `OrcamentoDialog` virou
+`OrcamentoPage(QWidget)`. O shell do `main_window` ganhou um
+`QStackedWidget` (index 0 = dashboard, index 1 = orçamento).
+`_trocar_secao` só muda `setCurrentIndex` em vez de `exec()`. Alias
+`OrcamentoDialog = OrcamentoPage` mantido pra backcompat de código
+externo que possa ter importado o nome antigo.
+
+Mapeamento, Config e Sobre continuam como dialog modal — decisão
+histórica de custo/benefício (são acesso pontual, não uso contínuo
+como o Orçamento).
+
+---
+
+## 6. Prioridade: calibração manual > visão automática ✅ manual ganha (build-100)
+
+**Contexto**: bug em prod reportado como "botão Empresa clica
+totalmente fora, e nem recalibrar resolve". Investigação mostrou que
+tanto o Novo Lote quanto o Orçamento faziam
+`preencher_calibracao_automatica(self.calibracao)` no INÍCIO de cada
+lote — a função mutava `calibracao.campos` in-place, sobrescrevendo o
+que o operador tinha calibrado manualmente. Se os offsets calculados
+por template matching não batiam exatamente com a resolução real do
+TOTVS do usuário, cliques caíam fora — E como sobrescrevia toda vez,
+recalibrar era inútil (o próximo lote apagava).
+
+**Opções:**
+
+- **A**: adicionar setting "modo visão automática" ligado/desligado.
+- **B**: se calibração manual está completa, respeita ela e pula a
+  visão. Visão vira fallback quando não há calib salva.
+
+**Escolhida — B**: menos configuração pro usuário decidir, mais
+intuitivo (quem calibrou espera que a calibração seja usada), zero UI
+nova. Aplicado em 3 lugares:
+
+- `workers.py::LoteOrcamentoWorker.run`
+- `workers.py::LoteWorker.run` (Novo Lote — mesmo bug potencial)
+- `rpa_orcamento.py::_clicar_popup_via_visao` (popups em runtime:
+  calibração manual do botão do popup > visão em runtime)
+
+**Consequência**: o log agora mostra explicitamente a decisão —
+`[calibração] manual completa — usando ela (visão automática ignorada)`
+vs `[visão] Visão OK — confiança 87%, 23 campos.` — facilita o
+diagnóstico se algo der errado em prod.
+
+---
+
+## 7. Resolver filial por CNPJ (DAE Bahia) ✅ tabela separada (build-101)
+
+**Contexto**: DAE (Documento de Arrecadação Estadual) da Bahia é
+endereçado por CNPJ — cada guia tem `CNPJ / CPF: 28.548.486/0010-07`
+que identifica a filial destinatária. Diferente do módulo Novo Lote
+(onde a filial vem do nome no relatório e resolve via fuzzy match no
+`mapeamento.json`) e do template OTIMO original do Orçamento (onde a
+filial é FIXA no template = "empresa_codigo: 6"), aqui cada documento
+do lote vai pra uma filial diferente.
+
+**Opções:**
+
+- **A**: espalhar os 31 CNPJs dentro do `mapeamento_orcamento.json`
+  no template DAE (JSON grande, alinhamento manual entre 2 fontes).
+- **B**: campo `aliases_cnpj` nas filiais do `mapeamento.json`
+  original — o loader `mapping.py` acha por CNPJ também.
+- **C**: novo arquivo `cnpjs_filiais.json` dedicado. O template DAE
+  só marca `empresa_por_cnpj: true` e o dialog resolve o CNPJ
+  quando o Gemini extrai.
+
+**Escolhida — C**: separa preocupações (`mapeamento.json` é sobre
+apelidos de filiais em relatórios de folha; `cnpjs_filiais.json` é
+sobre identificação fiscal); adicionar filial nova = editar um JSON
+enxuto de 40 linhas; e futuros documentos que resolvem por CNPJ
+reusam a mesma tabela.
+
+**Gotcha**: se o CNPJ vier "quase certo" do PDF (Gemini errou 1
+dígito de OCR), o lookup falha silenciosamente — a linha vai marcar
+"Revisar" na grid. **NÃO tentamos fuzzy match** de CNPJ: é
+documento fiscal, um dígito errado é filial errada, e um lançamento
+errado é problema real. Melhor o usuário conferir manualmente.
+
+---
+
 ## Convenções do projeto
 
 Registradas aqui pra IA/contribuidor novo não precisar adivinhar.
