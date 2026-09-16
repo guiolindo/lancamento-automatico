@@ -190,7 +190,11 @@ class RpaOrcamento:
             return int(ox), int(oy)
         return int(self._win.left + ox), int(self._win.top + oy)
 
-    def _sleep(self, chave: str, default_ms: int = 400) -> None:
+    def _sleep(self, chave: str, default_ms: int = 150) -> None:
+        """Default enxuto (150ms) pra digitação/troca de campo — TOTVS
+        RemoteApp aceita bem esse ritmo com os fluxos build-108+ estáveis.
+        User pode aumentar via settings.json[delays][<chave>] se algum
+        campo específico precisar folga."""
         ms = int(self._delays.get(chave, default_ms))
         time.sleep(ms / 1000.0)
 
@@ -198,7 +202,7 @@ class RpaOrcamento:
         import pyautogui
         x, y = self._pos_abs(campo)
         pyautogui.click(x, y)
-        self._sleep("apos_click_ms")
+        self._sleep("apos_click_ms", 120)
 
     def _preencher(self, campo: str, valor: str) -> None:
         self._check_abort()
@@ -206,17 +210,13 @@ class RpaOrcamento:
         import pyautogui
         from .keyboard_utils import digitar_texto
         self._clicar(campo)
-        pyautogui.press("backspace", presses=12, interval=0.002)
-        pyautogui.press("delete", presses=12, interval=0.002)
-        self._sleep("apos_selectall_ms")
+        pyautogui.press("backspace", presses=12, interval=0.001)
+        pyautogui.press("delete", presses=12, interval=0.001)
+        self._sleep("apos_selectall_ms", 100)
         _capslock_off()
-        intervalo = float(self._delays.get("intervalo_digitacao_s", 0.003))
-        # digitar_texto usa typewrite pra ASCII puro e clipboard+Ctrl+V
-        # pra strings com acentos (build-105). Antes o typewrite ignorava
-        # caracteres não-ASCII silenciosamente — "ELÉTRICA" virava
-        # "ELTRICA" no TOTVS.
+        intervalo = float(self._delays.get("intervalo_digitacao_s", 0.001))
         digitar_texto(valor_up, intervalo_ascii=intervalo)
-        self._sleep("entre_campos_ms")
+        self._sleep("entre_campos_ms", 100)
 
     def _digitar_multilinha(self, campo: str, texto: str) -> None:
         """Preenche uma observação que pode ter \\n. Cada linha vai
@@ -226,16 +226,16 @@ class RpaOrcamento:
         import pyautogui
         from .keyboard_utils import digitar_texto
         self._clicar(campo)
-        pyautogui.press("backspace", presses=30, interval=0.002)
-        pyautogui.press("delete", presses=30, interval=0.002)
-        self._sleep("apos_selectall_ms")
+        pyautogui.press("backspace", presses=30, interval=0.001)
+        pyautogui.press("delete", presses=30, interval=0.001)
+        self._sleep("apos_selectall_ms", 100)
         _capslock_off()
-        intervalo = float(self._delays.get("intervalo_digitacao_s", 0.003))
+        intervalo = float(self._delays.get("intervalo_digitacao_s", 0.001))
         linhas = str(texto).upper().split("\n")
         for i, linha in enumerate(linhas):
             if i > 0:
                 pyautogui.press("enter")
-                time.sleep(0.05)
+                time.sleep(0.03)
             digitar_texto(linha, intervalo_ascii=intervalo)
         self._sleep("entre_campos_ms")
 
@@ -336,13 +336,19 @@ class RpaOrcamento:
                     return
 
             # 5) Sem duplicidade → gravou com sucesso. Agora Autorizar.
-            self._sleep("apos_confirmar_ms", 3000)
+            self._sleep("apos_confirmar_ms", 2000)
             self._notificar(nota, "Autorizando")
             self._clicar("btn_autorizar")
-            self._sleep("apos_confirmar_ms", 2000)
+            self._sleep("apos_confirmar_ms", 1500)
 
             nota.status = StatusLancamento.SUCESSO
             self._notificar(nota, "Sucesso")
+
+            # +1s de folga entre notas — o TOTVS Orçamento precisa desse
+            # respiro pra fechar o registro atual antes do próximo "+".
+            # Antes o robô já ia direto pra próxima e às vezes começava
+            # a preencher enquanto o form ainda estava salvando.
+            self._sleep("entre_notas_ms", 1000)
 
         except EmergencyAbortException:
             raise
@@ -434,9 +440,9 @@ class RpaOrcamento:
         self._preencher("empresa", empresa)
 
         self._preencher("nat_despesa", str(an.get("nat_despesa_codigo", "")))
-        self._sleep("apos_especie_ms", 600)
+        self._sleep("apos_especie_ms", 400)
         self._preencher("pessoa", str(an.get("pessoa_codigo", "")))
-        self._sleep("apos_pessoa_ms", 800)
+        self._sleep("apos_pessoa_ms", 500)
 
         # Snapshot ANTES de digitar a NF — o popup Aviso costuma nascer
         # aqui no OnLeaveFocus do campo (o TOTVS valida unicidade).
@@ -449,7 +455,9 @@ class RpaOrcamento:
         # tentarmos qualquer outro click).
         import pyautogui
         pyautogui.press("tab")
-        self._sleep("apos_selectall_ms", 1000)
+        # Precisa DAR TEMPO do popup nascer (700ms tá seguro; abaixo
+        # começa a dar falso negativo em máquinas mais lentas)
+        self._sleep("apos_selectall_ms", 700)
 
         # Deu popup?
         popup = self._achar_popup_novo(titulos_antes, ("aviso", "atenção", "atencao"))
@@ -510,16 +518,16 @@ class RpaOrcamento:
             empresa = str(an.get("empresa_codigo", ""))
         self._preencher("empresa", empresa)
         self._preencher("nat_despesa", str(an.get("nat_despesa_codigo", "")))
-        self._sleep("apos_especie_ms", 600)
+        self._sleep("apos_especie_ms", 400)
         self._preencher("pessoa", str(an.get("pessoa_codigo", "")))
-        self._sleep("apos_pessoa_ms", 800)
+        self._sleep("apos_pessoa_ms", 500)
         self._preencher("nota_fiscal", str(nota.numero))
         self._completar_aba_nota(nota)
 
     def _preencher_aba_financeiro(self, nota: NotaDespesa) -> None:
         af = self.template.get("aba_financeiro") or {}
         self._clicar("aba_financeiro")
-        self._sleep("apos_click_ms", 700)
+        self._sleep("apos_click_ms", 400)
         self._digitar_multilinha("observacao_financeira", self._resolver_texto(af, nota, "observacao_financeira"))
         # Radio Vencimento (modo)
         self._clicar("radio_vencimento")
@@ -533,7 +541,7 @@ class RpaOrcamento:
             venc = nota.data_lancto
         self._preencher("data_vencimento", venc.strftime("%d/%m/%Y"))
         self._clicar("btn_gerar")
-        self._sleep("apos_gerar_parcelas_ms", 1000)
+        self._sleep("apos_gerar_parcelas_ms", 600)
 
     def _resolver_texto(self, secao: dict, nota: NotaDespesa, chave_base: str) -> str:
         """Resolve texto do template. Ordem de precedência:
@@ -576,7 +584,7 @@ class RpaOrcamento:
     def _preencher_aba_contabilizacao(self, nota: NotaDespesa) -> None:
         ac = self.template.get("aba_contabilizacao") or {}
         self._clicar("aba_contabilizacao")
-        self._sleep("apos_click_ms", 700)
+        self._sleep("apos_click_ms", 400)
         valor_txt = f"{nota.valor:.2f}".replace(".", ",")
 
         # Modo simples (OTIMO): replicar_valor_nas_linhas: N

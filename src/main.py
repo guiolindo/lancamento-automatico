@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-109 (fuzzy caneta desambigua LOJA vs CD — 'CD Feira de Santana' não cai mais como loja Feira, boost de +15 pro prefixo CD bater consistente)"
+BUILD_MARKER = "build-110 (Orçamento: delays enxutos + 1s entre notas + painel Atividade + menu contextual na grid — paridade com o Novo Lote)"
 
 
 def main() -> int:

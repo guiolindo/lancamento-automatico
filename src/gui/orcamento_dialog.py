@@ -27,8 +27,8 @@ from PySide6.QtCore import QDate, Qt, QThread, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QFileDialog, QFrame, QHBoxLayout,
-    QHeaderView, QLabel, QMessageBox, QPushButton, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QHeaderView, QInputDialog, QLabel, QMenu, QMessageBox, QPlainTextEdit,
+    QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ..core import calibracao_orcamento as calib_orc_store
@@ -232,9 +232,20 @@ class OrcamentoPage(QWidget):
         self._tabela.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
         self._tabela.setShowGrid(False)
         self._tabela.itemChanged.connect(self._on_item_editado)
+        # Menu contextual (botão direito) — mesma pattern da PreviewTable
+        # do Novo Lote.
+        self._tabela.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._tabela.customContextMenuRequested.connect(self._menu_contexto_linha)
         self._cols_atual = self.COLS_NFSE
         self._aplicar_colunas(self.COLS_NFSE)
-        root.addWidget(self._tabela, 1)
+
+        # Área principal: grid (dominante) + painel Atividade à direita.
+        # Coerente com o dashboard do Novo Lote (main_window._card_atividade).
+        area = QHBoxLayout()
+        area.setSpacing(12)
+        area.addWidget(self._tabela, 3)
+        area.addWidget(self._card_atividade(), 0)
+        root.addLayout(area, 1)
 
         # Rodapé
         rod = QHBoxLayout()
@@ -263,6 +274,42 @@ class OrcamentoPage(QWidget):
         self._btn_executar.clicked.connect(self._executar_lote)
         rod.addWidget(self._btn_executar)
         root.addLayout(rod)
+
+    def _card_atividade(self) -> QFrame:
+        """Painel de log ao lado da grid — mesma pattern do dashboard."""
+        card = QFrame()
+        card.setProperty("card", True)
+        card.setMinimumWidth(280)
+        card.setMaximumWidth(360)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(16, 16, 16, 16)
+        v.setSpacing(8)
+        cab = QHBoxLayout()
+        h2 = QLabel("Atividade")
+        h2.setProperty("h2", True)
+        cab.addWidget(h2)
+        cab.addStretch(1)
+        btn_limpar = QPushButton("×")
+        btn_limpar.setProperty("iconOnly", True)
+        btn_limpar.setToolTip("Limpar log")
+        btn_limpar.clicked.connect(lambda: self._log.clear())
+        cab.addWidget(btn_limpar)
+        v.addLayout(cab)
+        self._log = QPlainTextEdit()
+        self._log.setObjectName("LogConsole")
+        self._log.setReadOnly(True)
+        v.addWidget(self._log, 1)
+        return card
+
+    def _log_line(self, msg: str) -> None:
+        try:
+            self._log.appendPlainText(f"[{datetime.now():%H:%M:%S}] {msg}")
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            log.info(msg)
+        except Exception:  # noqa: BLE001
+            pass
 
     def _campo_inline(self, texto: str) -> QLabel:
         lb = QLabel(texto)
@@ -350,6 +397,7 @@ class OrcamentoPage(QWidget):
         template = self._templates.get(template_chave) or {}
         tipo_extracao = template.get("tipo_extracao", "nfse")
         extrair_caneta = bool(template.get("extrair_anotacao_caneta", False))
+        self._log_line(f"→ Extraindo {self._pdf_selecionado.name} (template {template_chave})")
 
         self._extrator = ExtratorNfseThread(
             self._pdf_selecionado, api_key, modelo,
@@ -536,6 +584,7 @@ class OrcamentoPage(QWidget):
         self._btn_extrair.setEnabled(True)
         self._btn_extrair.setText("Extrair notas do PDF")
         self._lbl_status.setText("Falha na extração.")
+        self._log_line(f"XX Falha na extração: {msg[:120]}")
         QMessageBox.critical(
             self, "Falha na extração",
             f"{msg}\n\n"
@@ -850,6 +899,7 @@ class OrcamentoPage(QWidget):
         self._btn_extrair.setEnabled(False)
         self._btn_cancelar.setVisible(True)
         self._lbl_status.setText("Executando. END aborta.")
+        self._log_line(f">> Iniciando lote — {len(pendentes)} nota(s) do template {template_chave}")
 
         # Multi-monitor: se a janela do Auto Conferi está na MESMA tela do
         # TOTVS, o main_window move ela pra outra tela pra o operador ver
@@ -884,6 +934,7 @@ class OrcamentoPage(QWidget):
             self._lbl_status.setText(
                 f"Calibração salva ({len(self._calibracao.campos)} campos)."
             )
+            self._log_line(f"OK Calibração salva ({len(self._calibracao.campos)} campos)")
 
     def _cancelar_lote(self) -> None:
         if self._worker is not None:
@@ -893,9 +944,12 @@ class OrcamentoPage(QWidget):
 
     def _on_log_worker(self, msg: str) -> None:
         self._lbl_status.setText(msg[:180])
+        self._log_line(msg)
 
     def _on_progresso_worker(self, i: int, total: int, msg: str) -> None:
-        self._lbl_status.setText(f"[{i+1}/{total}] {msg}")
+        linha = f"[{i+1}/{total}] {msg}"
+        self._lbl_status.setText(linha)
+        self._log_line(linha)
 
     def _on_nota_atualizada(self, i: int) -> None:
         # Encontra o índice na tabela — worker recebe a sub-lista de pendentes,
@@ -907,6 +961,119 @@ class OrcamentoPage(QWidget):
                 self._atualizar_status_celula(j)
         finally:
             self._tabela.blockSignals(False)
+
+    # ---------- Menu contextual da grid (botão direito) ----------
+
+    def _menu_contexto_linha(self, pos) -> None:
+        row = self._tabela.rowAt(pos.y())
+        if row < 0 or row >= len(self._notas):
+            return
+        self._tabela.selectRow(row)
+        n = self._notas[row]
+        cols = self._cols_atual
+
+        menu = QMenu(self._tabela)
+        act_edit_num  = menu.addAction("Editar número da nota…")
+        act_edit_val  = menu.addAction("Editar valor…")
+        if cols is self.COLS_DAE:
+            act_edit_data = menu.addAction("Editar vencimento…")
+            act_edit_fil  = menu.addAction("Editar filial…")
+            act_edit_can  = None
+        elif cols is self.COLS_NFSE_CANETA:
+            act_edit_data = menu.addAction("Editar data de emissão…")
+            act_edit_fil  = None
+            act_edit_can  = menu.addAction("Editar filial da caneta…")
+        else:
+            act_edit_data = menu.addAction("Editar data de emissão…")
+            act_edit_fil  = None
+            act_edit_can  = None
+        menu.addSeparator()
+        act_reset  = menu.addAction("Marcar como pendente (reprocessar)")
+        act_reset.setEnabled(n.status != StatusLancamento.EM_ANDAMENTO)
+        act_remover = menu.addAction("Remover deste lote")
+        act_remover.setEnabled(n.status != StatusLancamento.EM_ANDAMENTO)
+
+        chosen = menu.exec(self._tabela.viewport().mapToGlobal(pos))
+        if chosen is None:
+            return
+
+        if chosen is act_edit_num:
+            novo, ok = QInputDialog.getText(self, "Número da nota", "Número:", text=n.numero)
+            if ok:
+                n.numero = novo.strip()
+        elif chosen is act_edit_val:
+            novo, ok = QInputDialog.getDouble(
+                self, "Valor", "Valor (R$):", value=n.valor, decimals=2, min=0.0
+            )
+            if ok:
+                n.valor = novo
+        elif chosen is act_edit_data:
+            atual = ""
+            if cols is self.COLS_DAE and n.vencimento_dae:
+                atual = n.vencimento_dae.strftime("%d/%m/%Y")
+            elif n.data_emissao:
+                atual = n.data_emissao.strftime("%d/%m/%Y")
+            novo, ok = QInputDialog.getText(self, "Data", "Data (dd/mm/aaaa):", text=atual)
+            if ok:
+                for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+                    try:
+                        d = datetime.strptime(novo.strip(), fmt).date()
+                        if cols is self.COLS_DAE:
+                            n.vencimento_dae = d
+                        else:
+                            n.data_emissao = d
+                        break
+                    except ValueError:
+                        pass
+        elif act_edit_fil is not None and chosen is act_edit_fil:
+            atual = str(n.filial_codigo or "")
+            novo, ok = QInputDialog.getText(self, "Filial", "Código da filial:", text=atual)
+            if ok and novo.strip().isdigit():
+                cod = int(novo.strip())
+                n.filial_codigo = cod
+                # Pega o nome do cnpjs se tiver, senão deixa em branco
+                for info in self._cnpjs_filiais.values():
+                    if int(info.get("codigo", -1)) == cod:
+                        n.filial_nome = info.get("nome", "")
+                        break
+        elif act_edit_can is not None and chosen is act_edit_can:
+            atual = n.filial_caneta_nome or n.anotacao_caneta or ""
+            novo, ok = QInputDialog.getText(
+                self, "Filial da caneta",
+                "Nome da filial (ex: Luis Eduardo) ou 'código — nome':",
+                text=atual,
+            )
+            if ok:
+                txt = novo.strip()
+                import re
+                m = re.match(r"^\s*(\d+)\s*[—-]\s*(.*)$", txt)
+                if m:
+                    n.filial_caneta_codigo = int(m.group(1))
+                    n.filial_caneta_nome = m.group(2).strip()
+                    n.anotacao_caneta = txt
+                else:
+                    n.anotacao_caneta = txt
+                    n.filial_caneta_codigo, n.filial_caneta_nome = self._resolver_filial_por_texto(txt)
+        elif chosen is act_reset:
+            n.status = StatusLancamento.PENDENTE
+            n.erro = None
+            n.motivo_ignorado = None
+        elif chosen is act_remover:
+            del self._notas[row]
+            self._popular_grid()
+            self._atualizar_resumo()
+            return
+
+        # Redesenha só a linha afetada
+        self._tabela.blockSignals(True)
+        try:
+            self._popular_linha(row, n)
+            self._atualizar_status_celula(row)
+        finally:
+            self._tabela.blockSignals(False)
+        self._atualizar_resumo()
+
+    # ---------- Ciclo do lote (multi-monitor) ----------
 
     def _restaurar_janela(self) -> None:
         """Volta a MainWindow pra tela/estado de antes do lote."""
@@ -923,9 +1090,9 @@ class OrcamentoPage(QWidget):
         self._btn_cancelar.setVisible(False)
         self._restaurar_janela()
         total = sucessos + falhas + ignoradas
-        self._lbl_status.setText(
-            f"Concluído — {sucessos} OK · {falhas} falhas · {ignoradas} ignoradas (de {total})"
-        )
+        resumo = f"Concluído — {sucessos} OK · {falhas} falhas · {ignoradas} ignoradas (de {total})"
+        self._lbl_status.setText(resumo)
+        self._log_line(f"== {resumo}")
         QMessageBox.information(
             self, "Lote concluído",
             f"Sucesso: {sucessos}\n"
@@ -939,6 +1106,7 @@ class OrcamentoPage(QWidget):
         self._btn_cancelar.setVisible(False)
         self._restaurar_janela()
         self._lbl_status.setText("Erro.")
+        self._log_line(f"XX Lote abortado: {msg[:180]}")
         QMessageBox.critical(self, "Erro no lote Orçamento", msg)
 
     # ---------- Ciclo de vida ----------
