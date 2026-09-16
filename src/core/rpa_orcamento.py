@@ -603,21 +603,34 @@ class RpaOrcamento:
     def _processar_linha_contab(
         self, cfg: dict, prefixo: str, nota: NotaDespesa, valor_txt: str,
     ) -> None:
-        """Aplica a config de UMA linha da aba Contabilização. `prefixo` é
-        'linha1' ou 'linha2' — usado pra achar o campo calibrado
-        (contab_linha1_filial, contab_linha2_conta_debito, etc.).
+        """Aplica a config de UMA linha da aba Contabilização.
 
-        Reconhece:
-        - `trocar_filial_para`: string enum. Opções:
-             'filial_loja'     → nota.filial_codigo (usado pelo DAE)
-             'filial_emissao'  → nota.filial_emissao_codigo (Pluxee)
-             'filial_caneta'   → nota.filial_caneta_codigo (Pluxee)
-          Pra compat com o build-101 aceita também
-             `trocar_filial_para_da_loja: true` (= 'filial_loja').
-        - `conta_debito` / `cr`: strings fixas (DAE — linha 2).
+        **ORDEM IMPORTA** (fix build-111): o TOTVS Consinco ROLA a tabela
+        horizontalmente pra direita quando a linha ganha foco de edição —
+        colunas distantes (Valor, Percentual) trocam de posição visual.
+        Quem calibrou Valor com a tabela em estado idle vai clicar em
+        Percentual se preencher Filial ANTES (a linha rola).
+
+        Estratégia: preencher primeiro os campos que ficam LONGE do início
+        da linha (Valor, Percentual), enquanto a tabela ainda está no
+        estado idle. Só depois mexer nos campos das colunas iniciais
+        (Filial, Conta Débito) — que ficam sempre visíveis por serem
+        as primeiras colunas.
+
+        Prefixo: 'linha1' ou 'linha2'. Config aceita:
+        - `trocar_filial_para`: 'filial_loja' | 'filial_emissao' |
+          'filial_caneta'. Compat: `trocar_filial_para_da_loja: true`
+          equivale a 'filial_loja'.
+        - `conta_debito` / `cr`: strings fixas (DAE linha 2).
         - `preencher_valor`: bool (default True).
         """
-        # Trocar filial
+        # 1) VALOR primeiro (coluna que a rolagem afeta), enquanto a
+        #    tabela ainda está idle — offset calibrado ainda vale.
+        if cfg.get("preencher_valor", True):
+            self._preencher(f"contab_{prefixo}_valor", valor_txt)
+
+        # 2) Agora as colunas técnicas do início da linha (Filial,
+        #    Conta Débito, CR) — sempre visíveis independente da rolagem.
         alvo = cfg.get("trocar_filial_para")
         if not alvo and cfg.get("trocar_filial_para_da_loja"):
             alvo = "filial_loja"
@@ -636,14 +649,10 @@ class RpaOrcamento:
                             "nota não tem esse código resolvido — deixando "
                             "a filial padrão do TOTVS", prefixo, alvo)
 
-        # Colunas técnicas (só linha 2 do DAE hoje)
         if cfg.get("conta_debito"):
             self._preencher(f"contab_{prefixo}_conta_debito", str(cfg["conta_debito"]))
         if cfg.get("cr"):
             self._preencher(f"contab_{prefixo}_cr", str(cfg["cr"]))
-
-        if cfg.get("preencher_valor", True):
-            self._preencher(f"contab_{prefixo}_valor", valor_txt)
 
     def _notificar(self, nota: NotaDespesa, msg: str) -> None:
         if self.on_progress:

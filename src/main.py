@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-110 (Orçamento: delays enxutos + 1s entre notas + painel Atividade + menu contextual na grid — paridade com o Novo Lote)"
+BUILD_MARKER = "build-111 (fix Contab: preenche Valor ANTES da Filial pra o TOTVS não rolar a tabela + campo contab_linha2_filial que faltava)"
 
 
 def main() -> int:

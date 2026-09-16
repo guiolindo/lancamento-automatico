@@ -75,6 +75,7 @@ CAMPOS_OFFSET_ANCHOR: dict[str, tuple[int, int]] = {
     # ---- Aba Contabilização ----
     "contab_linha1_filial":        (205, 223),
     "contab_linha1_valor":         (900, 220),
+    "contab_linha2_filial":        (205, 242),
     "contab_linha2_conta_debito":  (288, 242),
     "contab_linha2_cr":            (419, 241),
     "contab_linha2_valor":         (895, 240),
