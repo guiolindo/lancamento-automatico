@@ -54,47 +54,75 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 os.environ.setdefault("ABSL_LOGGING_MIN_LOG_LEVEL", "3")
 
 
-# ---------- 2b. Check de rede corporativa (build-94) ----------
+# ---------- 2b. Check de rede corporativa (build-94, corrigido em build-112) ----------
 # O app só faz sentido rodando em máquina conectada à rede da empresa.
 # Fora da rede: aviso claro e sai.
 #
-# Estratégia (build-94, sem vazamento do nome do domínio):
-# Windows seta a env var USERDNSDOMAIN quando a máquina está no domínio
-# Active Directory da empresa (via cabo, WiFi corporativo, ou VPN que
-# conecta ao AD). Comparamos o hash SHA-256 desse valor com o hash
-# esperado. Vantagens sobre o método antigo (DNS lookup):
-#   - Zero DNS lookup — instantâneo, zero rede
-#   - Nome do domínio NUNCA aparece no source ou binário — só o hash
-#   - Kaspersky não vê chamada nenhuma
-#   - Nem `strings` no exe nem debug do source revelam o valor
+# HISTÓRICO:
+# - build-92: DNS lookup de um host interno. Confiável mas o nome do
+#   domínio vazava no source do launcher.
+# - build-94: só hash SHA-256 do USERDNSDOMAIN. Zero vazamento, MAS
+#   descobriu-se em prod (build-112) que USERDNSDOMAIN é CACHEADA pelo
+#   Windows no logon — permanece setada mesmo com o cabo desligado
+#   ou fora da VPN. Ou seja, checava "essa máquina foi joined ao
+#   domínio X" e não "está conectada agora".
 #
-# Para bater no hash sem conhecer o valor, atacante precisa fazer
-# brute-force com wordlist de sufixos de domínio corporativo — finito
-# mas exige trabalho ativo. Boa proteção contra reconhecimento casual.
+# ESTRATÉGIA ATUAL (build-112):
+# Dois estágios sequenciais:
+#   1. Env var USERDNSDOMAIN existe e bate no hash SHA-256 esperado.
+#      Rápido, sem rede, e mantém o nome do domínio fora do source.
+#      Se falha aqui → máquina de outro domínio ou pessoal.
+#   2. DNS lookup REAL do valor de USERDNSDOMAIN via socket.gethostbyname.
+#      Timeout curto (3s). Se o cabo tá desligado / fora da VPN, o DNS
+#      interno da empresa não é alcançável e falha rápido. Se resolve
+#      → estamos na rede.
+#
+# Segurança do nome: o valor de USERDNSDOMAIN vem do sistema em runtime,
+# NUNCA aparece no source ou binário. Nem `strings` no exe vaza — a única
+# constante embutida é o hash de 64 hex.
+#
+# AV concern: socket.gethostbyname é chamada mainstream (Chrome, Outlook
+# fazem centenas por segundo). Zero flag.
 #
 # Bypass pra dev: AUTOCONFERI_DEV=1.
 
 _REDE_SALT = b"AutoConferi/network-check/2026"
-# Hash SHA-256 do sufixo DNS interno (em lowercase) concatenado com o salt.
+# Hash SHA-256 do sufixo DNS interno (lowercase) concatenado com o salt.
 # Compute local: sha256(dns_bytes + _REDE_SALT).hexdigest()
 _REDE_HASH_ESPERADO = "33477803de1cc958aa6e36afc0ab3d3a99cb8468965ce7f7a878dfe25e0756ae"
 
 def _esta_na_rede_corporativa() -> bool:
-    """True se o Windows reporta que estamos no domínio AD esperado."""
+    """True se: (a) máquina está joined ao domínio AD esperado, E
+    (b) o DNS interno é alcançável agora (cabo/VPN/WiFi corporativo)."""
     if os.environ.get("AUTOCONFERI_DEV") == "1":
         _boot_trace("rede: bypass AUTOCONFERI_DEV=1 — pulando check")
         return True
+
     import hashlib
     dominio = os.environ.get("USERDNSDOMAIN", "").strip().lower()
     if not dominio:
         _boot_trace("rede: USERDNSDOMAIN vazio — máquina não está em domínio AD")
         return False
     h = hashlib.sha256(dominio.encode("utf-8") + _REDE_SALT).hexdigest()
-    if h == _REDE_HASH_ESPERADO:
-        _boot_trace("rede: domínio AD bate — na rede corporativa")
+    if h != _REDE_HASH_ESPERADO:
+        _boot_trace("rede: domínio AD presente mas não bate — máquina em outro domínio")
+        return False
+
+    # Estágio 2: teste REAL de conectividade — USERDNSDOMAIN é cacheada
+    # pelo Windows no logon, então mesmo com cabo desligado a env var
+    # continua setada. DNS lookup só resolve com o DNS interno da empresa
+    # alcançável (cabo/VPN/WiFi corporativo).
+    import socket
+    try:
+        socket.setdefaulttimeout(3.0)
+        socket.gethostbyname(dominio)
+        _boot_trace("rede: DNS interno alcançável — na rede corporativa")
         return True
-    _boot_trace("rede: domínio AD presente mas não bate — máquina em outro domínio")
-    return False
+    except (socket.gaierror, socket.timeout, OSError) as e:
+        _boot_trace(f"rede: DNS interno inacessível ({type(e).__name__}) — fora da rede/VPN")
+        return False
+    finally:
+        socket.setdefaulttimeout(None)
 
 
 # ---------- 3. Utilitários de log de boot ----------

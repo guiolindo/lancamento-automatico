@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-111 (fix Contab: preenche Valor ANTES da Filial pra o TOTVS não rolar a tabela + campo contab_linha2_filial que faltava)"
+BUILD_MARKER = "build-112 (fix check de rede — USERDNSDOMAIN é cacheada pelo Windows no logon, agora testa DNS lookup real do domínio pra saber se cabo/VPN estão realmente ativos)"
 
 
 def main() -> int:
