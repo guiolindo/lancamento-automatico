@@ -26,6 +26,11 @@ class Filial:
     nome: str
     tipo: TipoFilial
     aliases: list[str] = field(default_factory=list)
+    # Código da filial no Consinco. Usado por impostos que declaram
+    # `pessoa_por_filial: true` (FGTS_CONSIG, build-113) — o campo Pessoa
+    # do TOTVS recebe o codigo_consinco desta filial em vez do
+    # `pessoa_codigo` fixo do imposto.
+    codigo_consinco: Optional[int] = None
 
 
 @dataclass
@@ -43,6 +48,18 @@ class Imposto:
     # "mes_anterior_emissao": ignora Gemini; usa (data_emissao - 1 mês).
     #   Usado pelo INSS: emissão 20/07/2026 → observação "REFERENTE A: 06/2026".
     mes_ref_regra: Optional[str] = None
+    # Campos multi-espécie (build-113 — FGTS_CONSIG).
+    # `pessoa_por_filial: True` → pessoa_codigo do lançamento vem da
+    # filial (Filial.codigo_consinco), não do imposto.
+    pessoa_por_filial: bool = False
+    # `especie_por_coluna[COL] = "MFGTS"` → cada coluna do relatório
+    # vira lançamento com espécie própria (em vez de todos usarem
+    # `especie_totvs` do imposto). Fallback: `especie_totvs`.
+    especie_por_coluna: dict = field(default_factory=dict)
+    # `observacao_por_coluna[COL] = "FGTS MENSAL - REF: {mes_ref}/..."`
+    # → cada coluna vira lançamento com observação própria.
+    # Fallback: `observacao_template`.
+    observacao_por_coluna: dict = field(default_factory=dict)
 
 
 @dataclass

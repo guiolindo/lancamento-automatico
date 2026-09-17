@@ -1,48 +1,49 @@
 {
-  "_comentario": "De-Para de filiais Multicom para código TOTVS. Edite este arquivo para adicionar/alterar lojas sem recompilar. Aliases são normalizados (uppercase, sem acento) e comparados por fuzzy matching.",
+  "_comentario": "De-Para de filiais Multicom para código TOTVS. Edite este arquivo para adicionar/alterar lojas sem recompilar. Aliases são normalizados (uppercase, sem acento) e comparados por fuzzy matching. `codigo_consinco` é o código da empresa no Consinco — usado por impostos que declaram `pessoa_por_filial: true` (ex.: FGTS_CONSIG).",
   "empresas": {
     "MG": {
       "descricao": "Multicom Atacado e Varejo - Economart (Minas Gerais)",
       "filiais": [
-        {"codigo": 6,  "nome": "Contagem",         "tipo": "LOJA", "aliases": ["CONTAGEM"]},
-        {"codigo": 7,  "nome": "Passos",           "tipo": "LOJA", "aliases": ["PASSOS"]},
-        {"codigo": 10, "nome": "Nova Serrana",     "tipo": "LOJA", "aliases": ["NOVA SERRANA"]},
-        {"codigo": 11, "nome": "Pocos de Caldas",  "tipo": "LOJA", "aliases": ["POCOS DE CALDAS", "POÇOS DE CALDAS"]},
-        {"codigo": 14, "nome": "Ribeirao das Neves","tipo": "LOJA", "aliases": ["RIB NEVES", "RIB.NEVES", "RIBEIRAO DAS NEVES", "RIBEIRÃO DAS NEVES"]},
-        {"codigo": 15, "nome": "Manhuacu",         "tipo": "LOJA", "aliases": ["MANHUACU", "MANHUAÇU"]},
-        {"codigo": 16, "nome": "Serra Verde",      "tipo": "LOJA", "aliases": ["SERRA VERDE", "LINHA VERDE"]},
-        {"codigo": 18, "nome": "Muriae",           "tipo": "LOJA", "aliases": ["MURIAE", "MURIAÉ"]},
-        {"codigo": 24, "nome": "Contagem II",      "tipo": "LOJA", "aliases": ["CONTAGEM II", "CONTAGEM 2"]},
-        {"codigo": 27, "nome": "Pouso Alegre",     "tipo": "LOJA", "aliases": ["POUSO ALEGRE"]},
-        {"codigo": 30, "nome": "Araxa",            "tipo": "LOJA", "aliases": ["ARAXA", "ARAXÁ"]},
-        {"codigo": 32, "nome": "Ituiutaba",        "tipo": "LOJA", "aliases": ["ITUIUTABA"]}
+        {"codigo": 6,  "codigo_consinco": 72620,  "nome": "Contagem",           "tipo": "LOJA", "aliases": ["CONTAGEM"]},
+        {"codigo": 7,  "codigo_consinco": 72621,  "nome": "Passos",             "tipo": "LOJA", "aliases": ["PASSOS"]},
+        {"codigo": 10, "codigo_consinco": 78826,  "nome": "Nova Serrana",       "tipo": "LOJA", "aliases": ["NOVA SERRANA"]},
+        {"codigo": 11, "codigo_consinco": 92621,  "nome": "Pocos de Caldas",    "tipo": "LOJA", "aliases": ["POCOS DE CALDAS", "POÇOS DE CALDAS"]},
+        {"codigo": 14, "codigo_consinco": 110219, "nome": "Ribeirao das Neves", "tipo": "LOJA", "aliases": ["RIB NEVES", "RIB.NEVES", "RIBEIRAO DAS NEVES", "RIBEIRÃO DAS NEVES"]},
+        {"codigo": 15, "codigo_consinco": 110218, "nome": "Manhuacu",           "tipo": "LOJA", "aliases": ["MANHUACU", "MANHUAÇU"]},
+        {"codigo": 16, "codigo_consinco": 135411, "nome": "Serra Verde",        "tipo": "LOJA", "aliases": ["SERRA VERDE", "LINHA VERDE"]},
+        {"codigo": 18, "codigo_consinco": 150007, "nome": "Muriae",             "tipo": "LOJA", "aliases": ["MURIAE", "MURIAÉ"]},
+        {"codigo": 24, "codigo_consinco": 189018, "nome": "Contagem II",        "tipo": "LOJA", "aliases": ["CONTAGEM II", "CONTAGEM 2"]},
+        {"codigo": 27, "codigo_consinco": 223385, "nome": "Pouso Alegre",       "tipo": "LOJA", "aliases": ["POUSO ALEGRE"]},
+        {"codigo": 30, "codigo_consinco": 243451, "nome": "Araxa",              "tipo": "LOJA", "aliases": ["ARAXA", "ARAXÁ"]},
+        {"codigo": 32, "codigo_consinco": 246466, "nome": "Ituiutaba",          "tipo": "LOJA", "aliases": ["ITUIUTABA"]}
       ]
     },
     "BA": {
       "descricao": "Multicom Atacado e Varejo - Economart (Bahia)",
       "filiais": [
-        {"codigo": 17, "nome": "Paulo Afonso",         "tipo": "LOJA", "aliases": ["PAULO AFONSO"]},
-        {"codigo": 19, "nome": "Jequie",               "tipo": "LOJA", "aliases": ["JEQUIE", "JEQUIÉ"]},
-        {"codigo": 20, "nome": "Luis Eduardo Magalhaes","tipo": "LOJA", "aliases": ["LUIS EDUARDO", "LUIS EDUARDO MAGALHAES", "LEM"]},
-        {"codigo": 21, "nome": "Vitoria da Conquista", "tipo": "LOJA", "aliases": ["VITORIA DA CONQUISTA", "VITÓRIA DA CONQUISTA"]},
-        {"codigo": 22, "nome": "Feira de Santana",     "tipo": "LOJA", "aliases": ["FEIRA DE SANTANA (LOJA)", "FEIRA DE SANTANA LOJA", "F DE SANTANA (LOJA)", "FEIRA STA (LOJA)"]},
-        {"codigo": 23, "nome": "Barreiras",            "tipo": "LOJA", "aliases": ["BARREIRAS"]},
-        {"codigo": 25, "nome": "Santo Antonio de Jesus","tipo": "LOJA", "aliases": ["SANTO ANTONIO DE JESUS", "SANTO ANTÔNIO DE JESUS", "SAJ"]},
-        {"codigo": 26, "nome": "Itabuna",              "tipo": "LOJA", "aliases": ["ITABUNA"]},
-        {"codigo": 28, "nome": "Juazeiro",             "tipo": "LOJA", "aliases": ["JUAZEIRO"]},
-        {"codigo": 29, "nome": "Porto Seguro",         "tipo": "LOJA", "aliases": ["PORTO SEGURO"]},
-        {"codigo": 31, "nome": "Feira de Santana II",  "tipo": "LOJA", "aliases": ["FEIRA DE SANTANA II", "FEIRA DE SANTANA 2"]}
+        {"codigo": 17, "codigo_consinco": 144670, "nome": "Paulo Afonso",           "tipo": "LOJA", "aliases": ["PAULO AFONSO"]},
+        {"codigo": 19, "codigo_consinco": 179175, "nome": "Jequie",                 "tipo": "LOJA", "aliases": ["JEQUIE", "JEQUIÉ"]},
+        {"codigo": 20, "codigo_consinco": 188960, "nome": "Luis Eduardo Magalhaes", "tipo": "LOJA", "aliases": ["LUIS EDUARDO", "LUIS EDUARDO MAGALHAES", "LEM"]},
+        {"codigo": 21, "codigo_consinco": 188957, "nome": "Vitoria da Conquista",   "tipo": "LOJA", "aliases": ["VITORIA DA CONQUISTA", "VITÓRIA DA CONQUISTA"]},
+        {"codigo": 22, "codigo_consinco": 192894, "nome": "Feira de Santana",       "tipo": "LOJA", "aliases": ["FEIRA DE SANTANA (LOJA)", "FEIRA DE SANTANA LOJA", "F DE SANTANA (LOJA)", "FEIRA STA (LOJA)"]},
+        {"codigo": 23, "codigo_consinco": 205956, "nome": "Barreiras",              "tipo": "LOJA", "aliases": ["BARREIRAS"]},
+        {"codigo": 25, "codigo_consinco": 209843, "nome": "Santo Antonio de Jesus", "tipo": "LOJA", "aliases": ["SANTO ANTONIO DE JESUS", "SANTO ANTÔNIO DE JESUS", "SAJ"]},
+        {"codigo": 26, "codigo_consinco": 217721, "nome": "Itabuna",                "tipo": "LOJA", "aliases": ["ITABUNA"]},
+        {"codigo": 28, "codigo_consinco": 230414, "nome": "Juazeiro",               "tipo": "LOJA", "aliases": ["JUAZEIRO"]},
+        {"codigo": 29, "codigo_consinco": 227966, "nome": "Porto Seguro",           "tipo": "LOJA", "aliases": ["PORTO SEGURO"]},
+        {"codigo": 31, "codigo_consinco": 246171, "nome": "Feira de Santana II",    "tipo": "LOJA", "aliases": ["FEIRA DE SANTANA II", "FEIRA DE SANTANA 2"]}
       ]
     },
     "CD_ADM": {
       "descricao": "Multicom Atacado e Varejo - CDs, Comercial e Administrativo",
       "filiais": [
-        {"codigo": 201, "nome": "CD Feira de Santana", "tipo": "CD",  "aliases": ["CD FEIRA DE SANTANA", "CD FEIRA", "CD F DE SANTANA", "CD FEIRA STA"]},
-        {"codigo": 300, "nome": "CD Ribeirao das Neves","tipo": "CD", "aliases": ["CD RIB NEVES", "CD RIB.NEVES", "CD 040", "CD300", "CD 300", "CD RIBEIRAO DAS NEVES"]},
-        {"codigo": 301, "nome": "CD Campina Verde",   "tipo": "CD",  "aliases": ["CD CAMPINA VERDE", "CAMPINA VERDE"]},
-        {"codigo": 302, "nome": "CD Horti",           "tipo": "CD",  "aliases": ["CD HORTI", "HORTI"]},
-        {"codigo": 501, "nome": "ADM Salvador",       "tipo": "ADM", "aliases": ["ADM SALVADOR", "SALVADOR"]},
-        {"codigo": 502, "nome": "ADM Barao",          "tipo": "ADM", "aliases": ["ADM BARAO", "BARAO", "BARÃO", "ADM BARÃO"]}
+        {"codigo": 201, "codigo_consinco": 119082, "nome": "CD Feira de Santana",   "tipo": "CD",  "aliases": ["CD FEIRA DE SANTANA", "CD FEIRA", "CD F DE SANTANA", "CD FEIRA STA"]},
+        {"codigo": 202, "codigo_consinco": 195481, "nome": "CD 2 Feira de Santana", "tipo": "CD",  "aliases": ["CD 2 FEIRA DE SANTANA", "CD 2 FEIRA", "CD FEIRA 2"]},
+        {"codigo": 300, "codigo_consinco": 148175, "nome": "CD Ribeirao das Neves", "tipo": "CD",  "aliases": ["CD RIB NEVES", "CD RIB.NEVES", "CD 040", "CD300", "CD 300", "CD RIBEIRAO DAS NEVES"]},
+        {"codigo": 301, "codigo_consinco": 150897, "nome": "CD Campina Verde",      "tipo": "CD",  "aliases": ["CD CAMPINA VERDE", "CAMPINA VERDE"]},
+        {"codigo": 302, "codigo_consinco": 172240, "nome": "CD Horti",              "tipo": "CD",  "aliases": ["CD HORTI", "HORTI"]},
+        {"codigo": 501, "codigo_consinco": 154738, "nome": "ADM Salvador",          "tipo": "ADM", "aliases": ["ADM SALVADOR", "SALVADOR"]},
+        {"codigo": 502, "codigo_consinco": 175736, "nome": "ADM Barao",             "tipo": "ADM", "aliases": ["ADM BARAO", "BARAO", "BARÃO", "ADM BARÃO"]}
       ]
     }
   },
@@ -65,6 +66,24 @@
       "observacao_template": "INSS SOBRE FOLHA - REFERENTE A: {mes_ref}/{ano_ref}",
       "colunas_tipo_folha": ["VALOR"],
       "mes_ref_regra": "mes_anterior_emissao"
+    },
+    "FGTS_CONSIG": {
+      "descricao": "FGTS Mensal + Empréstimo Consignado",
+      "especie_totvs": "MFGTS",
+      "especie_descricao": "FGTS A PAGAR (fallback — cada coluna sobrescreve)",
+      "pessoa_codigo": 0,
+      "pessoa_nome": "Filial (usa codigo_consinco da própria filial)",
+      "pessoa_por_filial": true,
+      "colunas_tipo_folha": ["FGTS", "CONSIG"],
+      "especie_por_coluna": {
+        "FGTS": "MFGTS",
+        "CONSIG": "CONSIG"
+      },
+      "observacao_por_coluna": {
+        "FGTS":   "FGTS MENSAL - REF: {mes_ref}/{ano_ref} - {filial_nome}",
+        "CONSIG": "FGTS CONSIGNADO - REF: {mes_ref}/{ano_ref} - {filial_nome}"
+      },
+      "observacao_template": "FGTS {tipo_folha} - REF: {mes_ref}/{ano_ref} - {filial_nome}"
     }
   }
 }

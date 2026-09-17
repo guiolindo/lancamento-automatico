@@ -178,9 +178,49 @@ Exemplo de linha bem extraída:
 """
 
 
+PROMPT_FGTS_CONSIG = """## REGRAS ESPECÍFICAS DESTE RELATÓRIO — FGTS + Consignado
+
+Este é o relatório mensal de **FGTS + Empréstimo Consignado**. Layout:
+uma linha por filial, com DUAS colunas de valor lado a lado —
+"VALOR FGTS" e "VALOR EMPRÉSTIMO CONSIGNADO".
+
+- Colunas esperadas em "valores": **{colunas}** (use exatamente
+  essas chaves: `FGTS` e `CONSIG`).
+- Cada linha do relatório vira DOIS lançamentos separados (um pra
+  FGTS, um pro Consignado) — mas você só entrega os valores; a
+  separação é feita pelo app.
+- Se algum campo aparecer como "R$ -" (traço), "0,00" ou vazio,
+  registre como 0 (ou omita a chave); o app pula lançamentos com
+  valor zero.
+- O relatório traz o mês/ano no cabeçalho no formato "MM.AAAA"
+  (ex.: "08.2026"). Coloque em `mes_ref` = "08" e `ano_ref` = "2026".
+- Nomes das filiais vêm no formato "MULTICOM ATACADO E VAREJO S/A - <NOME>".
+  Devolva SÓ o `<NOME>` no `filial_documento` — o prefixo "MULTICOM..."
+  é ruído.
+- Ignore a linha "TOTAL" no rodapé e a linha "TOTAL GFD - FGTS DIGITAL"
+  (esse é o consolidado geral, não uma filial).
+
+Exemplo de linha bem extraída:
+```
+{{"filial_documento": "Contagem",
+  "valores": {{"FGTS": 33350.18, "CONSIG": 21959.80}},
+  "total_filial": 55309.98}}
+```
+
+Se uma filial tem só FGTS (ex.: Araxá com Empréstimo em branco),
+devolva só a chave FGTS:
+```
+{{"filial_documento": "Araxa",
+  "valores": {{"FGTS": 21789.98}},
+  "total_filial": 21789.98}}
+```
+"""
+
+
 PROMPTS_POR_IMPOSTO: dict[str, str] = {
     "IRRF": PROMPT_IRRF,
     "INSS": PROMPT_INSS,
+    "FGTS_CONSIG": PROMPT_FGTS_CONSIG,
 }
 
 
@@ -605,14 +645,34 @@ def montar_lancamentos(
         for tipo_folha, valor in linha_obj.valores.items():
             if not valor or valor <= 0:
                 continue
-            observacao = imposto.observacao_template.format(
+
+            # Observação: por coluna (FGTS_CONSIG) ou template global.
+            obs_template = imposto.observacao_por_coluna.get(tipo_folha) or imposto.observacao_template
+            observacao = obs_template.format(
                 mes_ref=mes_ref, ano_ref=ano_ref, tipo_folha=tipo_folha,
+                filial_nome=filial.nome,
             )
+
+            # Espécie: por coluna (FGTS→MFGTS, CONSIG→CONSIG) ou padrão.
+            especie = imposto.especie_por_coluna.get(tipo_folha) or imposto.especie_totvs
+
+            # Pessoa: código Consinco da filial (FGTS_CONSIG) ou padrão do imposto.
+            if imposto.pessoa_por_filial:
+                if filial.codigo_consinco is None:
+                    log.warning(
+                        "montar_lancamentos: filial %s (%d) sem codigo_consinco no de-para — "
+                        "linha %s / %s pulada", filial.nome, filial.codigo, tipo_folha, valor
+                    )
+                    continue
+                pessoa_codigo = filial.codigo_consinco
+            else:
+                pessoa_codigo = imposto.pessoa_codigo
+
             lancamentos.append(Lancamento(
                 filial_codigo=filial.codigo,
                 filial_nome=filial.nome,
-                especie=imposto.especie_totvs,
-                pessoa_codigo=imposto.pessoa_codigo,
+                especie=especie,
+                pessoa_codigo=pessoa_codigo,
                 observacao=observacao,
                 valor=round(valor, 2),
                 data_emissao=data_emissao,

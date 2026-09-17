@@ -45,11 +45,13 @@ class MappingRepository:
 
         for grupo in data.get("empresas", {}).values():
             for item in grupo.get("filiais", []):
+                cc = item.get("codigo_consinco")
                 filial = Filial(
                     codigo=int(item["codigo"]),
                     nome=item["nome"],
                     tipo=TipoFilial(item.get("tipo", "LOJA")),
                     aliases=list(item.get("aliases", [])),
+                    codigo_consinco=int(cc) if cc is not None else None,
                 )
                 self._filiais.append(filial)
                 self._alias_index[_normalize(filial.nome)] = filial
@@ -68,6 +70,9 @@ class MappingRepository:
                 observacao_template=cfg["observacao_template"],
                 colunas_tipo_folha=list(cfg.get("colunas_tipo_folha", [])),
                 mes_ref_regra=cfg.get("mes_ref_regra"),
+                pessoa_por_filial=bool(cfg.get("pessoa_por_filial", False)),
+                especie_por_coluna=dict(cfg.get("especie_por_coluna", {})),
+                observacao_por_coluna=dict(cfg.get("observacao_por_coluna", {})),
             )
 
         log.info("Mapeamento carregado: %d filiais, %d impostos",
