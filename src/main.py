@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-113 (novo imposto FGTS_CONSIG no Operador Financeiro — 2 valores por linha, espécie por coluna MFGTS/CONSIG, pessoa vem do codigo_consinco da filial)"
+BUILD_MARKER = "build-114 (Operador Financeiro com delays enxutos — mesma linha do build-110 do Orçamento; typewrite 3ms→1ms, click 400ms→120ms, entre campos 400ms→100ms)"
 
 
 def main() -> int:

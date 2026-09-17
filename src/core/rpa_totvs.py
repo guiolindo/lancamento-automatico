@@ -283,7 +283,11 @@ class RpaTotvs:
         wx, wy = self._win.left, self._win.top
         return int(wx + ox), int(wy + oy)
 
-    def _sleep(self, chave: str, default_ms: int = 400) -> None:
+    def _sleep(self, chave: str, default_ms: int = 150) -> None:
+        """Default enxuto (150ms). O TOTVS Operador Financeiro
+        responde rápido a click e digitação — não precisa dos 400ms
+        antigos. User pode aumentar via settings.json[delays][<chave>]
+        se algum campo precisar respirar."""
         ms = int(self._delays.get(chave, default_ms))
         time.sleep(ms / 1000.0)
 
@@ -291,15 +295,14 @@ class RpaTotvs:
         import pyautogui
         x, y = self._pos_abs(campo)
         pyautogui.click(x, y)
-        self._sleep("apos_click_ms")
+        self._sleep("apos_click_ms", 120)
 
     def _preencher(self, campo: str, valor: str) -> None:
-        """Click + Backspace × 15 + Delete × 15 + typewrite (UPPERCASE).
+        """Click + Backspace × 12 + Delete × 12 + typewrite (UPPERCASE).
 
-        Ctrl+A não estava confiável no RemoteApp. Solução direta:
-        pressionar Backspace 15x apaga do cursor até o início; Delete 15x
-        apaga do cursor até o fim. Independente de onde o cursor caiu, o
-        campo fica vazio.
+        Ctrl+A não é confiável no RemoteApp — apagamos com Backspace
+        (do cursor até o início) + Delete (do cursor até o fim).
+        Independente de onde o cursor caiu, o campo fica vazio.
         """
         self._check_abort()
         valor_up = valor.upper() if isinstance(valor, str) else str(valor)
@@ -307,15 +310,15 @@ class RpaTotvs:
         import pyautogui
         from .keyboard_utils import digitar_texto
         self._clicar(campo)
-        pyautogui.press("backspace", presses=12, interval=0.002)
-        pyautogui.press("delete", presses=12, interval=0.002)
-        self._sleep("apos_selectall_ms")
-        _capslock_off()  # defesa: usuário pode ter apertado Caps entre lançamentos
-        intervalo = float(self._delays.get("intervalo_digitacao_s", 0.003))
+        pyautogui.press("backspace", presses=12, interval=0.001)
+        pyautogui.press("delete", presses=12, interval=0.001)
+        self._sleep("apos_selectall_ms", 100)
+        _capslock_off()  # defesa: user pode ter apertado Caps entre lançamentos
+        intervalo = float(self._delays.get("intervalo_digitacao_s", 0.001))
         # ASCII vai por typewrite (rápido); acentos vão por clipboard+Ctrl+V.
         # Ver keyboard_utils.digitar_texto pra motivo (build-105).
         digitar_texto(valor_up, intervalo_ascii=intervalo)
-        self._sleep("entre_campos_ms")
+        self._sleep("entre_campos_ms", 100)
 
     # ---------- popup de duplicidade ----------
 
@@ -496,7 +499,9 @@ class RpaTotvs:
                 # Snapshot ANTES: pra detectar SÓ janela nova.
                 titulos_antes = self._snapshot_titulos()
                 self._clicar("btn_gerar_parcelas")
-                self._sleep("apos_gerar_parcelas_ms", 1000)
+                # 700ms é o mínimo pro popup Aviso conseguir nascer se
+                # for duplicidade — abaixo começa a dar falso negativo.
+                self._sleep("apos_gerar_parcelas_ms", 700)
 
                 if self._popup_duplicidade_novo(titulos_antes):
                     log.warning("Nro %s duplicado — nova tentativa", lanc.nro_documento)
@@ -505,7 +510,9 @@ class RpaTotvs:
 
                 if bool(self._rpa_cfg.get("confirmar_automaticamente", True)):
                     self._clicar("btn_confirmar")
-                    self._sleep("apos_confirmar_ms", 2000)
+                    # Grava tudo — precisa respirar mais que os outros
+                    # sleeps porque o TOTVS commita no banco aqui.
+                    self._sleep("apos_confirmar_ms", 1200)
                     lanc.status = StatusLancamento.SUCESSO
                     self._notificar(lanc, "Sucesso")
                     return
@@ -535,9 +542,9 @@ class RpaTotvs:
     def _preencher_cabecalho(self, lanc: Lancamento) -> None:
         self._preencher("empresa", str(lanc.filial_codigo))
         self._preencher("especie", lanc.especie)
-        self._sleep("apos_especie_ms", 800)  # aguarda auto-preencher banco/agência
+        self._sleep("apos_especie_ms", 400)  # aguarda auto-preencher banco/agência
         self._preencher("pessoa", str(lanc.pessoa_codigo))
-        self._sleep("apos_pessoa_ms", 800)  # aguarda auto-preencher P.Nota
+        self._sleep("apos_pessoa_ms", 500)   # aguarda auto-preencher P.Nota
         self._preencher("observacao", lanc.observacao)
 
     def _preencher_datas_e_valor(self, lanc: Lancamento) -> None:
