@@ -510,9 +510,7 @@ class RpaTotvs:
 
                 if bool(self._rpa_cfg.get("confirmar_automaticamente", True)):
                     self._clicar("btn_confirmar")
-                    # Grava tudo — precisa respirar mais que os outros
-                    # sleeps porque o TOTVS commita no banco aqui.
-                    self._sleep("apos_confirmar_ms", 1200)
+                    self._sleep("apos_confirmar_ms", 500)
                     lanc.status = StatusLancamento.SUCESSO
                     self._notificar(lanc, "Sucesso")
                     return
@@ -542,9 +540,9 @@ class RpaTotvs:
     def _preencher_cabecalho(self, lanc: Lancamento) -> None:
         self._preencher("empresa", str(lanc.filial_codigo))
         self._preencher("especie", lanc.especie)
-        self._sleep("apos_especie_ms", 400)  # aguarda auto-preencher banco/agência
+        self._sleep("apos_especie_ms", 150)  # aguarda auto-preencher banco/agência
         self._preencher("pessoa", str(lanc.pessoa_codigo))
-        self._sleep("apos_pessoa_ms", 500)   # aguarda auto-preencher P.Nota
+        self._sleep("apos_pessoa_ms", 200)   # aguarda auto-preencher P.Nota
         self._preencher("observacao", lanc.observacao)
 
     def _preencher_datas_e_valor(self, lanc: Lancamento) -> None:
