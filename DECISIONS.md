@@ -268,6 +268,140 @@ template no TOTVS deve usar `digitar_texto` e NUNCA
 
 ---
 
+## 9. Validação de CNPJ + anotação a caneta (Pluxee, build-107) ✅
+
+**Contexto**: Pluxee Frota e Combustível é o segundo fornecedor
+recorrente do módulo Orçamento (depois do Ótimo). Duas
+particularidades: (a) o CNPJ do prestador é único, dá pra usar como
+guarda de fornecedor; (b) as notas são emitidas para UMA filial
+matriz (a que centraliza compras) mas o vale é DESTINADO a lojas
+específicas — a loja destinatária é escrita **à mão** no rosto do
+papel.
+
+**Opções pra identificar a filial destinatária:**
+
+- **A**: sempre exigir digitação manual do operador (nome da loja
+  por linha). Chato — 40 notas → 40 digitações.
+- **B**: OCR da região do rabisco (Tesseract). Handwriting recognition
+  é onde Tesseract falha feio, ~40% de acerto em letra normal.
+  Depender do operador digitar de qualquer jeito.
+- **C**: usar Gemini Vision no rabisco. Modelos multimodais recentes
+  leem manuscrito com ~85-90% de precisão em letra legível.
+
+**Escolhida — C** com fallback pra digitação. Prompt `_PROMPT_NFSE_
+COM_CANETA` orienta o Gemini a extrair `anotacao_caneta` com regra
+dura: **NUNCA CHUTE**, vazio se ilegível. Cliente-side, fuzzy match
+com `rapidfuzz.WRatio` contra nomes canônicos + aliases das filiais
+(threshold 70, boost/penalty pra desambiguar LOJA vs CD). Se o match
+falha, a coluna "Caneta" na grid fica com o texto bruto do Gemini e
+o operador edita — ou digita "20 — Luis Eduardo Magalhaes" direto,
+ou refaz o fuzzy no texto que ele escrever.
+
+**Validação de CNPJ como bônus genérico:**
+
+Adicionado campo opcional `cnpj_esperado` em qualquer template do
+Orçamento. Se preenchido, o Gemini extrai `cnpj_prestador` da NFS-e
+e o app **marca IGNORADA** as notas que não batem — assim um lote
+com Pluxee misturado com nota de outro fornecedor rejeita as
+estranhas silenciosamente em vez de lançar errado. Deixado
+`cnpj_esperado: ""` no OTIMO como TODO — user preenche se quiser
+ativar depois.
+
+---
+
+## 10. Rolagem-por-foco do TOTVS na aba Contabilização (build-111) ✅
+
+**Contexto**: bug reportado — clique no Valor caía na coluna
+Percentual, "REGULARBA" aparecia lá. User explicou: o TOTVS Consinco
+rola a tabela horizontalmente pra direita quando a linha ganha
+foco de edição ("é feature nativa pra ver melhor a linha"). O offset
+X do Valor foi calibrado com a tabela em estado idle; depois de
+clicar na Filial (que dava foco → rolava), o click do Valor caía na
+coluna Percentual.
+
+**Opções:**
+
+- **A**: instruir usuário a recalibrar Valor **depois** de clicar
+  na Filial (ou seja, com a linha rolada). Fácil, mas quebra a
+  premissa "calibrei uma vez, funciona sempre".
+- **B**: navegar por Tab após clicar na Filial (12+ Tabs até o
+  Valor). Frágil — depende de quais células são editáveis, versão
+  do TOTVS, etc.
+- **C**: **inverter a ordem**. Preencher primeiro os campos das
+  colunas DISTANTES (Valor, Percentual), com a tabela ainda idle.
+  Só depois mexer nas colunas iniciais (Filial, Conta Débito, CR)
+  que ficam sempre visíveis independente da rolagem.
+
+**Escolhida — C**. Aplicado em `_processar_linha_contab`: Valor →
+Filial → Conta Débito → CR. Zero calibração adicional, zero
+dependência de detalhes do TOTVS, funciona nos 2 modos (OTIMO
+simples + DAE/PLUXEE complexo). Gotcha registrada como nº 18 no
+ARCHITECTURE.md pra futuros contribuidores não caírem.
+
+---
+
+## 11. Check de rede tem que ser conectividade real, não só domain-join (build-112) ✅
+
+**Contexto**: bug reportado — "tirei o cabo de rede e continuou
+abrindo o app normalmente". O check do build-94 só validava se
+`USERDNSDOMAIN` estava setada e batia no hash esperado. Descobrimos
+que essa env var é **cacheada pelo Windows no logon** — permanece
+setada mesmo com cabo desligado, fora da VPN, sem rede nenhuma.
+Estávamos verificando "essa máquina foi joined ao domínio X alguma
+vez", não "está conectada agora".
+
+**Opções pra verificar conectividade real:**
+
+- **A**: `ping` num IP interno conhecido. Mas isso vaza IPs no
+  source.
+- **B**: tentar TCP connect numa porta específica de servidor
+  interno. Vaza hostname E porta.
+- **C**: `socket.gethostbyname(USERDNSDOMAIN)`. O valor vem da env
+  var (nunca do source), a chamada DNS só resolve se o DNS interno
+  estiver alcançável.
+
+**Escolhida — C**. Adicionada como segunda etapa (roda depois do
+check de hash). Timeout 3s. Segurança do nome do domínio preservada
+(`strings` no exe continua vazando só o hash de 64 hex). Zero AV
+concern — `socket.gethostbyname` é chamada mainstream (Chrome,
+Outlook, Windows Update fazem centenas por segundo).
+
+---
+
+## 12. Espécie e Pessoa por coluna (FGTS_CONSIG, build-113) ✅
+
+**Contexto**: novo relatório "FGTS + Empréstimo Consignado" tem 2
+colunas de valor lado a lado (VALOR FGTS + VALOR EMPRÉSTIMO
+CONSIGNADO). Cada linha do relatório precisa virar 2 lançamentos
+com espécies diferentes (MFGTS + CONSIG), e a Pessoa não é fixa por
+imposto — é o "código Consinco" da própria filial (diferente do
+código TOTVS que já usamos).
+
+**Opções pra representar isso no modelo `Imposto`:**
+
+- **A**: criar dois impostos separados (MFGTS e CONSIG), rodar 2
+  vezes no lote. Operador extrai o mesmo PDF 2 vezes, filtra
+  colunas diferentes. Chato e propenso a erro.
+- **B**: um "meta-imposto" com sub-lançamentos. Complexo, exige
+  mudar o modelo de dados e a UI (combo, worker).
+- **C**: extensão ADITIVA do `Imposto` atual. Novos campos opcionais
+  `especie_por_coluna` (dict coluna→espécie), `pessoa_por_filial`
+  (bool) e `observacao_por_coluna` (dict coluna→template). Impostos
+  antigos (IRRF, INSS) ignoram esses campos, comportam idêntico.
+
+**Escolhida — C**. Zero quebra de compat, ganha 3 capacidades
+reusáveis pra impostos futuros:
+- Cada coluna vira lançamento com espécie/observação própria.
+- Pessoa pode vir da filial (via `Filial.codigo_consinco`) em vez
+  de fixa por imposto.
+- Placeholder `{filial_nome}` disponível em qualquer observação.
+
+Filial ganhou `codigo_consinco: Optional[int]` — 30 filiais tiveram
+o código Consinco preenchido no `mapeamento.json`. Backward compat
+preservada (default `None`).
+
+---
+
 ## Convenções do projeto
 
 Registradas aqui pra IA/contribuidor novo não precisar adivinhar.

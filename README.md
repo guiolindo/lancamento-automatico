@@ -30,6 +30,7 @@ Guias/resumos de impostos sobre folha de pagamento.
 | ------- | ------ |
 | IRRF (folha, férias, rescisão, adiantamento) | ✅ funcionando |
 | INSS (folha, coluna única, ref = mês anterior à emissão) | ✅ funcionando |
+| FGTS + Empréstimo Consignado (2 valores por linha → 2 lançamentos MFGTS + CONSIG, pessoa = código Consinco da própria filial) | ✅ funcionando |
 | ICMS ST, ISS, PIS/COFINS | 🕓 roadmap — adicionar em `mapeamento.json` |
 
 ### 2. Orçamento (Notas Fiscais de Despesa)
@@ -43,6 +44,7 @@ TOTVS. Cada fornecedor recorrente vira um **template** em
 | ---------------------- | ------ | ------------------- |
 | Ótimo (Consórcio de Bilhetagem — vale-transporte, NFS-e) | ✅ | Multi-página, 3 campos por nota |
 | DAE Bahia — ICMS sobre energia elétrica (regime normal + adic fundo pobreza) | ✅ | Resolve empresa por CNPJ, identifica tipo automaticamente |
+| Pluxee Frota e Combustível (vale-combustível, NFS-e) | ✅ | Extrai CNPJ prestador (valida contra template) + rabisco a caneta via Gemini Vision; resolve emissão pelo CNPJ tomador e destino pelo rabisco (fuzzy match contra aliases) |
 | Outros fornecedores recorrentes | 🕓 roadmap — novo entry em `mapeamento_orcamento.json` |
 
 Fluxo idêntico ao módulo principal:

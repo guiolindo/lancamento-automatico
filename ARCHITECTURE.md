@@ -703,6 +703,16 @@ Só os builds com mudança arquitetural relevante. Detalhes em `git log`.
 | 103 | **Fix duplicidade Orçamento** — detecta LOGO após digitar Nota Fiscal, não só depois do "+". O TOTVS valida o campo Nota Fiscal no OnLeaveFocus e mostra o popup Aviso na hora; o robô ignorava e seguia clicando por cima. Novo fluxo: cabeçalho aba Nota → digita NF + Tab pra forçar OnLeaveFocus → sleep 1s → verifica popup novo. Se apareceu: `_resolver_duplicidade` (OK+F2+Sim → IGNORADA). Segunda verificação antes do "+" fica como cinturão+suspensório. | `rpa_orcamento.py` |
 | 104 | **Offsets da visão do Orçamento reescritos** com a calibração real do usuário. Meus valores anteriores tinham 2 erros grosseiros: toda a aba Financeiro estava com Y +132px errado e `observacao_financeira` com X −209px. Recalculei todos os 26 campos + 2 popups subtraindo (20, 62) — posição do âncora "Notas Fiscais de Despesas" dentro da janela — de cada coordenada window-relative dele. Além disso, `OrcamentoPage` agora recebe `main_window=self` e chama `_preparar_janela_para_execucao()`/`_restaurar_janela_pos_lote()` — auto-move a MainWindow pra outra tela em multi-monitor, mesma pattern do Novo Lote. | `visao_orcamento.py`, `orcamento_dialog.py`, `main_window.py` |
 | 105 | **Fix acentos ignorados**: `pyautogui.typewrite` só sabe digitar ASCII — qualquer char não-ASCII (é/ê/ç/á…) é ignorado silenciosamente. "ELÉTRICA" saía "ELTRICA" no TOTVS. Novo `keyboard_utils.digitar_texto(texto)` decide por caractere: ASCII vai por typewrite (rápido), string com acento vai por clipboard Win32 (`OpenClipboard`/`SetClipboardData` via ctypes puro — sem dep nova) + `Ctrl+V`, salvando e restaurando o clipboard atual. Aplicado em `rpa_totvs._preencher` e `rpa_orcamento._preencher`/`_digitar_multilinha`. Também: textos do Orçamento enxutos ("🤖 Enviando… — 1 request só", "✓ N item(ns) extraído(s). Revise…" etc. cortados) — removida a "cara de IA". Sobre reescrito com os 2 módulos e o BUILD_MARKER. | `keyboard_utils.py` (novo), `rpa_totvs.py`, `rpa_orcamento.py`, `orcamento_dialog.py`, `main_window.py` |
+| 106 | Docs sync (README + ARCHITECTURE + DECISIONS) cobrindo builds 103-105. | `*.md` |
+| 107 | **Pluxee vale combustível + validação CNPJ + anotação de caneta**: novo fornecedor no módulo Orçamento (CNPJ 20.211.412/0001-88). Cada NFS-e endereça 2 filiais — emissão (do CNPJ tomador) e destino (rabisco a caneta que o Gemini lê via Vision). Novo `_PROMPT_NFSE_COM_CANETA` extrai cnpj_prestador, cnpj_tomador e anotacao_caneta. App resolve filial de emissão via CNPJ e filial da caneta via fuzzy match (rapidfuzz WRatio, threshold 70). Aba Contabilização suporta `trocar_filial_para` genérico: `filial_loja`/`filial_emissao`/`filial_caneta`. Template ganha `cnpj_esperado` (opcional) — quando preenchido, rejeita silenciosamente notas de outros fornecedores no mesmo lote. Grid dinâmico ganha 3º layout (NFS-e com caneta = 8 cols com Emissor + Caneta). Placeholders `{filial_caneta_nome}` etc. em templates de observação. | `mapeamento_orcamento.json`, `models.py`, `gemini_client.py`, `rpa_orcamento.py`, `orcamento_dialog.py` |
+| 108 | **Fix access violation no clipboard**: `keyboard_utils.py` chamava as APIs Win32 sem argtypes/restype; ctypes assumia c_int (32-bit) como retorno, o que TRUNCA ponteiros HANDLE/HGLOBAL de 64-bit no Windows x64. Próximo uso do handle → `access violation reading 0x…`. Configurados tipos corretos em todas as 8 APIs (OpenClipboard/GlobalAlloc/etc). Também: aliases pro fuzzy da caneta (`cnpjs_filiais.json` ganha campo `aliases` — Linha Verde → Serra Verde, LEM → Luis Eduardo, etc.). Trocado scorer de `token_set_ratio` pra `WRatio`. | `keyboard_utils.py`, `cnpjs_filiais.json`, `orcamento_dialog.py` |
+| 109 | **Fuzzy caneta desambigua LOJA vs CD**: "CD Feira de Santana" caía como loja (22) em vez de CD (201) porque WRatio dava 1 ponto de diferença em minúsculas. Fix: reranking pós-WRatio com boost +15 se prefixo "CD " bate consistente, penalidade -20 se cruza LOJA↔CD. | `orcamento_dialog.py` |
+| 110 | **Orçamento: paridade com Novo Lote**. (a) Delays enxutos: click 400→120ms, entre campos 400→100ms, typewrite 3ms→1ms; +1s entre notas via `entre_notas_ms` pra dar respiro pro TOTVS fechar o registro. (b) Painel Atividade (`QPlainTextEdit`) ao lado da grid — mesma pattern do dashboard. (c) Menu contextual (botão direito): editar número/valor/data/filial/caneta + marcar como pendente + remover. | `rpa_orcamento.py`, `orcamento_dialog.py` |
+| 111 | **Fix Contab: Valor ANTES da Filial**. TOTVS Consinco rola a tabela horizontalmente quando a linha ganha foco (feature nativa) — o offset do Valor (calibrado em estado idle) caía na coluna Percentual depois de clicar na Filial. Reordenado `_processar_linha_contab` pra preencher Valor primeiro (tabela idle), depois Filial/Conta/CR (colunas iniciais, sempre visíveis). Também: adicionado campo `contab_linha2_filial` que faltava (KeyError impedia Pluxee de trocar filial na linha 2). | `rpa_orcamento.py`, `calibracao_orcamento.py`, `visao_orcamento.py` |
+| 112 | **Fix check de rede — cabo desligado não bloqueava**. `USERDNSDOMAIN` é cacheada pelo Windows no logon — permanece setada mesmo com cabo desligado / fora da VPN. O check só verificava "essa máquina foi joined ao domínio X". Agora 2 estágios: (1) env var + hash (como antes) + (2) `socket.gethostbyname(USERDNSDOMAIN)` com timeout 3s — só resolve se o DNS interno estiver acessível. Segurança do nome preservada (vem do sistema em runtime, nunca do source). | `launcher.py` |
+| 113 | **Novo imposto FGTS_CONSIG no Operador Financeiro**. Cada linha do relatório tem 2 colunas de valor (FGTS + Consignado) e vira 2 lançamentos com espécies diferentes (MFGTS + CONSIG). Duas novas capacidades no modelo `Imposto`: `especie_por_coluna` (cada coluna do relatório usa espécie própria) e `pessoa_por_filial` (pessoa = `Filial.codigo_consinco` em vez de fixa por imposto). `Filial` ganha `codigo_consinco: Optional[int]`. Placeholder `{filial_nome}` disponível em qualquer observação. Novo `PROMPT_FGTS_CONSIG` explica ao Gemini o layout de 2 colunas + como ignorar TOTAL/GFD. 30 filiais tiveram o código Consinco preenchido. | `mapeamento.json`, `models.py`, `mapping.py`, `gemini_client.py` |
+| 114 | **Delays enxutos no Operador Financeiro** (paridade com build-110 do Orçamento): default 400→150ms, click 400→120, entre campos 400→100, especie 800→400, pessoa 800→500, gerar parcelas 1000→700, confirmar 2000→1200; typewrite 3ms→1ms, Backspace/Delete 2ms→1ms. Backdoor via `settings.json[delays]` mantido. | `rpa_totvs.py` |
+| 115 | Delays ainda mais enxutos no Operador Financeiro: após espécie 400→150, após pessoa 500→200, após confirmar 1200→500. User validou que o TOTVS aguenta esse ritmo. | `rpa_totvs.py` |
 
 ---
 
@@ -811,6 +821,34 @@ Coisas que vão pegar contribuidor novo (humano ou IA) de surpresa:
     Win32 + Ctrl+V. Sempre use `digitar_texto` no lugar de
     `pyautogui.typewrite` em código que preenche campos de nota,
     observação ou qualquer texto vindo de template.
+17. **Win32 API por ctypes exige `argtypes` E `restype`** — sem
+    isso, ctypes assume retorno `c_int` (32-bit). No Windows x64
+    todo `HANDLE`/`HGLOBAL`/`HWND` é ponteiro de 64 bits — retorno
+    truncado, próximo uso lê memória inválida = `access violation
+    reading 0x…`. Aconteceu em prod (build-108) no clipboard do
+    `keyboard_utils.py`. Já rolou antes no `GetAsyncKeyState`
+    (build-49). **Sempre** configure ambos ao usar
+    `ctypes.windll.user32`/`kernel32` etc. — inclusive quando o
+    retorno "parece" um int simples.
+18. **TOTVS Consinco ROLA a tabela quando a linha ganha foco de
+    edição** (aba Contabilização e similares). Feature nativa
+    ("ver melhor a linha"). Colunas distantes (Valor, Percentual)
+    TROCAM DE POSIÇÃO VISUAL quando a linha rola. Consequência:
+    offset X do Valor calibrado em estado idle cai numa outra
+    coluna se a Filial for clicada primeiro. Fix (build-111): sempre
+    preencher primeiro os campos das colunas LONGE do início da
+    linha (Valor, Percentual), enquanto a tabela ainda está idle;
+    só depois mexer nas colunas iniciais (Filial, Conta Débito, CR
+    — sempre visíveis).
+19. **`USERDNSDOMAIN` é cacheada pelo Windows no logon** — permanece
+    setada mesmo com cabo desligado, fora da VPN, ou sem qualquer
+    conectividade de rede. Checar só a env var (build-94) NÃO verifica
+    "está conectado agora", verifica "essa máquina foi joined a
+    esse domínio alguma vez". Fix (build-112): 2 estágios — hash
+    da env var + `socket.gethostbyname(USERDNSDOMAIN)` com timeout
+    3s. Se algum código futuro fizer check de conectividade
+    corporativa, use a mesma pattern (nome do domínio vem da env
+    var, nunca do source).
 
 ---
 

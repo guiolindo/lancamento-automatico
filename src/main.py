@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-115 (Operador Financeiro ainda mais rápido — após espécie 150ms, após pessoa 200ms, após confirmar 500ms)"
+BUILD_MARKER = "build-116 (docs atualizadas — README/ARCHITECTURE/DECISIONS cobrem tudo até 115: Pluxee, DAE, FGTS_CONSIG, delays, rolagem TOTVS, check de rede)"
 
 
 def main() -> int:
