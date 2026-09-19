@@ -378,7 +378,7 @@ class RpaTotvs:
             x, y = self._pos_abs("popup_indicador")
             atual = pyautogui.pixel(x, y)
             ref = self.calibracao.cores["popup_indicador"]
-            dist = sum(abs(int(a) - int(b)) for a, b in zip(atual, ref))
+            dist = sum(abs(int(a) - int(b)) for a, b in zip(atual, ref, strict=False))
             # Tolerância folgada — RemoteApp pode variar cor ligeiramente
             # por compressão do RDP.
             match = dist < 60

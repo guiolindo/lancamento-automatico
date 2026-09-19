@@ -1,5 +1,11 @@
 # Auto Conferi
 
+[![Build .exe portátil](https://github.com/guiolindo/lancamento-automatico/actions/workflows/build-exe.yml/badge.svg?branch=main)](https://github.com/guiolindo/lancamento-automatico/actions/workflows/build-exe.yml)
+[![Lint](https://github.com/guiolindo/lancamento-automatico/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/guiolindo/lancamento-automatico/actions/workflows/lint.yml)
+[![Rolling release](https://img.shields.io/github/v/release/guiolindo/lancamento-automatico?include_prereleases&label=rolling)](https://github.com/guiolindo/lancamento-automatico/releases/tag/latest)
+[![License: proprietary](https://img.shields.io/badge/license-proprietary-blue)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/downloads/release/python-3120/)
+
 > Automação de lançamento de guias/resumos de impostos no **TOTVS/Consinco**
 > a partir de PDF ou imagem do relatório.
 
@@ -22,7 +28,7 @@ dentro de VM via RemoteApp (Auto Sky), onde a janela aparece com sufixo
 O app tem **dois módulos** na sidebar, cada um automatizando uma tela
 diferente do TOTVS:
 
-### 1. Novo lote (Operador Financeiro / Inclusão de Títulos)
+### 1. Operador Financeiro (Inclusão de Títulos)
 
 Guias/resumos de impostos sobre folha de pagamento.
 
@@ -88,11 +94,12 @@ Detalhes técnicos em [ARCHITECTURE.md → Módulo Orçamento](ARCHITECTURE.md).
 > detectada por substring `Operador Financeiro` (casa também
 > `Operador Financeiro (Remoto)` do RemoteApp).
 >
-> O botão **"Recalibrar (backup)"** existe só como rede de segurança:
-> se o auto-detect falhar por causa de mudança de tema/DPI/versão do
-> TOTVS, você calibra manualmente uma vez e o resultado fica salvo em
-> `~/.lancamento-automatico/calibracao.json` como fallback pros próximos
-> lotes. Em máquina padrão, nunca precisa apertar esse botão.
+> O botão **"Recalibrar"** existe como rede de segurança: se algum
+> click começar a cair fora (mudança de tema/DPI/versão do TOTVS), você
+> calibra manualmente uma vez e o resultado fica salvo em
+> `~/.lancamento-automatico/calibracao.json`. Desde o build-100 a
+> calibração manual **prevalece** sobre a visão automática — não é
+> sobrescrita a cada boot.
 
 ### Parada de emergência
 
@@ -216,7 +223,7 @@ Ao lado do `.exe` (pasta portátil):
 
 | Arquivo | Papel |
 | ------- | ----- |
-| `mapeamento.json` | De-para de filiais e configurações por imposto (Novo lote) — **editável pelo usuário final sem recompilar** |
+| `mapeamento.json` | De-para de filiais e configurações por imposto (Operador Financeiro) — **editável pelo usuário final sem recompilar** |
 | `mapeamento_orcamento.json` | Templates de fornecedores do módulo Orçamento (OTIMO, DAE_ENERGIA, …) — **editável pelo usuário** |
 | `cnpjs_filiais.json` | Mapa CNPJ→filial (usado por documentos que endereçam pelo CNPJ, como o DAE Bahia) — **editável** |
 | `_next/` | Pasta temporária do updater. Só existe entre "download pronto" e "próximo boot aplica". |
@@ -268,7 +275,7 @@ src/
   main.py                      boot do app PySide6 (splash IMEDIATO, depois imports pesados)
                                contém BUILD_MARKER — string que identifica a versão
   config/
-    mapeamento.json            de-para de filiais + impostos (Novo lote)
+    mapeamento.json            de-para de filiais + impostos (Operador Financeiro)
     mapeamento_orcamento.json  templates de fornecedores (Orçamento)
     cnpjs_filiais.json         mapa CNPJ → filial (usado por DAE Bahia e afins)
   assets/
@@ -306,8 +313,8 @@ src/
     calibracao_dialog.py       captura das posições no TOTVS — parametrizável pros 2 módulos
     depara_dialog.py           editor do mapeamento.json
     orcamento_dialog.py        OrcamentoPage — página integrada ao main_window (não dialog)
-    workers.py                 QThreads (extração + execução do lote — Novo lote e Orçamento)
-    preview_table.py           tabela de revisão do Novo lote
+    workers.py                 QThreads (extração + execução do lote — Operador Financeiro e Orçamento)
+    preview_table.py           tabela de revisão do Operador Financeiro
     main_window.py             janela principal (QStackedWidget: dashboard + orçamento)
 build/
   build.py                     script Nuitka (portátil, anti-AV)

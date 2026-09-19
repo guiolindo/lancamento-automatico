@@ -4,12 +4,10 @@ from datetime import date, datetime
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QRect, QSize, Qt, QThread
-from PySide6.QtGui import QGuiApplication, QIcon, QPixmap
+from PySide6.QtGui import QGuiApplication, QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDateEdit, QFileDialog, QFrame, QGridLayout,
-    QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPlainTextEdit,
-    QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
-    QStackedWidget, QVBoxLayout, QWidget
+    QCheckBox, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPlainTextEdit,
+    QProgressBar, QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 )
 
 from . import icons as _icons
@@ -647,7 +645,7 @@ class MainWindow(QMainWindow):
                     )
                     self._updater_bar.iniciar(info)
                 else:
-                    self._log_line(f"i Versão local já é a mais recente")
+                    self._log_line("i Versão local já é a mais recente")
                 return
 
             # Falha — decide se agenda outra tentativa

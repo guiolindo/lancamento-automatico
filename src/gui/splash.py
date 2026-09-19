@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import (
-    Property, QEasingCurve, QPropertyAnimation, Qt, QTimer
+    Qt, QTimer
 )
-from PySide6.QtGui import QFont, QGuiApplication, QPainter, QPixmap
+from PySide6.QtGui import QGuiApplication, QPixmap
 from PySide6.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QWidget
 
 

@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-117 (UX — sidebar/breadcrumb usam nomes reais do TOTVS: 'Operador Financeiro' no lugar de 'Novo lote'; textos de calibração corrigidos, cabeçalho simétrico entre os 2 módulos)"
+BUILD_MARKER = "build-118 (housekeeping — LICENSE, CHANGELOG, CI de lint (ruff), templates de PR/issue, badges no README; nenhuma mudança de comportamento no app)"
 
 
 def main() -> int:

@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
-    QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
+    QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget
 )
 
 from ..core.mapping import MappingRepository
@@ -269,7 +268,7 @@ class DeParaDialog(QDialog):
 
         # Código duplicado
         vistos: dict[int, str] = {}
-        for chave, bloco in novas.items():
+        for _chave, bloco in novas.items():
             for f in bloco["filiais"]:
                 if f["codigo"] in vistos:
                     QMessageBox.warning(

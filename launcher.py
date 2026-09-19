@@ -150,7 +150,7 @@ def _log_startup_error(err: BaseException) -> None:
             f.write(f"cwd: {os.getcwd()}\n")
             f.write(f"python: {sys.version}\n")
             f.write(f"platform: {sys.platform}\n")
-            f.write(f"sys.path (primeiros 10):\n")
+            f.write("sys.path (primeiros 10):\n")
             for p in sys.path[:10]:
                 f.write(f"  - {p}\n")
             f.write("\n")

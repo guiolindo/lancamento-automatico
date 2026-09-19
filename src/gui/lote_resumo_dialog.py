@@ -66,7 +66,7 @@ class LoteResumoDialog(QDialog):
         elif n_bad > 0:
             titulo = f"✗ Lote falhou — {n_bad} falha(s), 0 OK"
             cor_titulo = "#EF4444"  # vermelho
-            subtitulo = f"Nada foi lançado. Verifique a lista abaixo."
+            subtitulo = "Nada foi lançado. Verifique a lista abaixo."
         else:
             titulo = "Lote sem lançamentos processados"
             cor_titulo = "#B7C2CF"

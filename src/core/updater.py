@@ -24,7 +24,6 @@ import json
 import re
 import shutil
 import sys
-import tempfile
 import threading
 import zipfile
 from dataclasses import dataclass

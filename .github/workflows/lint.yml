@@ -1,0 +1,74 @@
+name: Lint
+
+# Roda em toda push/PR — leve (~30s). Separado do build-exe.yml pra dar
+# feedback rápido sem gastar 10min de Nuitka a cada commit.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar ruff
+        run: pip install ruff==0.6.9
+
+      - name: ruff check
+        run: ruff check src/ launcher.py build/ --output-format=github
+
+      - name: ruff format --check
+        run: ruff format --check src/ launcher.py build/
+        continue-on-error: true
+
+  smoke-import:
+    # Mesmo smoke gate do build-exe.yml, mas isolado — dá sinal em ~30s.
+    # Pega bugs de f-string/circular import antes do build pesado rodar.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Smoke gate (import + qss runtime + BUILD_MARKER)
+        run: |
+          python -c "
+          import sys
+          class _Stub:
+              def __getattr__(self, n): return _Stub()
+              def __call__(self, *a, **k): return _Stub()
+          for m in ['PySide6','PySide6.QtCore','PySide6.QtGui','PySide6.QtWidgets']:
+              sys.modules[m] = _Stub()
+
+          from src.core import updater, mapping, models, settings_store, logger
+          from src.gui.theme import qss
+          qss('escuro'); qss('claro')
+
+          from src.main import BUILD_MARKER
+          import re
+          if not re.match(r'^build-\d+', BUILD_MARKER):
+              raise SystemExit(f'BUILD_MARKER fora do padrão: {BUILD_MARKER!r}')
+          print('smoke gate OK:', BUILD_MARKER)
+          "

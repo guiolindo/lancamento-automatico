@@ -8,7 +8,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 from ..core.gemini_client import GeminiClient, montar_lancamentos
 from ..core.logger import log
 from ..core.mapping import MappingRepository
-from ..core.models import Imposto, Lancamento, LinhaExtracao, NotaDespesa, StatusLancamento
+from ..core.models import Imposto, Lancamento, NotaDespesa, StatusLancamento
 
 
 class ExtracaoWorker(QObject):

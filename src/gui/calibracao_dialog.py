@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QVBoxLayout, QWidget
 )
 
-from ..core.calibracao import CAMPOS, CAMPOS_OPCIONAIS, Calibracao
+from ..core.calibracao import CAMPOS, CAMPOS_OPCIONAIS
 
 
 _TODOS_CAMPOS = CAMPOS + CAMPOS_OPCIONAIS

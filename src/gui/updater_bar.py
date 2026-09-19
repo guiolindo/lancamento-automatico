@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import threading
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton
+    QFrame, QHBoxLayout, QLabel, QProgressBar
 )
 
 from ..core import updater

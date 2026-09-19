@@ -1,0 +1,56 @@
+# Config do ruff. Só isso — sem build backend, sem pytest, sem entry
+# points. O projeto é empacotado pelo Nuitka (`build/build.py`), não por
+# setuptools/poetry.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+    "build/dist",
+    "build/build",
+    "src/assets",
+]
+
+[tool.ruff.lint]
+# Foco em correctness (F = pyflakes) + higienização básica (E/W =
+# pycodestyle). Sem regras de estilo agressivas — o codebase já tem seu
+# próprio dialeto e Nuitka é sensível a certas mágicas.
+select = [
+    "F",  # pyflakes: unused import, redefinição, f-string sem placeholder…
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "B",  # flake8-bugbear (mutable defaults, except:pass, etc.)
+    # `UP` (pyupgrade) desligado de propósito: reescreveria `Optional[X]`
+    # pra `X | None` em massa. O codebase é PEP-561-friendly em Python
+    # 3.12, mas pydantic v2 + Nuitka têm interações com annotations que
+    # já mordeu (`from __future__ import annotations` NÃO está em todos
+    # os módulos). Não vale a rewrite automática.
+]
+ignore = [
+    # Nomes de uma letra são comuns em loops curtos e coordenadas visuais
+    # (x, y, w, h). Não vale a briga.
+    "E741",
+    # Semicolons em uma linha só, quando usados propositalmente pra
+    # agrupar "declara + configura" (ex: `it = QTableWidgetItem(x);
+    # it.setFlags(...)`). Estilo do codebase, não é bug.
+    "E702",
+    # Except-except bare em código de UI que precisa não crashar por
+    # motivo cosmético (ex: aplicar ícone, animação). Bugbear reclama
+    # muito nesses e sempre falso-positivo.
+    "B008", "B011",
+    # Linhas longas: Nuitka às vezes gera código com strings gigantes;
+    # a gente formata quando dá, mas não trava CI por causa disso.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# `src/main.py` faz imports após `_boot_trace()` de propósito — o boot
+# lento do Qt precisa do splash ANTES dos imports pesados (ver comentário
+# no arquivo). E402 aqui é intencional.
+"src/main.py" = ["E402"]
+# `launcher.py` mesma coisa — imports condicionais por plataforma.
+"launcher.py" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
