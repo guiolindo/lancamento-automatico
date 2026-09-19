@@ -33,9 +33,11 @@ jobs:
       - name: ruff check
         run: ruff check src/ launcher.py build/ --output-format=github
 
-      - name: ruff format --check
-        run: ruff format --check src/ launcher.py build/
-        continue-on-error: true
+      # `ruff format --check` desligado de propósito — o codebase existente
+      # tem seu próprio dialeto (comentários largos, imports agrupados por
+      # dependência, `x; y` proposital) que o formatter da ruff reescreveria
+      # em 30+ arquivos. Se quisermos formatar no futuro, é um big-bang commit
+      # separado; até lá esse check só produziria ruído.
 
   smoke-import:
     # Mesmo smoke gate do build-exe.yml, mas isolado — dá sinal em ~30s.
@@ -51,6 +53,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      # PySide6 é stubado (o CI não tem GUI), mas as libs puras que os
+      # módulos core importam no top-level (requests, rapidfuzz) precisam
+      # estar instaladas — do contrário o `from src.core import updater`
+      # já falha com ModuleNotFoundError e a gente nem chega no qss().
+      - name: Instalar deps puras do core (não-Qt)
+        run: pip install requests==2.32.3 rapidfuzz==3.9.6
 
       - name: Smoke gate (import + qss runtime + BUILD_MARKER)
         run: |
