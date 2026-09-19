@@ -158,7 +158,7 @@ class OrcamentoPage(QWidget):
         titulo.setStyleSheet("font-size: 20px; font-weight: 700; letter-spacing: -0.3px;")
         root.addWidget(titulo)
 
-        sub = QLabel("Templates por fornecedor. Extraia do PDF e execute no TOTVS.")
+        sub = QLabel("Notas por fornecedor (Ótimo, Pluxee, DAE). Extraia do PDF e execute no TOTVS.")
         sub.setStyleSheet("color: #94A3B8; font-size: 12px;")
         sub.setWordWrap(True)
         root.addWidget(sub)

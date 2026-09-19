@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-116 (docs atualizadas — README/ARCHITECTURE/DECISIONS cobrem tudo até 115: Pluxee, DAE, FGTS_CONSIG, delays, rolagem TOTVS, check de rede)"
+BUILD_MARKER = "build-117 (UX — sidebar/breadcrumb usam nomes reais do TOTVS: 'Operador Financeiro' no lugar de 'Novo lote'; textos de calibração corrigidos, cabeçalho simétrico entre os 2 módulos)"
 
 
 def main() -> int:

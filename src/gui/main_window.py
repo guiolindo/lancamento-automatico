@@ -33,16 +33,20 @@ from .workers import ExtracaoWorker, LoteWorker
 
 
 # Cada item de nav: (chave, icon_factory_name, rótulo, tooltip)
+# Nomenclatura: os rótulos da sidebar ecoam o vocabulário do TOTVS
+# (as duas telas reais que o user opera — "Operador Financeiro" e
+# "Orçamento"). Antes o dashboard era "Novo lote" (rótulo de AÇÃO,
+# quebrava o modelo mental de "cada seção = um módulo do TOTVS").
 NAV_ITEMS = [
-    ("dashboard",     "icon_lote",     "Novo lote", "Preparar e executar novo lote (impostos sobre folha)"),
-    ("orcamento",     "icon_lote",     "Orçamento", "Notas Fiscais de Despesa — templates de fornecedores recorrentes"),
-    ("mapeamento",    "icon_filiais",  "Filiais",   "Editar de-para de filiais"),
-    ("configuracoes", "icon_config",   "Config",    "Chave da API e configurações"),
-    ("sobre",         "icon_sobre",    "Sobre",     "Sobre o Auto Conferi"),
+    ("dashboard",     "icon_lote",     "Operador Financeiro", "Lançar IRRF, INSS e FGTS/Consignado na tela 'Inclusão de Títulos' do TOTVS"),
+    ("orcamento",     "icon_lote",     "Orçamento",           "Lançar Notas Fiscais de Despesa (Ótimo, Pluxee, DAE) na tela do módulo Orçamento"),
+    ("mapeamento",    "icon_filiais",  "Filiais",             "Editar de-para de filiais (código, aliases, código Consinco)"),
+    ("configuracoes", "icon_config",   "Config",              "Chave da API do Gemini e ajustes"),
+    ("sobre",         "icon_sobre",    "Sobre",               "Versão e créditos do Auto Conferi"),
 ]
 
 NOME_SECAO = {
-    "dashboard":     "Novo lote",
+    "dashboard":     "Operador Financeiro — Inclusão de Títulos",
     "orcamento":     "Orçamento — Notas Fiscais de Despesa",
     "mapeamento":    "Filiais (De-Para)",
     "configuracoes": "Configurações",
@@ -249,9 +253,13 @@ class MainWindow(QMainWindow):
         h.addWidget(self._lbl_status_calib_top)
         self._atualizar_status_calibracao()
 
-        self._btn_atualizar = QPushButton("Atualizar")
+        self._btn_atualizar = QPushButton("Atualizar app")
         self._btn_atualizar.setProperty("ghost", True)
-        self._btn_atualizar.setToolTip("Verificar se há uma versão nova no GitHub")
+        self._btn_atualizar.setToolTip(
+            "Buscar uma versão nova do Auto Conferi no GitHub e aplicar "
+            "na próxima abertura. O app checa sozinho no boot; este botão "
+            "é atalho manual."
+        )
         self._btn_atualizar.setCursor(Qt.PointingHandCursor)
         self._btn_atualizar.clicked.connect(self._verificar_atualizacao)
         h.addWidget(self._btn_atualizar)
@@ -261,13 +269,24 @@ class MainWindow(QMainWindow):
     # -------- Content --------
 
     def _montar_content(self) -> QWidget:
-        """Layout single-screen: stepper compacto no topo, toolbar de ação,
-        resumo, tabela dominante, painel atividade lateral colapsável."""
+        """Layout single-screen: cabeçalho, stepper compacto, toolbar de
+        ação, resumo, tabela dominante, painel atividade lateral
+        colapsável."""
         wrap = QFrame()
         wrap.setObjectName("Content")
         v = QVBoxLayout(wrap)
         v.setContentsMargins(24, 16, 24, 16)
         v.setSpacing(12)
+
+        # Cabeçalho — paralelo com o do Orçamento pra reforçar
+        # "cada seção = um módulo com identidade própria".
+        titulo = QLabel("Inclusão de Títulos — Operador Financeiro")
+        titulo.setStyleSheet("font-size: 20px; font-weight: 700; letter-spacing: -0.3px;")
+        v.addWidget(titulo)
+        sub = QLabel("Relatórios de folha (IRRF, INSS, FGTS/Consignado). Extraia do PDF e execute no TOTVS.")
+        sub.setStyleSheet("color: #94A3B8; font-size: 12px;")
+        sub.setWordWrap(True)
+        v.addWidget(sub)
 
         # STEPPER: [1 Documento] → [2 Revisar] → [3 Executar]
         v.addWidget(self._stepper())
@@ -489,13 +508,12 @@ class MainWindow(QMainWindow):
 
         h.addStretch(1)
 
-        self._btn_calibrar = QPushButton("Recalibrar (backup)")
+        self._btn_calibrar = QPushButton("Recalibrar")
         self._btn_calibrar.setProperty("ghost", True)
         self._btn_calibrar.setToolTip(
-            "Auto-detect via visão computacional roda automaticamente a "
-            "cada lote. Use este botão só se o auto-detect falhar por "
-            "mudança de tema/DPI/versão do TOTVS — a calibração salva "
-            "aqui serve de fallback."
+            "Marcar a posição de cada campo da tela 'Inclusão de Títulos' "
+            "manualmente. A calibração salva prevalece sobre a visão "
+            "automática — refaça se algum click começar a cair fora."
         )
         self._btn_calibrar.clicked.connect(self._abrir_calibracao)
         h.addWidget(self._btn_calibrar)
@@ -676,30 +694,28 @@ class MainWindow(QMainWindow):
             self._log_line("⚠ Sem chave configurada — extração ficará indisponível")
 
     def _atualizar_status_calibracao(self) -> None:
-        # Auto-detect (visão computacional em src/core/visao_totvs.py) é
-        # SEMPRE tentado no início do lote, independente de calibração
-        # manual. A calibração manual serve só de fallback quando a
-        # visão não consegue localizar os campos.
+        # Prioridade real desde build-100: calibração manual, se
+        # completa, PREVALECE — visão automática só entra como fallback
+        # quando não há calibração salva. Antes o texto aqui dizia o
+        # oposto ("auto-detect ativo, manual como backup"), inconsistente
+        # com o código.
         if not hasattr(self, "_lbl_status_calib_top"):
             return
         if self._calibracao.esta_completa():
-            self._lbl_status_calib_top.setText(
-                "● Auto-detect visual ativo · calibração manual como backup"
-            )
+            self._lbl_status_calib_top.setText("● Calibração manual salva")
             self._lbl_status_calib_top.setStyleSheet("color:#22C55E; font-size:11px;")
             self._lbl_status_calib_top.setToolTip(
-                "A cada lote o app tenta detectar os campos do TOTVS "
-                "automaticamente via visão computacional. Se falhar, usa "
-                "a calibração manual que você já salvou."
+                "Sua calibração manual dos 11 campos do TOTVS está salva "
+                "e é usada em todo lote. Se um dia os cliques caírem "
+                "fora, refaça pelo botão 'Recalibrar'."
             )
         else:
-            self._lbl_status_calib_top.setText("● Auto-detect visual ativo")
+            self._lbl_status_calib_top.setText("● Sem calibração · visão automática")
             self._lbl_status_calib_top.setStyleSheet("color:#B45309; font-size:11px;")
             self._lbl_status_calib_top.setToolTip(
-                "A cada lote o app tenta detectar os campos do TOTVS "
-                "automaticamente via visão computacional. Sem calibração "
-                "manual salva ainda — clique em 'Recalibrar' se o "
-                "auto-detect falhar."
+                "Sem calibração manual salva. O app vai tentar detectar "
+                "os campos do TOTVS automaticamente via visão computacional. "
+                "Se falhar, clique em 'Recalibrar' pra marcar os campos manualmente."
             )
 
     # ---------------- Ações ----------------
