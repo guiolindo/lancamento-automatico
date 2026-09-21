@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-118 (housekeeping — LICENSE, CHANGELOG, CI de lint (ruff), templates de PR/issue, badges no README; nenhuma mudança de comportamento no app)"
+BUILD_MARKER = "build-119 (docs — split de docs/ (getting-started/operations/faq/testing), CREDITS.md, 22 unit tests, requirements-dev.txt, ToC no README, keyboard_utils portátil pra CI; nenhuma mudança de comportamento no app)"
 
 
 def main() -> int:

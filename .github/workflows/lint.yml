@@ -81,3 +81,24 @@ jobs:
               raise SystemExit(f'BUILD_MARKER fora do padrão: {BUILD_MARKER!r}')
           print('smoke gate OK:', BUILD_MARKER)
           "
+
+  pytest:
+    # Unit tests do core (models, mapping, keyboard_utils). ~1s.
+    # PySide6/pyautogui/etc são stubados pelo tests/conftest.py.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar deps de teste
+        run: pip install pytest>=8.0.0 requests==2.32.3 rapidfuzz==3.9.6
+
+      - name: pytest
+        run: pytest tests/ -v

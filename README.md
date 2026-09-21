@@ -23,6 +23,15 @@ dentro de VM via RemoteApp (Auto Sky), onde a janela aparece com sufixo
 > (`LancamentoAutomatico-portatil.zip`) mantêm o nome antigo por
 > compatibilidade com o updater embarcado em builds já distribuídos.
 
+## Sumário
+
+- [Módulos](#módulos)
+- [Fluxo de uso](#fluxo-de-uso)
+- [Rodando em desenvolvimento](#rodando-em-desenvolvimento)
+- [Baixando o executável pronto](#baixando-o-executável-pronto)
+- [Empacotando um executável portátil](#empacotando-um-executável-portátil-sem-admin-sem-antivírus-dando-ruim)
+- [Documentação técnica completa](#documentação-técnica-completa)
+
 ## Módulos
 
 O app tem **dois módulos** na sidebar, cada um automatizando uma tela
@@ -333,10 +342,15 @@ Ordem de recurso:
    confiado no domínio) faz o SmartScreen parar. Falar com TI.
 3. **Whitelist por hash**: TI adiciona o hash do `.exe` ao AV corporativo.
 
-## Documentação adicional
+## Documentação técnica completa
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — contratos internos, mecânica
-  do auto-update, changelog de builds, gotchas conhecidos. **Leia antes
-  de mexer em `updater.py`, `launcher.py` ou no workflow.**
-- **[DECISIONS.md](DECISIONS.md)** — log das decisões tomadas ao longo
-  do projeto.
+Ponto de partida por perfil:
+
+- **Vai rodar em dev pela primeira vez** → [docs/getting-started.md](docs/getting-started.md)
+- **Vai operar / está com problema em produção** → [docs/operations.md](docs/operations.md)
+- **Dúvida específica ("por que isso acontece?")** → [docs/faq.md](docs/faq.md)
+- **Vai mexer no código** → [docs/testing.md](docs/testing.md)
+- **Vai mexer em `updater.py`, `launcher.py` ou no workflow** → **[ARCHITECTURE.md](ARCHITECTURE.md)** (contratos internos, mecânica do auto-update, gotchas conhecidos)
+- **Quer entender por que uma decisão foi tomada** → [DECISIONS.md](DECISIONS.md)
+- **Quer o histórico build-a-build** → [CHANGELOG.md](CHANGELOG.md)
+- **Créditos e licenças das bibliotecas** → [CREDITS.md](CREDITS.md)

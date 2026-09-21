@@ -1,0 +1,12 @@
+# Deps de desenvolvimento. Instala com:
+#   pip install -r requirements-dev.txt
+# NÃO vai pro bundle Nuitka — só usado em dev/CI.
+
+-r requirements.txt
+
+# Linter (mesma versão pinada em .github/workflows/lint.yml)
+ruff==0.6.9
+
+# Testes
+pytest>=8.0.0
+pytest-cov>=5.0.0

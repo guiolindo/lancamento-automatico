@@ -6,6 +6,30 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-119 — docs split + suite de tests
+
+Inspirado no repo irmão `guiolindo/Notas-despesas` (o backend web que
+alimenta a fila do Auto Conferi). Sem mudança de comportamento no app.
+
+- `docs/` com 4 arquivos temáticos: `getting-started.md`,
+  `operations.md`, `faq.md`, `testing.md`. Cada um resolve um perfil
+  ("nunca rodou", "produção quebrou", "dúvida do operador", "vai mexer
+  no código"). ARCHITECTURE.md continua sendo o mergulho profundo.
+- `CREDITS.md` com todas as libs, licenças e a atribuição do TOTVS /
+  Consinco como marca registrada da TOTVS S.A.
+- `requirements-dev.txt` separado (ruff pinado + pytest + pytest-cov).
+- `tests/` com 22 unit tests em 3 arquivos: `test_models.py` (dataclasses
+  + retrocompat do FGTS_CONSIG), `test_mapping.py` (carrega
+  mapeamento.json real do repo + fuzzy exato/alias/acento/case), e
+  `test_keyboard.py` (regressão do bug de acento do build-105).
+  `conftest.py` stuba PySide6/pyautogui/pywinauto pra rodar em Linux.
+- `.github/workflows/lint.yml` ganha o job `pytest` (~1s).
+- `keyboard_utils.py`: setup Win32 guardado por `hasattr(ctypes, "windll")`.
+  O runtime real continua 100% Windows, mas o módulo importa limpo em
+  Linux/macOS pra os unit tests rodarem no CI.
+- README ganha sumário no topo e um bloco "Documentação técnica completa"
+  no rodapé com ponteiros por perfil.
+
 ## build-118 — housekeeping (LICENSE, CHANGELOG, CI de lint, templates)
 
 - Adicionado `LICENSE` (uso interno restrito).

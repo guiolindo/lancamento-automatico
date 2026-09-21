@@ -38,32 +38,43 @@ def _eh_ascii_puro(texto: str) -> bool:
 CF_UNICODETEXT = 13
 GMEM_MOVEABLE = 0x0002
 
-_user32 = ctypes.windll.user32
-_kernel32 = ctypes.windll.kernel32
+# Só carrega o setup Win32 em Windows. Em Linux/macOS (CI de teste,
+# desenvolvimento em máquina não-Windows), o módulo ainda precisa
+# importar sem crashar pra unit tests da parte pura (_eh_ascii_puro)
+# rodarem. O runtime real é 100% Windows — o RPA nem existe fora.
+_IS_WINDOWS = hasattr(ctypes, "windll")
 
-# user32
-_user32.OpenClipboard.argtypes = [wintypes.HWND]
-_user32.OpenClipboard.restype = wintypes.BOOL
-_user32.CloseClipboard.argtypes = []
-_user32.CloseClipboard.restype = wintypes.BOOL
-_user32.EmptyClipboard.argtypes = []
-_user32.EmptyClipboard.restype = wintypes.BOOL
-_user32.GetClipboardData.argtypes = [wintypes.UINT]
-_user32.GetClipboardData.restype = wintypes.HANDLE
-_user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
-_user32.SetClipboardData.restype = wintypes.HANDLE
+if _IS_WINDOWS:
+    _user32 = ctypes.windll.user32
+    _kernel32 = ctypes.windll.kernel32
+else:
+    _user32 = None  # type: ignore[assignment]
+    _kernel32 = None  # type: ignore[assignment]
 
-# kernel32 — HGLOBAL == HANDLE == void* (64-bit no x64)
-_kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
-_kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
-_kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
-_kernel32.GlobalLock.restype = ctypes.c_void_p
-_kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
-_kernel32.GlobalUnlock.restype = wintypes.BOOL
-_kernel32.GlobalFree.argtypes = [wintypes.HGLOBAL]
-_kernel32.GlobalFree.restype = wintypes.HGLOBAL
-_kernel32.GlobalSize.argtypes = [wintypes.HGLOBAL]
-_kernel32.GlobalSize.restype = ctypes.c_size_t
+if _IS_WINDOWS:
+    # user32
+    _user32.OpenClipboard.argtypes = [wintypes.HWND]
+    _user32.OpenClipboard.restype = wintypes.BOOL
+    _user32.CloseClipboard.argtypes = []
+    _user32.CloseClipboard.restype = wintypes.BOOL
+    _user32.EmptyClipboard.argtypes = []
+    _user32.EmptyClipboard.restype = wintypes.BOOL
+    _user32.GetClipboardData.argtypes = [wintypes.UINT]
+    _user32.GetClipboardData.restype = wintypes.HANDLE
+    _user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+    _user32.SetClipboardData.restype = wintypes.HANDLE
+
+    # kernel32 — HGLOBAL == HANDLE == void* (64-bit no x64)
+    _kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    _kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+    _kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    _kernel32.GlobalLock.restype = ctypes.c_void_p
+    _kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    _kernel32.GlobalUnlock.restype = wintypes.BOOL
+    _kernel32.GlobalFree.argtypes = [wintypes.HGLOBAL]
+    _kernel32.GlobalFree.restype = wintypes.HGLOBAL
+    _kernel32.GlobalSize.argtypes = [wintypes.HGLOBAL]
+    _kernel32.GlobalSize.restype = ctypes.c_size_t
 
 
 def _abrir_clipboard(retries: int = 5) -> bool:

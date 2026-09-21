@@ -9,6 +9,12 @@ lendo um arquivo só, e que fatalmente causam bug se contribuidor novo
 > `.github/workflows/build-exe.yml`**. As três camadas conversam por
 > convenções que não estão declaradas no código.
 
+> **Procurando algo mais rápido?** — Este documento é o mergulho
+> profundo. Para leitura por tarefa: [docs/getting-started.md](docs/getting-started.md)
+> (rodar em dev), [docs/operations.md](docs/operations.md) (troubleshoot
+> em produção), [docs/faq.md](docs/faq.md) (Q&A curto),
+> [docs/testing.md](docs/testing.md) (suite pytest).
+
 ---
 
 ## 1. Camadas do app
