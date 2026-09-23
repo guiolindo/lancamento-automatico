@@ -30,6 +30,66 @@ _MIME_POR_EXTENSAO = {
 }
 
 
+class GeminiError(RuntimeError):
+    """Erro amigável (PT-BR, sem stack, sem JSON) pronto pra mostrar
+    ao operador. A causa técnica original fica em `__cause__` — o
+    `log.exception()` no worker pega o traceback completo, mas a UI
+    mostra só `str(e)` deste erro."""
+
+
+def _headers_gemini(api_key: str) -> dict:
+    """Chave em HEADER (não em query param). Isso é o que impede a
+    chave de vazar em tracebacks do `requests` — SSLError, ConnectionError
+    e Timeout carregam a URL no `str(exc)`; se a chave estivesse em
+    `?key=...`, ia parar no log/UI. Google aceita ambos os formatos."""
+    return {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    }
+
+
+def _mensagem_para_http(code: int) -> str:
+    """Traduz um HTTP status code do Gemini pra PT-BR amigável."""
+    if code == 400:
+        return "O Gemini rejeitou o arquivo (formato inválido ou muito grande). Verifica o PDF/imagem e tenta de novo."
+    if code in (401, 403):
+        return "Chave da API do Gemini inválida ou revogada. Vai em Configurações → Chave do Gemini e atualiza."
+    if code == 429:
+        return "Limite de uso do Gemini atingido pra esta chave (cota grátis são ~15 pedidos por minuto). Espera 1 minuto ou usa outra chave."
+    if code in (500, 502, 503, 504):
+        return "Google fora do ar temporariamente. Tenta de novo em 30 segundos."
+    return f"Gemini devolveu erro HTTP {code}. Tenta de novo em alguns segundos — se persistir, chama o suporte."
+
+
+def _mensagem_para_exception(exc: Exception) -> str:
+    """Traduz uma exception do `requests` pra PT-BR amigável."""
+    if isinstance(exc, requests.exceptions.SSLError):
+        return "Não consegui verificar o certificado HTTPS do Google. Provavelmente o antivírus ou proxy da rede está interceptando a conexão — pede pra o TI liberar generativelanguage.googleapis.com."
+    if isinstance(exc, requests.exceptions.ConnectTimeout):
+        return "Google não respondeu no tempo (conexão lenta ou instável). Verifica a internet e tenta de novo."
+    if isinstance(exc, requests.exceptions.ReadTimeout):
+        return "Gemini demorou mais que 3 minutos pra responder (arquivo grande ou serviço lento). Divide o PDF ou tenta de novo."
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        return "Sem conexão com o Google. Verifica se a internet está ligada e se o TI não bloqueou generativelanguage.googleapis.com."
+    # Fallback — nunca expõe str(exc) ao operador (pode ter URL/chave)
+    return "Falha ao chamar o Gemini. Detalhes técnicos foram registrados no log — chama o suporte se persistir."
+
+
+def _post_gemini(url: str, api_key: str, payload: dict, timeout: int) -> "requests.Response":
+    """Wrapper único de todos os POSTs pro Gemini. Centraliza:
+    (a) header em vez de query param (não vaza chave em traceback),
+    (b) tradução de erros técnicos pra PT-BR amigável via GeminiError —
+        o `__cause__` preserva o original pro log detalhado."""
+    try:
+        r = requests.post(url, headers=_headers_gemini(api_key),
+                          json=payload, timeout=timeout)
+    except requests.exceptions.RequestException as exc:
+        raise GeminiError(_mensagem_para_exception(exc)) from exc
+    if r.status_code >= 400:
+        raise GeminiError(_mensagem_para_http(r.status_code))
+    return r
+
+
 PROMPT_BASE = """Você é um extrator estruturado de dados de relatórios fiscais brasileiros.
 
 Extraia do documento em anexo TODAS as linhas de filiais e seus valores.
@@ -295,17 +355,8 @@ class GeminiClient:
 
         url = f"{API_BASE}/models/{self._model_name}:generateContent"
         log.info("extrair: POST %s (arquivo %s bytes, mime %s)", url, len(dados), mime)
-        r = requests.post(
-            url,
-            params={"key": self._api_key},
-            json=payload,
-            timeout=120,
-        )
+        r = _post_gemini(url, self._api_key, payload, timeout=120)
         log.info("extrair: HTTP %s", r.status_code)
-        if r.status_code >= 400:
-            trecho = r.text[:500]
-            raise RuntimeError(f"Gemini HTTP {r.status_code}: {trecho}")
-
         data = r.json()
         try:
             texto = data["candidates"][0]["content"]["parts"][0]["text"]
@@ -357,11 +408,8 @@ class GeminiClient:
             "generationConfig": {"response_mime_type": "application/json"},
         }
         url = f"{API_BASE}/models/{self._model_name}:generateContent"
-        r = requests.post(url, params={"key": self._api_key}, json=payload, timeout=180)
+        r = _post_gemini(url, self._api_key, payload, timeout=180)
         log.info("extrair_notas_nfse: HTTP %s", r.status_code)
-        if r.status_code >= 400:
-            raise RuntimeError(f"Gemini HTTP {r.status_code}: {r.text[:400]}")
-
         data = r.json()
         try:
             texto = data["candidates"][0]["content"]["parts"][0]["text"]
@@ -416,11 +464,8 @@ class GeminiClient:
             "generationConfig": {"response_mime_type": "application/json"},
         }
         url = f"{API_BASE}/models/{self._model_name}:generateContent"
-        r = requests.post(url, params={"key": self._api_key}, json=payload, timeout=180)
+        r = _post_gemini(url, self._api_key, payload, timeout=180)
         log.info("extrair_daes: HTTP %s", r.status_code)
-        if r.status_code >= 400:
-            raise RuntimeError(f"Gemini HTTP {r.status_code}: {r.text[:400]}")
-
         data = r.json()
         try:
             texto = data["candidates"][0]["content"]["parts"][0]["text"]

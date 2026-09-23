@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-123 (Orçamento — delays exclusivos para + e Autorizar (4s cada), separados dos do Operador Financeiro que rodam instantâneos)"
+BUILD_MARKER = "build-124 (segurança — chave da API do Gemini agora em header (não em URL), logger redige chaves em qualquer traceback, e erros do Gemini viram texto PT-BR amigável pro operador)"
 
 
 def main() -> int:

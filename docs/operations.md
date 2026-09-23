@@ -116,3 +116,39 @@ com todas as deps embutidas.
 
 Menu → Configurações → Chave da API do Gemini → cola nova → Salvar. A
 antiga é sobrescrita.
+
+## Erros da extração Gemini (o que o operador vê e o que cada um significa)
+
+Desde o build-124, o que aparece pro operador é uma frase única em
+PT-BR, sem stack trace, sem JSON, sem inglês. Tabela:
+
+| Texto que aparece | O que aconteceu | Ação |
+|---|---|---|
+| "Chave da API do Gemini inválida ou revogada." | HTTP 401/403 — chave expirada, foi rotada, ou foi digitada errada. | Menu → Configurações → cola chave nova. |
+| "Limite de uso do Gemini atingido…" | HTTP 429 — cota grátis são ~15 pedidos/min. Rajada grande de lote passou do limite. | Espera 1 minuto. Ou usa outra chave (outro Google account). |
+| "Google fora do ar temporariamente." | HTTP 500/502/503/504. | Tenta de novo em 30s. |
+| "O Gemini rejeitou o arquivo…" | HTTP 400 — PDF corrompido, imagem muito grande, formato inesperado. | Reabre o arquivo, converte pra PDF se for outra coisa. |
+| "Não consegui verificar o certificado HTTPS…" | Antivírus/proxy corporativo interceptando (`SSLError`). | Chama o TI e pede pra liberar `generativelanguage.googleapis.com`. |
+| "Google não respondeu no tempo…" | `ConnectTimeout` — internet lenta na hora, ou a máquina não consegue sair. | Verifica a internet. |
+| "Gemini demorou mais que 3 minutos…" | `ReadTimeout` — PDF muito grande (mais de 50 páginas). | Divide o PDF em partes menores. |
+| "Sem conexão com o Google." | `ConnectionError` — sem rede, DNS bloqueado. | Cabo/wifi, ou TI liberar o domínio. |
+| "Falha inesperada na extração." | Erro fora dos padrões acima. | Anexa `logs/lancamento.log` numa issue. |
+
+## Segurança da chave da API no log
+
+A partir do build-124, o logger tem um filtro que **redige a chave da
+API** em qualquer linha antes de ela ir pra arquivo/console:
+
+- `?key=AIza…` → `?key=***REDACTED***`
+- `x-goog-api-key: AIza…` → `x-goog-api-key: ***REDACTED***`
+- Chave solta com prefixo `AIza…` ou `AQ.Ab8…` → `AIza***REDACTED***`
+
+Isso protege retroativamente contra qualquer log/traceback do
+`requests` que embutisse a chave (como aconteceu com o `SSLError`
+antes do build-124). Combinado com o novo envio da chave em **header
+em vez de query param**, a chave hoje **não aparece em nenhuma URL**
+de traceback.
+
+Logs velhos (pré-build-124) ainda podem ter chaves em plaintext —
+se algum for anexado numa issue, revoga a chave e cria nova pelo AI
+Studio (Menu → Configurações → cola nova).

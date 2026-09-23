@@ -74,6 +74,19 @@ Em `%USERPROFILE%\.lancamento-automatico\settings.json`, criptografada
 com DPAPI (Windows Data Protection API). Só o mesmo usuário Windows na
 mesma máquina consegue decifrar. Backup em outra máquina não abre.
 
+### Ela aparece no `lancamento.log`?
+
+Não. Desde o build-124:
+1. O app envia a chave em **header** (`x-goog-api-key`), não em query
+   param — assim ela não aparece em tracebacks do `requests`.
+2. O logger tem um filtro que redige qualquer padrão de chave (`?key=…`,
+   `x-goog-api-key: …`, `AIza…`, `AQ.Ab8…`) antes de escrever no
+   arquivo. Retroativo: pega até códigos velhos que ainda logam
+   URLs manualmente.
+
+Se você tem um log de build antigo (< 124) com chave visível, revoga
+essa chave no AI Studio e gera uma nova.
+
 ### Passei do limite gratuito do Gemini. O que acontece?
 
 O app mostra "erro na extração" pra o PDF que falhou e pula pro próximo.

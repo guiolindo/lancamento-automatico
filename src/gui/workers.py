@@ -65,8 +65,15 @@ class ExtracaoWorker(QObject):
             self.finished.emit(lancamentos, nao_resolvidas)
         except BaseException as e:  # noqa: BLE001
             log.exception("Falha na extração")
-            # Envia tipo + mensagem para a GUI para diagnóstico rápido.
-            self.error.emit(f"{type(e).__name__}: {e}")
+            # Se for GeminiError, a mensagem já é PT-BR pronta pro
+            # operador (traduzida em _mensagem_para_http/_exception).
+            # Se for outra coisa, mostra só uma linha genérica em
+            # PT-BR — o traceback vai pro log.
+            from ..core.gemini_client import GeminiError
+            if isinstance(e, GeminiError):
+                self.error.emit(str(e))
+            else:
+                self.error.emit("Falha inesperada na extração. Verifica o arquivo e tenta de novo — detalhes técnicos foram registrados no log.")
 
 
 class LoteWorker(QObject):

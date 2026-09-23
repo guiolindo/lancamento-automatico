@@ -6,6 +6,48 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-124 — Segurança: chave em header + logger redator + erros PT-BR
+
+Log de produção mostrou dois problemas convergentes:
+
+1. **Vazamento da chave**: `requests.exceptions.SSLError` colocava a
+   URL completa no `str(exc)`, incluindo `?key=<CHAVE>`. Quando o
+   `log.exception("Falha na extração")` rodava, a chave ia parar em
+   `logs/lancamento.log` em plaintext. O caso reportado teve a chave
+   aparecendo duas vezes num arquivo de log.
+2. **UX ruim de erro**: mensagens em inglês + JSON + traceback Python
+   apareciam pro operador via `f"{type(e).__name__}: {e}"`. Um operador
+   leigo não sabe o que é "SSLError certificate verify failed"; um
+   traceback intimida.
+
+Correções em 3 camadas:
+
+- **Chave em header**: `gemini_client._post_gemini()` centraliza
+  todos os 3 POSTs pro Gemini e passa a chave em `x-goog-api-key`, não
+  em `params={"key": ...}`. URL nunca mais carrega a chave, então
+  tracebacks do `requests` não vazam.
+- **Logger redator**: `logger._RedactApiKeys` (Filter) +
+  `_RedactingFormatter` rodam sobre TODA mensagem/traceback logada,
+  redigindo `?key=…`, `&api-key=…`, `x-goog-api-key: …`, e chaves
+  soltas com prefixos Google (`AIza…`, `AQ.Ab8…`). Retroativo:
+  protege até código antigo que ainda logue URL manual.
+- **Erros amigáveis**: `GeminiError` (subclasse de `RuntimeError` pra
+  compat) carrega mensagem já em PT-BR — `_mensagem_para_http()` e
+  `_mensagem_para_exception()` traduzem HTTP 400/401/403/429/5xx e
+  exceptions do `requests` (SSLError, ConnectTimeout, ReadTimeout,
+  ConnectionError) pra frases claras: **"Chave inválida"**, **"Limite
+  atingido — espera 1 min"**, **"Antivírus interceptando — chama o
+  TI"**, etc. Nunca expõe `str(exc)` original ao operador — traceback
+  detalhado fica só no log (agora redigido).
+
+`workers.py` e `orcamento_dialog.py` emitem `str(GeminiError)` puro
+pra UI. Erro fora dos padrões vira "Falha inesperada — chama o
+suporte".
+
+Suite pytest: 31 → **51 testes** (+13 tradutores Gemini, +7 redação
+logger). `docs/operations.md` e `docs/faq.md` atualizados com a tabela
+dos erros e a nota de segurança.
+
 ## build-123 — Orçamento: delays exclusivos para + e Autorizar
 
 Módulo Orçamento faz transação real (natureza despesa, plano de contas

@@ -94,7 +94,11 @@ class ExtratorNfseThread(QThread):
             self.concluido.emit(itens)
         except BaseException as e:  # noqa: BLE001
             log.exception("ExtratorNfseThread falhou")
-            self.falhou.emit(f"{type(e).__name__}: {e}")
+            from ..core.gemini_client import GeminiError
+            if isinstance(e, GeminiError):
+                self.falhou.emit(str(e))
+            else:
+                self.falhou.emit("Falha inesperada na extração. Verifica o PDF e tenta de novo — detalhes técnicos foram registrados no log.")
 
 
 def _carregar_cnpjs_filiais() -> dict:
