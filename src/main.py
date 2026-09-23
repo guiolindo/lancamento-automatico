@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-121 (OTIMO — validação do CNPJ tomador em 3 níveis: exato/raiz do grupo/outra empresa; roteia pra filial certa em vez de forçar Contagem)"
+BUILD_MARKER = "build-122 (OTIMO Contab — linha1 e linha2 trocam a filial pra do CNPJ tomador, mesma mecânica do PLUXEE)"
 
 
 def main() -> int:

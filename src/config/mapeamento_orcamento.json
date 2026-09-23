@@ -29,7 +29,14 @@
         "dias_entre_vencimentos": 1
       },
       "aba_contabilizacao": {
-        "replicar_valor_nas_linhas": 2
+        "linha1": {
+          "trocar_filial_para": "filial_emissao",
+          "preencher_valor": true
+        },
+        "linha2": {
+          "trocar_filial_para": "filial_emissao",
+          "preencher_valor": true
+        }
       },
       "regras": {
         "vencimento_igual_a": "data_lancto",

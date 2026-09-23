@@ -6,6 +6,18 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-122 — OTIMO Contab: troca filial das 2 linhas pro CNPJ tomador
+
+Completa o roteamento por tomador do build-121. Antes as duas linhas
+da Contab ficavam na filial default (fixa em Contagem no modo simples
+`replicar_valor_nas_linhas: 2`). Agora usam o modo estruturado
+`linha1`+`linha2`, ambas com `trocar_filial_para: "filial_emissao"` —
+a mesma filial resolvida pelo CNPJ tomador é aplicada nas duas linhas
+da contabilização.
+
+Zero código novo — só troca no template `mapeamento_orcamento.json`.
+A mecânica `trocar_filial_para` já existia desde o build-107 (PLUXEE).
+
 ## build-121 — OTIMO: validação do CNPJ tomador em 3 níveis
 
 Fecha o gap deixado pelo build-120. Antes: OTIMO validava só o
