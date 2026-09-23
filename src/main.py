@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-122 (OTIMO Contab — linha1 e linha2 trocam a filial pra do CNPJ tomador, mesma mecânica do PLUXEE)"
+BUILD_MARKER = "build-123 (Orçamento — delays exclusivos para + e Autorizar (4s cada), separados dos do Operador Financeiro que rodam instantâneos)"
 
 
 def main() -> int:

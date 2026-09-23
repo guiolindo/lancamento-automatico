@@ -51,8 +51,15 @@ DEFAULTS: dict[str, Any] = {
         "apos_gerar_parcelas_ms": 800,
         "apos_confirmar_ms": 800,
         "timeout_janela_s": 30,
+        # Delays exclusivos do módulo Orçamento (build-123). Módulo
+        # Orçamento faz transação com subforms internos (natureza
+        # despesa, plano de contas) e precisa de mais tempo em cada
+        # click estrutural — não compartilha com os delays do Operador
+        # Financeiro acima.
+        "orcamento_apos_plus_ms": 4000,
+        "orcamento_apos_autorizar_ms": 4000,
     },
-    "delays_version": 2,
+    "delays_version": 3,
     "rpa": {
         "titulo_janela": "Operador Financeiro",
         "titulo_janela_erro": "",

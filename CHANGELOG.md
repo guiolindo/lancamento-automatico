@@ -6,6 +6,27 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-123 — Orçamento: delays exclusivos para + e Autorizar
+
+Módulo Orçamento faz transação real (natureza despesa, plano de contas
+como subforms internos) — precisa de mais tempo em cada click
+estrutural. Antes reutilizava as chaves do Operador Financeiro, o que
+forçava um empate impossível: subir os delays quebrava a velocidade do
+Operador (que roda bem em 100-200ms), abaixar quebrava o Orçamento.
+
+Chaves novas, exclusivas do Orçamento (defaults 4000 ms cada):
+
+- `orcamento_apos_plus_ms` — após clicar "+" (absorve a janela de
+  detecção de popup de duplicidade).
+- `orcamento_apos_autorizar_ms` — após clicar "Autorizar".
+
+Removidos os delays redundantes que se somavam (`apos_confirmar_ms`
+antes do Autorizar e `entre_notas_ms` depois). Fluxo agora é: **click +
+→ 4s → popup check → click Autorizar → 4s → próxima nota**.
+
+`delays_version` bumpado 2 → 3 — usuário existente pega os novos
+defaults automaticamente via `_migrar_delays()` no próximo boot.
+
 ## build-122 — OTIMO Contab: troca filial das 2 linhas pro CNPJ tomador
 
 Completa o roteamento por tomador do build-121. Antes as duas linhas

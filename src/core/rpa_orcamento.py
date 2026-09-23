@@ -328,7 +328,14 @@ class RpaOrcamento:
             self._notificar(nota, "Gravando (+ único, final)")
             titulos_antes = self._snapshot_titulos()
             self._clicar("btn_novo_mais")
-            self._sleep("apos_gerar_parcelas_ms", 1500)
+            # +/Autorizar do módulo Orçamento fazem transação real com
+            # subforms internos (natureza da despesa, plano de contas,
+            # etc). Em produção o usuário mediu ~4s como o mínimo estável
+            # — abaixo disso o TOTVS ainda está gravando quando o robô
+            # avança pro próximo passo. Essas chaves são separadas das
+            # do Operador Financeiro (apos_gerar_parcelas_ms /
+            # apos_confirmar_ms) que rodam bem em 100-200ms.
+            self._sleep("orcamento_apos_plus_ms", 4000)
 
             popup = self._achar_popup_novo(titulos_antes, ("aviso", "atenção", "atencao"))
             if popup is not None:
@@ -336,19 +343,15 @@ class RpaOrcamento:
                     return
 
             # 5) Sem duplicidade → gravou com sucesso. Agora Autorizar.
-            self._sleep("apos_confirmar_ms", 2000)
+            #    Os 4s acima já cobrem a folga antes de clicar Autorizar.
             self._notificar(nota, "Autorizando")
             self._clicar("btn_autorizar")
-            self._sleep("apos_confirmar_ms", 1500)
+            self._sleep("orcamento_apos_autorizar_ms", 4000)
 
             nota.status = StatusLancamento.SUCESSO
             self._notificar(nota, "Sucesso")
-
-            # +1s de folga entre notas — o TOTVS Orçamento precisa desse
-            # respiro pra fechar o registro atual antes do próximo "+".
-            # Antes o robô já ia direto pra próxima e às vezes começava
-            # a preencher enquanto o form ainda estava salvando.
-            self._sleep("entre_notas_ms", 1000)
+            # Sem folga adicional entre notas: os 4s pós-Autorizar acima
+            # já dão tempo pro TOTVS fechar o registro antes do próximo "+".
 
         except EmergencyAbortException:
             raise
