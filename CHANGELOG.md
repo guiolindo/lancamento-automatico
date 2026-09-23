@@ -6,6 +6,43 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-125 — OTIMO revisão: coluna Emissor + reprocessar de verdade
+
+Dois bugs de UX que o operador reportou depois do build-122:
+
+**1. Tabela do OTIMO sem info suficiente pra conferir.**
+Desde o build-121 o roteamento por CNPJ tomador decide pra qual filial
+a nota vai. Mas a tabela do OTIMO (COLS_NFSE) só mostrava
+`#, Pág., Número NF, Data Emissão, Valor, Status` — o operador não via
+PRA QUEM cada nota estava indo. Um "Status: OK" na linha não dizia
+nada sobre o destino. Agora tem coluna **"Emissor"** entre Data e Valor,
+mostrando `"codigo — nome"` da filial resolvida (ou `"?"` quando não
+bateu — vira revisão manual óbvia).
+
+**2. "Marcar como pendente (reprocessar)" não funcionava de verdade.**
+Só resetava `status = PENDENTE`. Se a nota tinha sido barrada por
+"filial não cadastrada" (RAIZ_GRUPO do build-121) e o operador
+cadastrasse a filial nova em `cnpjs_filiais.json` entre tanto, o dict
+em memória continuava velho e a linha continuava sem filial resolvida
+— reprocessar ficava sem efeito prático. Agora:
+- Recarrega `cnpjs_filiais.json` do disco.
+- Re-roda a resolução da nota (`_rerresolver_nota`): filial de emissão
+  pelo CNPJ tomador, filial da caneta pelo rabisco, filial DAE pelo
+  CNPJ do próprio DAE.
+- Reaplica a validação do tomador — se ainda não resolveu, volta pra
+  IGNORADO com o motivo atualizado (não fica "meio-pendente" mentindo
+  que vai lançar).
+
+**Adicional:**
+- Menu contextual do OTIMO ganhou **"Editar filial de emissão…"** —
+  antes só tinha pro DAE. Ajusta `filial_emissao_codigo`/`filial_emissao_nome`
+  quando o auto-resolve falha e o operador sabe qual é a filial certa.
+- `_executar_lote` do OTIMO agora exige `filial_emissao_codigo` na
+  lista de "pendentes" quando o template pede `validar_cnpj_tomador`.
+  Sem isso, o RPA cairia no fallback `empresa_codigo: "6"` (Contagem)
+  silenciosamente pra qualquer linha sem tomador resolvido — combinação
+  que voltaria a lançar em Contagem à força, defeat the whole build-121.
+
 ## build-124 — Segurança: chave em header + logger redator + erros PT-BR
 
 Log de produção mostrou dois problemas convergentes:

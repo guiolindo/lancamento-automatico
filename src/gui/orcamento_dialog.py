@@ -122,7 +122,11 @@ class OrcamentoPage(QWidget):
     não mais dialog modal (build-99). O user relatou UX ruim: dialog abria
     janela separada 'a nada com nada'. Agora vive dentro do shell com
     sidebar + topbar, ganha log integrado e visual coerente."""
-    COLS_NFSE        = ["#", "Pág.", "Número NF", "Data Emissão", "Valor (R$)", "Status"]
+    # Coluna "Emissor" (o tomador resolvido — a filial que vai receber
+    # a nota no TOTVS) adicionada no build-125. Sem ela o operador
+    # revisando não via se o roteamento por CNPJ tomador (build-121)
+    # tinha acertado — o Status "OK" não dizia PRA QUEM ia a nota.
+    COLS_NFSE        = ["#", "Pág.", "Número NF", "Data Emissão", "Emissor", "Valor (R$)", "Status"]
     COLS_NFSE_CANETA = ["#", "Pág.", "Número NF", "Data", "Emissor", "Caneta (destino)", "Valor (R$)", "Status"]
     COLS_DAE         = ["#", "Pág.", "Nº Série DAE", "Filial", "Tipo", "Vencimento", "Valor (R$)", "Status"]
 
@@ -718,12 +722,19 @@ class OrcamentoPage(QWidget):
             it_val = QTableWidgetItem(self._fmt_valor(n.valor))
             it_val.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self._tabela.setItem(i, 6, it_val)
-        else:  # COLS_NFSE simples
+        else:  # COLS_NFSE simples (OTIMO)
             data_txt = n.data_emissao.strftime("%d/%m/%Y") if n.data_emissao else ""
             self._tabela.setItem(i, 3, QTableWidgetItem(data_txt))
+            # Emissor = filial que vai receber a nota (resolvida pelo
+            # CNPJ tomador). "?" quando o tomador não bate com nenhuma
+            # filial cadastrada — visualmente marca a linha como
+            # exigindo revisão manual.
+            emi_txt = f"{n.filial_emissao_codigo} — {n.filial_emissao_nome}" if n.filial_emissao_codigo else "?"
+            it_e = QTableWidgetItem(emi_txt); it_e.setFlags(it_e.flags() & ~Qt.ItemIsEditable)
+            self._tabela.setItem(i, 4, it_e)
             it_val = QTableWidgetItem(self._fmt_valor(n.valor))
             it_val.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self._tabela.setItem(i, 4, it_val)
+            self._tabela.setItem(i, 5, it_val)
 
     def _atualizar_status_celula(self, i: int) -> None:
         n = self._notas[i]
@@ -798,7 +809,8 @@ class OrcamentoPage(QWidget):
                     n.valor = float(txt.replace(".", "").replace(",", "."))
                 except ValueError:
                     pass
-        else:  # COLS_NFSE simples
+        else:  # COLS_NFSE simples (OTIMO) — build-125 inseriu "Emissor"
+            # em col 4 (não editável), então Valor migrou de 4 pra 5.
             if col == 3:
                 for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
                     try:
@@ -806,7 +818,7 @@ class OrcamentoPage(QWidget):
                         break
                     except ValueError:
                         pass
-            elif col == 4:
+            elif col == 5:
                 try:
                     n.valor = float(txt.replace(".", "").replace(",", "."))
                 except ValueError:
@@ -862,10 +874,18 @@ class OrcamentoPage(QWidget):
             ]
             criterio = "número, data, valor, filial de emissão e filial da caneta"
         else:
+            # OTIMO (COLS_NFSE simples). Se o template pede validação do
+            # CNPJ tomador (build-121), a filial de emissão vira campo
+            # obrigatório — sem ele o RPA cairia no fallback empresa_codigo
+            # fixo (Contagem) sem o operador saber.
+            template_chave = self._combo_forn.currentData() or ""
+            template = self._templates.get(template_chave) or {}
+            valida_tomador = bool(template.get("validar_cnpj_tomador", False))
             pendentes = [
                 (i, n) for i, n in enumerate(self._notas)
                 if n.status == StatusLancamento.PENDENTE
                 and n.numero and n.data_emissao and n.valor > 0
+                and (not valida_tomador or n.filial_emissao_codigo)
             ]
             criterio = "número, data de emissão e valor"
         if not pendentes:
@@ -1005,9 +1025,11 @@ class OrcamentoPage(QWidget):
             act_edit_data = menu.addAction("Editar data de emissão…")
             act_edit_fil  = None
             act_edit_can  = menu.addAction("Editar filial da caneta…")
-        else:
+        else:  # OTIMO (COLS_NFSE simples)
             act_edit_data = menu.addAction("Editar data de emissão…")
-            act_edit_fil  = None
+            # Filial de emissão editável pra o operador conseguir
+            # ajustar quando o CNPJ tomador não resolveu automaticamente.
+            act_edit_fil  = menu.addAction("Editar filial de emissão…")
             act_edit_can  = None
         menu.addSeparator()
         act_reset  = menu.addAction("Marcar como pendente (reprocessar)")
@@ -1048,16 +1070,25 @@ class OrcamentoPage(QWidget):
                     except ValueError:
                         pass
         elif act_edit_fil is not None and chosen is act_edit_fil:
-            atual = str(n.filial_codigo or "")
+            # DAE mexe em `filial_codigo` (campo do DAE); OTIMO/PLUXEE
+            # mexem em `filial_emissao_codigo` (a filial resolvida do
+            # CNPJ tomador, que a Contab e a aba Nota usam).
+            usa_emissao = cols is not self.COLS_DAE
+            atual = str((n.filial_emissao_codigo if usa_emissao else n.filial_codigo) or "")
             novo, ok = QInputDialog.getText(self, "Filial", "Código da filial:", text=atual)
             if ok and novo.strip().isdigit():
                 cod = int(novo.strip())
-                n.filial_codigo = cod
-                # Pega o nome do cnpjs se tiver, senão deixa em branco
+                nome = ""
                 for info in self._cnpjs_filiais.values():
                     if int(info.get("codigo", -1)) == cod:
-                        n.filial_nome = info.get("nome", "")
+                        nome = info.get("nome", "")
                         break
+                if usa_emissao:
+                    n.filial_emissao_codigo = cod
+                    n.filial_emissao_nome = nome
+                else:
+                    n.filial_codigo = cod
+                    n.filial_nome = nome
         elif act_edit_can is not None and chosen is act_edit_can:
             atual = n.filial_caneta_nome or n.anotacao_caneta or ""
             novo, ok = QInputDialog.getText(
@@ -1077,9 +1108,17 @@ class OrcamentoPage(QWidget):
                     n.anotacao_caneta = txt
                     n.filial_caneta_codigo, n.filial_caneta_nome = self._resolver_filial_por_texto(txt)
         elif chosen is act_reset:
+            # Reprocessar = volta pra PENDENTE E re-avalia o roteamento.
+            # Antes do build-125 só mudava o status, mas se a nota tinha
+            # sido barrada por "filial não cadastrada" (build-121) e o
+            # operador cadastrou a filial em cnpjs_filiais.json entre
+            # tanto, o dict em memória seguia velho e a linha continuava
+            # sem resolver — reprocessar ficava sem efeito prático.
+            self._cnpjs_filiais = _carregar_cnpjs_filiais()
             n.status = StatusLancamento.PENDENTE
             n.erro = None
             n.motivo_ignorado = None
+            self._rerresolver_nota(n)
         elif chosen is act_remover:
             del self._notas[row]
             self._popular_grid()
@@ -1094,6 +1133,60 @@ class OrcamentoPage(QWidget):
         finally:
             self._tabela.blockSignals(False)
         self._atualizar_resumo()
+
+    def _rerresolver_nota(self, n: NotaDespesa) -> None:
+        """Reaplica em UMA nota a lógica de resolução do
+        `_converter_nfse`/`_converter_daes`: filial pelo CNPJ, filial da
+        caneta pelo rabisco, e a validação do tomador (build-121).
+
+        Chamado pelo menu contextual "reprocessar" — o dict
+        `self._cnpjs_filiais` já foi recarregado do disco antes deste
+        método, então pega filiais que o operador cadastrou entre o
+        primeiro extrair e o reprocessar.
+
+        Se a nota continuar sem satisfazer a validação do tomador, volta
+        pra IGNORADO com o motivo apropriado.
+        """
+        template_chave = self._combo_forn.currentData() or n.template_chave
+        template = self._templates.get(template_chave) or {}
+
+        # DAE: filial resolve pelo CNPJ do próprio DAE
+        if template.get("tipo_extracao") == "dae":
+            if n.cnpj:
+                info = self._cnpjs_filiais.get(n.cnpj)
+                if info:
+                    n.filial_codigo = int(info["codigo"])
+                    n.filial_nome = info.get("nome", "")
+            return
+
+        # NFS-e: filial de emissão vem do CNPJ tomador
+        if n.cnpj_tomador:
+            info = self._cnpjs_filiais.get(n.cnpj_tomador)
+            if info:
+                n.filial_emissao_codigo = int(info["codigo"])
+                n.filial_emissao_nome = info.get("nome", "")
+
+        # Filial da caneta (PLUXEE — refuzzy contra o cadastro novo)
+        if n.anotacao_caneta and not n.filial_caneta_codigo:
+            cod, nome = self._resolver_filial_por_texto(n.anotacao_caneta)
+            if cod:
+                n.filial_caneta_codigo = cod
+                n.filial_caneta_nome = nome
+
+        # Reaplica a validação do tomador (mesma lógica do build-121)
+        if template.get("validar_cnpj_tomador"):
+            from ..core.cnpj_utils import TomadorMatch, classificar_tomador
+            cls = classificar_tomador(n.cnpj_tomador or "", self._cnpjs_filiais)
+            if cls == TomadorMatch.AUSENTE:
+                n.status = StatusLancamento.IGNORADO
+                n.motivo_ignorado = "CNPJ do tomador não veio na extração — não é possível validar a filial de destino"
+            elif cls == TomadorMatch.RAIZ_GRUPO:
+                n.status = StatusLancamento.IGNORADO
+                n.motivo_ignorado = f"Filial ainda não cadastrada (CNPJ {n.cnpj_tomador} é do grupo). Cadastre em cnpjs_filiais.json e reprocesse."
+            elif cls == TomadorMatch.OUTRA_EMPRESA:
+                n.status = StatusLancamento.IGNORADO
+                n.motivo_ignorado = f"CNPJ do tomador ({n.cnpj_tomador}) é de outra empresa — nota chegou por engano"
+            # EXATO → segue PENDENTE (o act_reset acima já resetou)
 
     # ---------- Ciclo do lote (multi-monitor) ----------
 

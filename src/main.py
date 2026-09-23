@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-124 (segurança — chave da API do Gemini agora em header (não em URL), logger redige chaves em qualquer traceback, e erros do Gemini viram texto PT-BR amigável pro operador)"
+BUILD_MARKER = "build-125 (OTIMO revisão — coluna 'Emissor' na tabela + reprocessar realmente re-resolve tomador (recarrega cnpjs_filiais e reaplica validação) + editar filial de emissão no menu contextual)"
 
 
 def main() -> int:
