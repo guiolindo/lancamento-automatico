@@ -432,6 +432,7 @@ class OrcamentoPage(QWidget):
     def _converter_nfse(self, notas_dict: list, template_chave: str, data_lancto: date) -> list:
         template = self._templates.get(template_chave) or {}
         cnpj_esperado = "".join(c for c in str(template.get("cnpj_esperado", "")) if c.isdigit())
+        validar_tomador = bool(template.get("validar_cnpj_tomador", False))
 
         out = []
         for i, n in enumerate(notas_dict):
@@ -479,6 +480,23 @@ class OrcamentoPage(QWidget):
             if cnpj_esperado and cnpj_prest and cnpj_prest != cnpj_esperado:
                 nota.status = StatusLancamento.IGNORADO
                 nota.motivo_ignorado = f"CNPJ do prestador ({cnpj_prest}) não bate com o fornecedor {template_chave}"
+
+            # Validação do TOMADOR (build-121): se o template pede, o
+            # CNPJ tomador tem que estar cadastrado em `cnpjs_filiais.json`.
+            # Aplicado só se a nota ainda não foi barrada pelo prestador.
+            elif validar_tomador:
+                from ..core.cnpj_utils import TomadorMatch, classificar_tomador
+                cls = classificar_tomador(cnpj_tom, self._cnpjs_filiais)
+                if cls == TomadorMatch.AUSENTE:
+                    nota.status = StatusLancamento.IGNORADO
+                    nota.motivo_ignorado = "CNPJ do tomador não veio na extração — não é possível validar a filial de destino"
+                elif cls == TomadorMatch.RAIZ_GRUPO:
+                    nota.status = StatusLancamento.IGNORADO
+                    nota.motivo_ignorado = f"Filial não cadastrada (CNPJ {cnpj_tom} é do grupo, mas não está em cnpjs_filiais.json). Adicione a filial e reprocesse."
+                elif cls == TomadorMatch.OUTRA_EMPRESA:
+                    nota.status = StatusLancamento.IGNORADO
+                    nota.motivo_ignorado = f"CNPJ do tomador ({cnpj_tom}) é de outra empresa — nota chegou por engano"
+                # EXATO: passa direto, filial_emissao_codigo já foi resolvido
 
             out.append(nota)
         return out

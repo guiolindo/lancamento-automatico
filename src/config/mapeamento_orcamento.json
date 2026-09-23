@@ -5,9 +5,12 @@
     "OTIMO": {
       "descricao": "Consórcio Ótimo de Bilhetagem Eletrônica — vale transporte",
       "cnpj_esperado": "10426715000164",
+      "validar_cnpj_tomador": true,
+      "_validar_help": "Bloqueia nota cujo CNPJ tomador não está em cnpjs_filiais.json (com 3 níveis: exato / raiz do grupo / outra empresa). O empresa_codigo abaixo vira fallback — é ativado apenas se, por algum motivo, o Gemini não retornar o cnpj_tomador (nota danificada, PDF ilegível). Nesse caso a nota lança na Contagem, comportamento de antes do build-121.",
       "tipo_extracao": "nfse",
       "aba_nota": {
         "empresa_codigo": "6",
+        "empresa_por_cnpj_tomador": true,
         "nat_despesa_codigo": "215",
         "pessoa_codigo": "36657",
         "versao_pessoa": "1",

@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-120 (OTIMO — CNPJ 10.426.715/0001-64 preenchido pra validar notas do fornecedor certo no mesmo lote)"
+BUILD_MARKER = "build-121 (OTIMO — validação do CNPJ tomador em 3 níveis: exato/raiz do grupo/outra empresa; roteia pra filial certa em vez de forçar Contagem)"
 
 
 def main() -> int:

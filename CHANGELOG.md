@@ -6,6 +6,36 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-121 — OTIMO: validação do CNPJ tomador em 3 níveis
+
+Fecha o gap deixado pelo build-120. Antes: OTIMO validava só o
+prestador (que a nota veio do Ótimo mesmo) e sempre lançava na
+Contagem, mesmo que a nota fosse endereçada a outra filial ou a uma
+empresa fora do grupo por engano. Agora:
+
+- **CNPJ tomador bate exato com filial cadastrada** → OK, lança na
+  filial resolvida (não mais Contagem à força).
+- **Só a raiz (8 primeiros dígitos) bate** → IGNORADA, motivo "Filial
+  não cadastrada" — operador cadastra a filial em `cnpjs_filiais.json`
+  e reprocessa.
+- **Nem a raiz bate** → IGNORADA, motivo "CNPJ de outra empresa" —
+  nota chegou por engano.
+- **CNPJ tomador nem veio na extração** → IGNORADA — não dá pra
+  validar destino.
+
+Custo de token no Gemini: zero. `_PROMPT_NFSE` já pedia `cnpj_tomador`
+desde build-107 (Pluxee).
+
+Ativado via `validar_cnpj_tomador: true` no template. Lógica pura em
+`src/core/cnpj_utils.py` (9 unit tests cobrindo os 4 resultados).
+Total da suite: 31 passing.
+
+## build-120 — OTIMO: CNPJ preenchido
+
+Preenche `cnpj_esperado` do template OTIMO em `mapeamento_orcamento.json`
+(`10426715000164`). Ao lançar um lote do Ótimo, o app rejeita PDFs
+que sejam de outro fornecedor — mesma proteção do PLUXEE (build-107).
+
 ## build-119 — docs split + suite de tests
 
 Inspirado no repo irmão `guiolindo/Notas-despesas` (o backend web que
