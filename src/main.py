@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-119 (docs — split de docs/ (getting-started/operations/faq/testing), CREDITS.md, 22 unit tests, requirements-dev.txt, ToC no README, keyboard_utils portátil pra CI; nenhuma mudança de comportamento no app)"
+BUILD_MARKER = "build-120 (OTIMO — CNPJ 10.426.715/0001-64 preenchido pra validar notas do fornecedor certo no mesmo lote)"
 
 
 def main() -> int:

@@ -4,8 +4,7 @@
   "templates": {
     "OTIMO": {
       "descricao": "Consórcio Ótimo de Bilhetagem Eletrônica — vale transporte",
-      "cnpj_esperado": "",
-      "_cnpj_esperado_help": "Preencha aqui (só dígitos, 14 chars) pra o app rejeitar notas de outros fornecedores no mesmo lote.",
+      "cnpj_esperado": "10426715000164",
       "tipo_extracao": "nfse",
       "aba_nota": {
         "empresa_codigo": "6",
