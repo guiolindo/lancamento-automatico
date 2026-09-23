@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-125 (OTIMO revisão — coluna 'Emissor' na tabela + reprocessar realmente re-resolve tomador (recarrega cnpjs_filiais e reaplica validação) + editar filial de emissão no menu contextual)"
+BUILD_MARKER = "build-126 (fix cancelamento — nota abortada (END/cancelar) marca FALHA em vez de ficar EM_ANDAMENTO pra sempre; agora o menu contextual libera Remover/Reprocessar dessas linhas)"
 
 
 def main() -> int:

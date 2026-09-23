@@ -527,8 +527,16 @@ class RpaTotvs:
 
             raise RuntimeError(f"Falhou após {max_tent} tentativas de Nro.Documento")
         except ManualAbortException:
+            # Aborto manual (usuário disse "não confirmar" no modo
+            # revisão). Marca FALHA pra o menu contextual (Remover /
+            # Reprocessar) não ficar cinza — EM_ANDAMENTO trava as duas
+            # ações. Build-126.
+            lanc.status = StatusLancamento.FALHA
+            lanc.erro = "Cancelado no modo revisão"
             raise
         except EmergencyAbortException:
+            lanc.status = StatusLancamento.FALHA
+            lanc.erro = "Cancelado (tecla END)"
             raise
         except Exception as e:  # noqa: BLE001
             lanc.status = StatusLancamento.FALHA

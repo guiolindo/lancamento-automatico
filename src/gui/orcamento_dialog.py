@@ -1204,6 +1204,17 @@ class OrcamentoPage(QWidget):
         self._btn_cancelar.setEnabled(True)
         self._btn_cancelar.setVisible(False)
         self._restaurar_janela()
+        # Rede de segurança (build-126): qualquer nota que sobrou em
+        # EM_ANDAMENTO depois do lote é resquício de cancelamento — o
+        # menu contextual desabilita Remover/Reprocessar em EM_ANDAMENTO,
+        # e o operador fica sem conseguir mexer na linha. Vira FALHA
+        # (visível na coluna Status, editável, removível).
+        for n in self._notas:
+            if n.status == StatusLancamento.EM_ANDAMENTO:
+                n.status = StatusLancamento.FALHA
+                if not n.erro:
+                    n.erro = "Cancelado antes de terminar"
+        self._popular_grid()
         total = sucessos + falhas + ignoradas
         resumo = f"Concluído — {sucessos} OK · {falhas} falhas · {ignoradas} ignoradas (de {total})"
         self._lbl_status.setText(resumo)

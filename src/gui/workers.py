@@ -433,11 +433,15 @@ class LoteOrcamentoWorker(QObject):
                             ignoradas += 1
                     except EmergencyAbortException:
                         self._emit_e_log("!! EMERGÊNCIA: END pressionada — lote abortado")
+                        # rpa.lancar() já marcou FALHA antes de re-raise
+                        # (build-126). Emite update pra grid refletir na UI.
+                        self.nota_atualizada.emit(i)
                         break
                     except Exception as e:  # noqa: BLE001
                         falhas += 1
                         self._emit_e_log(f"X Falha nota #{nota.numero}: {e}")
                         if self.parar_em_falha:
+                            self.nota_atualizada.emit(i)
                             break
                     self.nota_atualizada.emit(i)
                 self.finished.emit(sucessos, falhas, ignoradas)

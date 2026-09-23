@@ -354,6 +354,12 @@ class RpaOrcamento:
             # já dão tempo pro TOTVS fechar o registro antes do próximo "+".
 
         except EmergencyAbortException:
+            # Marca como FALHA antes de re-raise. Sem isso a nota fica
+            # eternamente em EM_ANDAMENTO — o menu contextual usa esse
+            # status pra desabilitar Remover/Reprocessar, e o operador
+            # não consegue nem excluir a linha nem tentar de novo (build-126).
+            nota.status = StatusLancamento.FALHA
+            nota.erro = "Cancelado (tecla END)"
             raise
         except Exception as e:  # noqa: BLE001
             nota.status = StatusLancamento.FALHA

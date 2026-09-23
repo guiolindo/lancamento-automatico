@@ -6,6 +6,36 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-126 — Fix "Remover/Reprocessar aparecia cinza" após cancelar
+
+Bug reportado: no Orçamento, "Remover deste lote" ficava desabilitado
+(cinza) numa linha e não dava pra clicar. Investigação:
+
+O menu contextual desabilita Remover e Reprocessar quando o status é
+EM_ANDAMENTO (faz sentido — não dá pra mexer numa linha que o RPA está
+processando). Mas se o operador aperta END ou clica "Cancelar lote" no
+meio, `rpa_orcamento.lancar()` re-raise EmergencyAbortException SEM
+converter o status. A nota fica em EM_ANDAMENTO pra sempre — mesmo
+após o lote acabar — e o menu contextual bloqueia as duas ações.
+
+Correção em 3 camadas:
+
+1. `rpa_orcamento.lancar()` / `rpa_totvs.executar_lancamento()`: no
+   `except EmergencyAbortException` (e no `ManualAbortException` no
+   Operador Financeiro) — marca `status = FALHA` com erro descritivo
+   ("Cancelado (tecla END)" / "Cancelado no modo revisão") ANTES do
+   re-raise.
+2. Worker do Orçamento (`workers.py`): emite `nota_atualizada` também
+   nos paths de abort/falha-com-parar-em-falha pra grid refletir.
+3. Rede de segurança em `_on_finished_worker` (Orçamento) e
+   `_on_lote_finalizado` (Operador Financeiro): pós-lote, varre a
+   lista e converte EM_ANDAMENTO residual → FALHA "Cancelado antes de
+   terminar". Cobre casos extremos que os passos 1-2 não pegam
+   (disconnect, crash grave).
+
+Suite pytest: 51 → 57. Novos testes em `test_abort_status.py`
+documentam o contrato "abort marca FALHA" pros dois módulos.
+
 ## build-125 — OTIMO revisão: coluna Emissor + reprocessar de verdade
 
 Dois bugs de UX que o operador reportou depois do build-122:

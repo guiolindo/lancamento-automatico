@@ -1049,6 +1049,19 @@ class MainWindow(QMainWindow):
         self._btn_extrair.setEnabled(True)
         self._btn_cancelar.setVisible(False)
         self._progress.setVisible(False)
+        # Rede de segurança (build-126): converte EM_ANDAMENTO residual
+        # em FALHA. Se ficasse pendurado, o menu contextual da tabela
+        # desabilitava Remover/Reprocessar naquela linha.
+        from ..core.models import StatusLancamento
+        alterou = False
+        for lanc in self._lancamentos:
+            if lanc.status == StatusLancamento.EM_ANDAMENTO:
+                lanc.status = StatusLancamento.FALHA
+                if not lanc.erro:
+                    lanc.erro = "Cancelado antes de terminar"
+                alterou = True
+        if alterou:
+            self._tabela.carregar(self._lancamentos)
         if falhas == 0:
             self._set_status_revisao("sucesso", f"{sucessos} lançados")
         else:
