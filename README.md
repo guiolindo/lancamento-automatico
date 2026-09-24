@@ -344,6 +344,11 @@ Ordem de recurso:
 
 ## Documentação técnica completa
 
+> **Se você é uma IA ou dev pela primeira vez no repo:** comece por
+> **[CLAUDE.md](CLAUDE.md)** — 8KB de mapa que diz o que ler pra CADA
+> tipo de tarefa. Os documentos abaixo somam ~130KB; o mapa evita ler
+> mais do que precisa.
+
 Ponto de partida por perfil:
 
 - **Vai rodar em dev pela primeira vez** → [docs/getting-started.md](docs/getting-started.md)

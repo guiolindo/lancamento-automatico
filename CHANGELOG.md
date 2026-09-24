@@ -6,6 +6,33 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-127 — CLAUDE.md como mapa curto na raiz
+
+Insight do usuário: docs somam 130KB (README 17 + ARCHITECTURE 65 +
+DECISIONS 20 + CHANGELOG 8 + docs/ 20). Ainda cabem no contexto do
+Opus 4.7 (200KB), mas conforme o projeto crescer, uma IA que entra
+fria vai gastar contexto lendo doc irrelevante pra a tarefa dela.
+
+Solução: `CLAUDE.md` (~8KB) na raiz, seguindo a convenção que o
+próprio Claude Code adota (`/init`). Não substitui documentação —
+aponta pra ela cirurgicamente:
+
+- Overview em 5 linhas do projeto.
+- Tabela "pra fazer X, leia Y" — 12 linhas cobrindo os tipos de
+  tarefa que aparecem (novo imposto, novo fornecedor, mexer no
+  auto-update, RPA, visão, UI, teste, empacotamento, build antigo).
+- Lista "nunca faça isto" — 8 armadilhas destrutivas (não trocar
+  Nuitka por PyInstaller, não usar google-generativeai, não
+  force-push em main, não `params={key}` no Gemini, etc.).
+- Convenções: commit (BUILD_MARKER + footer), idioma, comentários,
+  tests.
+- Mapa de arquivos condensado (`src/`, `build/`, `tests/`).
+- Como o boot funciona em 7 linhas (com pointer pra ARCHITECTURE §2
+  pra detalhes).
+
+`ARCHITECTURE.md` e `README.md` ganharam pointer no topo: "IA
+começa por CLAUDE.md".
+
 ## build-126 — Fix "Remover/Reprocessar aparecia cinza" após cancelar
 
 Bug reportado: no Orçamento, "Remover deste lote" ficava desabilitado

@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-126 (fix cancelamento — nota abortada (END/cancelar) marca FALHA em vez de ficar EM_ANDAMENTO pra sempre; agora o menu contextual libera Remover/Reprocessar dessas linhas)"
+BUILD_MARKER = "build-127 (docs — CLAUDE.md como mapa curto na raiz apontando 'pra tarefa X leia Y'; poupa contexto de IA nova no repo)"
 
 
 def main() -> int:

@@ -4,10 +4,11 @@ Documento vivo dos **contratos internos** — coisas que não estão óbvias
 lendo um arquivo só, e que fatalmente causam bug se contribuidor novo
 (humano ou IA) mudar sem entender.
 
-> Se você é uma IA acabando de entrar no projeto: **leia este documento
-> inteiro antes de tocar em `updater.py`, `launcher.py`, `main.py` ou
-> `.github/workflows/build-exe.yml`**. As três camadas conversam por
-> convenções que não estão declaradas no código.
+> **Se você é uma IA:** comece por [CLAUDE.md](CLAUDE.md) — 8KB de mapa
+> que diz o que ler pra CADA tipo de tarefa. Só volta aqui quando o
+> mapa te mandou. NÃO leia este documento inteiro por padrão — ele é o
+> mergulho profundo (65KB) e existe pra tarefas específicas de
+> updater/launcher/visão computacional.
 
 > **Procurando algo mais rápido?** — Este documento é o mergulho
 > profundo. Para leitura por tarefa: [docs/getting-started.md](docs/getting-started.md)
