@@ -344,10 +344,10 @@ Ordem de recurso:
 
 ## Documentação técnica completa
 
-> **Se você é uma IA ou dev pela primeira vez no repo:** comece por
-> **[CLAUDE.md](CLAUDE.md)** — 8KB de mapa que diz o que ler pra CADA
-> tipo de tarefa. Os documentos abaixo somam ~130KB; o mapa evita ler
-> mais do que precisa.
+> **Se você é uma IA (Claude, Codex, Cursor, Manus, Grok, Gemini…) ou
+> dev pela primeira vez no repo:** comece por **[AGENTS.md](AGENTS.md)**
+> — 8KB de mapa que diz o que ler pra CADA tipo de tarefa. Os
+> documentos abaixo somam ~130KB; o mapa evita ler mais do que precisa.
 
 Ponto de partida por perfil:
 

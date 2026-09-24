@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-127 (docs — CLAUDE.md como mapa curto na raiz apontando 'pra tarefa X leia Y'; poupa contexto de IA nova no repo)"
+BUILD_MARKER = "build-128 (docs — CLAUDE.md renomeado pra AGENTS.md (convenção agente-agnóstica); CLAUDE.md vira stub pra Claude Code ainda encontrar)"
 
 
 def main() -> int:

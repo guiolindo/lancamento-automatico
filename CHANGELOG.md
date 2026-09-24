@@ -6,6 +6,23 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-128 — CLAUDE.md → AGENTS.md (convenção agente-agnóstica)
+
+Observação do usuário: `CLAUDE.md` é convenção Claude-específica. Se
+outros agentes entrarem no repo (Codex, Cursor, Manus, Grok, Gemini,
+Aider), eles procuram um outro arquivo.
+
+O padrão que virou informal-standard: **`AGENTS.md`** (impulsionado
+pelo Codex/OpenAI, adotado por Cursor, Aider, Manus, Grok Studio,
+alguns clientes do Gemini). Movido o mapa (do build-127) pra
+`AGENTS.md`. `CLAUDE.md` fica como stub 10-linhas apontando pra ele
+— Claude Code continua achando automaticamente, sem duplicar
+conteúdo (que sairia de sincronia).
+
+`README.md` e `ARCHITECTURE.md` referenciam AGENTS.md agora.
+
+Sem mudança de código. `git mv` preserva histórico do arquivo.
+
 ## build-127 — CLAUDE.md como mapa curto na raiz
 
 Insight do usuário: docs somam 130KB (README 17 + ARCHITECTURE 65 +

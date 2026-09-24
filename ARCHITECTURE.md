@@ -4,9 +4,10 @@ Documento vivo dos **contratos internos** — coisas que não estão óbvias
 lendo um arquivo só, e que fatalmente causam bug se contribuidor novo
 (humano ou IA) mudar sem entender.
 
-> **Se você é uma IA:** comece por [CLAUDE.md](CLAUDE.md) — 8KB de mapa
-> que diz o que ler pra CADA tipo de tarefa. Só volta aqui quando o
-> mapa te mandou. NÃO leia este documento inteiro por padrão — ele é o
+> **Se você é uma IA:** comece por [AGENTS.md](AGENTS.md) — 8KB de mapa
+> agente-agnóstico (Claude/Codex/Cursor/Manus/Grok/Gemini) que diz o
+> que ler pra CADA tipo de tarefa. Só volta aqui quando o mapa te
+> mandou. NÃO leia este documento inteiro por padrão — ele é o
 > mergulho profundo (65KB) e existe pra tarefas específicas de
 > updater/launcher/visão computacional.
 
