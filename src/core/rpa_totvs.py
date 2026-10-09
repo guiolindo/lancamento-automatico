@@ -474,11 +474,16 @@ class RpaTotvs:
 
     def lancar(self, lanc: Lancamento) -> None:
         max_tent = int(self._rpa_cfg.get("max_tentativas_duplicidade", 10))
-        lanc.status = StatusLancamento.EM_ANDAMENTO
-        self._notificar(lanc, "Iniciando")
-        self._check_abort()
-
+        # Setup DENTRO do try (build-129). Antes do fix, essas 3 linhas
+        # ficavam fora e um `_check_abort()` levantando aqui (END apertado
+        # entre notas) escapava do `except EmergencyAbortException` abaixo
+        # — o lançamento ficava eternamente em EM_ANDAMENTO e o menu
+        # contextual bloqueava Remover/Reprocessar.
         try:
+            lanc.status = StatusLancamento.EM_ANDAMENTO
+            self._notificar(lanc, "Iniciando")
+            self._check_abort()
+
             # Re-força o TOTVS pra frente a cada lançamento — o operador pode
             # ter clicado em outro app e voltado.
             if self._win is not None:

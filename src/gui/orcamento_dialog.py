@@ -1231,6 +1231,17 @@ class OrcamentoPage(QWidget):
         self._btn_extrair.setEnabled(True)
         self._btn_cancelar.setVisible(False)
         self._restaurar_janela()
+        # Rede de segurança — mesmo em erro grave (não só na terminação
+        # normal via _on_finished_worker), varre EM_ANDAMENTO residual
+        # e marca FALHA. Caminho esquecido no build-126: se o worker
+        # emitir `error` (ex: `rpa.encerrar()` falha) a nota em curso
+        # ficava presa (build-129).
+        for n in self._notas:
+            if n.status == StatusLancamento.EM_ANDAMENTO:
+                n.status = StatusLancamento.FALHA
+                if not n.erro:
+                    n.erro = "Lote abortado antes de terminar"
+        self._popular_grid()
         self._lbl_status.setText("Erro.")
         self._log_line(f"XX Lote abortado: {msg[:180]}")
         QMessageBox.critical(self, "Erro no lote Orçamento", msg)

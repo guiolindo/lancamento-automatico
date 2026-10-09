@@ -1086,6 +1086,19 @@ class MainWindow(QMainWindow):
         self._set_status_revisao("falha", "Erro no lote")
         self._encerrar_hud(0, 1)
         self._restaurar_janela_pos_lote()
+        # Rede de segurança (build-129): mesmo em erro grave, converte
+        # EM_ANDAMENTO residual pra FALHA — senão o menu contextual
+        # bloqueia Remover/Reprocessar na linha presa.
+        from ..core.models import StatusLancamento
+        alterou = False
+        for lanc in self._lancamentos:
+            if lanc.status == StatusLancamento.EM_ANDAMENTO:
+                lanc.status = StatusLancamento.FALHA
+                if not lanc.erro:
+                    lanc.erro = "Lote abortado antes de terminar"
+                alterou = True
+        if alterou:
+            self._tabela.carregar(self._lancamentos)
         QMessageBox.critical(self, "Erro no lote", msg)
 
     def _cancelar(self) -> None:

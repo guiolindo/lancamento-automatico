@@ -301,11 +301,16 @@ class RpaOrcamento:
     # ---------- fluxo por nota ----------
 
     def lancar(self, nota: NotaDespesa) -> None:
-        nota.status = StatusLancamento.EM_ANDAMENTO
-        self._notificar(nota, "Iniciando")
-        self._check_abort()
-
+        # Setup DENTRO do try (build-129). Antes do fix, essas 3 linhas
+        # ficavam fora e um `_check_abort()` levantando aqui (END apertado
+        # entre notas) escapava do `except EmergencyAbortException` abaixo
+        # — a nota ficava eternamente em EM_ANDAMENTO e o menu
+        # contextual bloqueava Remover/Reprocessar.
         try:
+            nota.status = StatusLancamento.EM_ANDAMENTO
+            self._notificar(nota, "Iniciando")
+            self._check_abort()
+
             if self._win is not None:
                 _trazer_para_frente(self._win)
 

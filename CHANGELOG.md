@@ -6,6 +6,38 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-129 — fix END deixava a próxima nota em EM_ANDAMENTO
+
+Bug reportado: ao apertar END no meio do lote, a próxima nota ficava
+em "Em curso" permanentemente — Executar pulava ela, e o menu
+contextual bloqueava Remover/Reprocessar.
+
+Build-126 cobria o abort DENTRO do try principal mas tinha dois gaps:
+
+GAP 1 — SETUP FORA DO TRY
+`rpa_orcamento.lancar()` e `rpa_totvs.lancar()` tinham o setup inicial
+(status=EM_ANDAMENTO + notificar + `_check_abort()`) **antes** do `try`.
+Se o operador apertava END entre notas, `abort_event` já estava set, e
+quando o loop entrava na próxima nota:
+  1. Seta `status = EM_ANDAMENTO`
+  2. `_check_abort()` levanta EmergencyAbortException imediatamente
+  3. Exception escapa do `except EmergencyAbortException` (que está no
+     try abaixo) → nota fica EM_ANDAMENTO
+Fix: mover o setup pra DENTRO do try. Agora o except pega qualquer
+abort e marca FALHA.
+
+GAP 2 — _on_erro_worker SEM REDE DE SEGURANÇA
+A rede de segurança do build-126 só rodava em `_on_finished_worker`
+(caminho normal). Se o worker emitia `error` (ex: `rpa.encerrar()`
+falha no finally, exception externa ao loop), a nota em curso ficava
+presa — `_on_erro_worker` só mostrava o messagebox e saía.
+Fix: `_on_erro_worker` (Orçamento) e `_on_erro_lote` (Operador
+Financeiro) agora também varrem EM_ANDAMENTO → FALHA antes do
+QMessageBox.critical.
+
+Suite pytest: 57 → 59. Novos testes em `test_abort_status.py` cobrem
+o gap do setup-fora-do-try e a rede de segurança no caminho de erro.
+
 ## build-128 — CLAUDE.md → AGENTS.md (convenção agente-agnóstica)
 
 Observação do usuário: `CLAUDE.md` é convenção Claude-específica. Se

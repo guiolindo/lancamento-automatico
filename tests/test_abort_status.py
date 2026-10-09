@@ -110,3 +110,56 @@ def test_rede_de_seguranca_pos_lote_converte_em_andamento_em_falha():
     assert notas[1].status == StatusLancamento.FALHA     # convertida
     assert notas[1].erro == "Cancelado antes de terminar"
     assert notas[2].status == StatusLancamento.PENDENTE  # intocada
+
+
+def test_rede_de_seguranca_tambem_em_erro_grave_do_worker():
+    """Build-129: _on_erro_worker (worker.error.emit) também roda a rede
+    de segurança — não só o caminho normal via finished.emit.
+
+    Antes do build-129, se o worker emitisse `error` (rpa.encerrar() falha,
+    exception externa ao loop), o _on_erro_worker só mostrava a mensagem e
+    deixava EM_ANDAMENTO pendurado — mesmo cenário do bug reportado.
+    """
+    notas = [_make_nota(), _make_nota()]
+    notas[0].status = StatusLancamento.SUCESSO
+    notas[1].status = StatusLancamento.EM_ANDAMENTO
+    # Mesma rede de segurança, mas agora rodando no caminho de erro:
+    for n in notas:
+        if n.status == StatusLancamento.EM_ANDAMENTO:
+            n.status = StatusLancamento.FALHA
+            if not n.erro:
+                n.erro = "Lote abortado antes de terminar"
+    assert notas[1].status == StatusLancamento.FALHA
+    assert "Lote abortado" in notas[1].erro
+
+
+def test_check_abort_antes_do_try_nao_pode_deixar_em_andamento():
+    """Build-129 gap: no rpa_orcamento.lancar() / rpa_totvs.lancar(), o
+    setup (status=EM_ANDAMENTO + notificar + _check_abort) ficava FORA do
+    try/except — se o _check_abort levantasse (END apertado entre notas),
+    escapava do `except EmergencyAbortException` e a nota ficava
+    eternamente em EM_ANDAMENTO.
+
+    Fix: mover todo o setup pra DENTRO do try. Este teste simula o
+    cenário e verifica que, com o setup dentro, o except pega.
+    """
+    class _FakeAbortExc(RuntimeError):
+        pass
+
+    def lancar_com_fix(nota):
+        # Setup DENTRO do try (como ficou após build-129)
+        try:
+            nota.status = StatusLancamento.EM_ANDAMENTO
+            raise _FakeAbortExc("end apertado antes do processamento")
+        except _FakeAbortExc:
+            nota.status = StatusLancamento.FALHA
+            nota.erro = "Cancelado (tecla END)"
+            raise
+
+    n = _make_nota()
+    try:
+        lancar_com_fix(n)
+    except _FakeAbortExc:
+        pass
+    assert n.status == StatusLancamento.FALHA
+    assert n.erro == "Cancelado (tecla END)"

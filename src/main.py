@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-128 (docs — CLAUDE.md renomeado pra AGENTS.md (convenção agente-agnóstica); CLAUDE.md vira stub pra Claude Code ainda encontrar)"
+BUILD_MARKER = "build-129 (fix END — próxima nota ficava EM_ANDAMENTO permanente; gap entre o status=EM_ANDAMENTO e o try/except do RPA, mais rede de segurança no caminho de erro grave)"
 
 
 def main() -> int:
