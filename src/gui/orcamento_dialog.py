@@ -636,6 +636,17 @@ class OrcamentoPage(QWidget):
             cnpj_tom   = str(r.get("cnpj_tomador", "")).strip()
             desc       = str(r.get("descricao", "")).strip()
 
+            # Número que entra no TOTVS = ANO + número do recibo
+            # concatenados (build-132). Ex.: ano "2026" + recibo "1205"
+            # → "20261205". Se o ano não veio na extração, cai no número
+            # cru pra pelo menos permitir que o operador edite.
+            ano_raw = "".join(c for c in str(r.get("ano", "")) if c.isdigit())
+            num_raw = "".join(c for c in str(r.get("numero", "")) if c.isdigit())
+            if ano_raw and num_raw:
+                numero_concat = f"{ano_raw}{num_raw}"
+            else:
+                numero_concat = num_raw
+
             # Resolve filial de emissão pelo CNPJ tomador (mesma lógica
             # OTIMO/PLUXEE desde build-121).
             fil_emi_info = self._cnpjs_filiais.get(cnpj_tom) if cnpj_tom else None
@@ -644,7 +655,7 @@ class OrcamentoPage(QWidget):
 
             nota = NotaDespesa(
                 pagina=int(r.get("pagina", i + 1)),
-                numero=str(r.get("numero", "")).strip(),
+                numero=numero_concat,
                 data_emissao=data_emi,
                 valor=float(r.get("valor") or 0.0),
                 data_lancto=data_lancto,

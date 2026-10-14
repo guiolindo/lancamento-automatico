@@ -6,6 +6,32 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-132 — TAP/DL: Nº documento concatena ANO + Nº recibo
+
+Novo erro reportado pelo operador: o TOTVS espera o campo "Número do
+documento" como `ano + número do recibo` concatenados. Ex.:
+
+- Recibo com ANO=2026, RECIBO Nº=1205 → vai pra o TOTVS como **"20261205"**
+- Recibo com ANO=2026, RECIBO Nº=405 → **"2026405"**
+- Recibo com ANO=2025, RECIBO Nº=1030 → **"20251030"**
+
+Antes o app mandava só o número do recibo cru ("1205", "405"). TOTVS
+provavelmente rejeitava como duplicata com outro título real do mesmo
+número.
+
+Mudanças:
+- `_PROMPT_RECIBO`: agora pede `ano` como campo separado (comportamento
+  pré-build: Gemini extraía só `numero`). Prompt deixa explícito que
+  NÃO deve concatenar — o app faz.
+- `extrair_recibos`: dict de saída ganha chave `"ano"` (dígitos).
+- `_converter_recibos`: concatena `ano + numero` ao criar NotaDespesa.
+  Se ano vier vazio, cai no número cru (pelo menos operador vê e
+  edita manualmente).
+
+Suite pytest: 76 → 81. Novo `test_recibo_numero_concat.py` cobre:
+exemplos do operador, fallback sem ano, ignorar pontuação, edge
+cases.
+
 ## build-131 — TAP/DL: picker separado "Data de Vencimento"
 
 Esqueci no build-130. Pros recibos TAP/DL, o operador precisa escolher

@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-131 (TAP/DL — picker 'Data de Vencimento' separado na UI, visível só pra recibo; conectado via vencimento_igual_a=vencimento_manual na aba_financeiro)"
+BUILD_MARKER = "build-132 (TAP/DL — Nº documento no TOTVS passa a ser ANO + Nº recibo concatenados (ex: 2026 + 1205 → 20261205); Gemini extrai os dois separados, app concatena)"
 
 
 def main() -> int:

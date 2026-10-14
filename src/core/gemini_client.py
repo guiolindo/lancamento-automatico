@@ -486,7 +486,8 @@ class GeminiClient:
                 datas_norm = [str(d).strip() for d in datas if str(d).strip()]
                 resultado.append({
                     "pagina":         int(n.get("pagina") or (i + 1)),
-                    "numero":         str(n.get("numero", "")).strip(),
+                    "ano":            "".join(c for c in str(n.get("ano", "")) if c.isdigit()),
+                    "numero":         "".join(c for c in str(n.get("numero", "")) if c.isdigit()),
                     "datas":          datas_norm,
                     "valor":          float(n.get("valor") or 0.0),
                     "descricao":      str(n.get("descricao", "")).strip(),
@@ -496,7 +497,7 @@ class GeminiClient:
             except (TypeError, ValueError) as e:
                 log.warning("extrair_recibos: linha %d inválida (%s): %r", i, e, n)
                 resultado.append({
-                    "pagina": i + 1, "numero": "", "datas": [], "valor": 0.0,
+                    "pagina": i + 1, "ano": "", "numero": "", "datas": [], "valor": 0.0,
                     "descricao": "", "cnpj_prestador": "", "cnpj_tomador": "",
                 })
         log.info("extrair_recibos: %d recibos extraídos", len(resultado))
@@ -636,10 +637,15 @@ são recibos simples).
 
 Cada página do PDF é UM recibo. Extraia por recibo:
 
-1. `numero`: o número do recibo (campo "RECIBO Nº"). Dígitos apenas.
-   Ex.: "1205", "405".
+1. `ano`: o valor literal do campo "ANO" no cabeçalho (ex.: "2026").
+   Normalmente são 4 dígitos. Importante: NÃO é o ano da data —
+   é o campo "ANO" preenchido pelo fornecedor no topo do recibo.
 
-2. `datas`: TODAS as datas que aparecem no cabeçalho do recibo (não
+2. `numero`: o número do recibo (campo "RECIBO Nº"). Dígitos apenas.
+   Ex.: "1205", "405". NÃO concatene com o ano — o app faz isso
+   depois. Retorne só o número puro do campo "RECIBO Nº".
+
+3. `datas`: TODAS as datas que aparecem no cabeçalho do recibo (não
    as da tabela interna de itens). Lista no formato "AAAA-MM-DD".
    Pode ter 1 ou 2 datas:
    - Se tiver só uma (ex.: campo "DATA 23/05/2026"), lista com 1
@@ -651,26 +657,27 @@ Cada página do PDF é UM recibo. Extraia por recibo:
    repetido em todas as linhas do item — essa é a data do item, não
    do recibo).
 
-3. `valor`: o "VALOR" do cabeçalho (ou "TOTAL" do rodapé — devem ser
+4. `valor`: o "VALOR" do cabeçalho (ou "TOTAL" do rodapé — devem ser
    iguais). Float com ponto decimal. Ex.: 299.16.
 
-4. `descricao`: o texto da PRIMEIRA célula de descrição da tabela de
+5. `descricao`: o texto da PRIMEIRA célula de descrição da tabela de
    itens (a célula com valor > 0, ignorando as linhas em branco).
    Transcreva LITERALMENTE, inclusive maiúsculas e separadores.
    Ex.: "CRED - CD300 08/2026", "CRED - POCOS DE CALDAS 04/2026".
 
-5. `cnpj_prestador`: CNPJ do fornecedor (quem emitiu — assinatura
+6. `cnpj_prestador`: CNPJ do fornecedor (quem emitiu — assinatura
    embaixo "TAP SERVIÇOS DE GESTÃO LTDA" / "DL SERVIÇOS DE GESTÃO
    LTDA"). 14 dígitos, sem pontuação.
 
-6. `cnpj_tomador`: CNPJ do campo "Recebemos de" ou "CNPJ:" no
+7. `cnpj_tomador`: CNPJ do campo "Recebemos de" ou "CNPJ:" no
    cabeçalho do bloco de identificação do destinatário. 14 dígitos.
 
 Retorne APENAS um JSON válido, sem markdown, sem comentários:
 
 {
   "notas": [
-    {"pagina": 1, "numero": "1205", "datas": ["2026-09-20", "2026-10-13"],
+    {"pagina": 1, "ano": "2026", "numero": "1205",
+     "datas": ["2026-09-20", "2026-10-13"],
      "valor": 299.16, "descricao": "CRED - CD300 08/2026",
      "cnpj_prestador": "31548807000197", "cnpj_tomador": "28548486001783"}
   ]
