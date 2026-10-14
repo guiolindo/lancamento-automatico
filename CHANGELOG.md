@@ -6,6 +6,28 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-131 — TAP/DL: picker separado "Data de Vencimento"
+
+Esqueci no build-130. Pros recibos TAP/DL, o operador precisa escolher
+a data de vencimento INDEPENDENTE da data de lançamento (ao contrário
+de OTIMO/PLUXEE onde vencimento = lançamento sempre).
+
+Adicionado:
+- Campo "VENCIMENTO" + `DateEditFast` ao lado de "DATA LANÇTO". Fica
+  oculto por padrão; aparece só quando o template selecionado é do
+  tipo "recibo" (TAP/DL). O `_on_template_mudou` liga/desliga a
+  visibilidade.
+- `NotaDespesa.vencimento_manual: Optional[date]` novo.
+- `_converter_recibos` lê `self._date_venc.date()` e copia pra cada
+  NotaDespesa criada (operador pode editar nota a nota depois).
+- `rpa_orcamento`: `vencimento_igual_a == "vencimento_manual"` agora
+  usa `nota.vencimento_manual`. Default inalterado (data_lancto).
+- Templates TAP/DL: `aba_financeiro.vencimento_igual_a =
+  "vencimento_manual"`.
+
+Suite pytest: 74 → 76 (+2 testes do vencimento_manual + regressão
+dos OTIMO/PLUXEE inalterados).
+
 ## build-130 — TAP + DL: recibos de ressarcimento no Orçamento
 
 Dois fornecedores novos no módulo Orçamento. **Documentos são recibos

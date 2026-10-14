@@ -157,7 +157,8 @@
         "observacao_financeira_template": "{descricao}",
         "modo": "vencimento",
         "quantidade_parcelas": 1,
-        "dias_entre_vencimentos": 1
+        "dias_entre_vencimentos": 1,
+        "vencimento_igual_a": "vencimento_manual"
       },
       "aba_contabilizacao": {
         "linha1": {
@@ -171,7 +172,7 @@
         }
       },
       "regras": {
-        "vencimento_igual_a": "data_lancto",
+        "vencimento_igual_a": "vencimento_manual",
         "data_lancto_default": "hoje",
         "duplicidade_regra": "pular_ja_lancada",
         "data_emissao_regra": "mais_antiga_das_duas"
@@ -200,7 +201,8 @@
         "observacao_financeira_template": "{descricao}",
         "modo": "vencimento",
         "quantidade_parcelas": 1,
-        "dias_entre_vencimentos": 1
+        "dias_entre_vencimentos": 1,
+        "vencimento_igual_a": "vencimento_manual"
       },
       "aba_contabilizacao": {
         "linha1": {
@@ -214,7 +216,7 @@
         }
       },
       "regras": {
-        "vencimento_igual_a": "data_lancto",
+        "vencimento_igual_a": "vencimento_manual",
         "data_lancto_default": "hoje",
         "duplicidade_regra": "pular_ja_lancada"
       }

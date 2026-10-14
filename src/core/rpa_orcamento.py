@@ -547,10 +547,13 @@ class RpaOrcamento:
         self._clicar("radio_vencimento")
         self._preencher("qtd_parcelas", str(af.get("quantidade_parcelas", 1)))
         self._preencher("dias_entre_venc", str(af.get("dias_entre_vencimentos", 1)))
-        # Vencimento: default = data_lancto; DAE usa vencimento_dae.
+        # Vencimento: default = data_lancto; DAE usa vencimento_dae;
+        # TAP/DL (build-131) usa vencimento_manual (picker separado na UI).
         venc_regra = af.get("vencimento_igual_a") or "data_lancto"
         if venc_regra == "vencimento_dae" and nota.vencimento_dae is not None:
             venc = nota.vencimento_dae
+        elif venc_regra == "vencimento_manual" and nota.vencimento_manual is not None:
+            venc = nota.vencimento_manual
         else:
             venc = nota.data_lancto
         self._preencher("data_vencimento", venc.strftime("%d/%m/%Y"))

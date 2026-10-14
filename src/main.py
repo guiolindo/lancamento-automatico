@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-130 (TAP + DL — 2 fornecedores novos de recibo de ressarcimento no Orçamento; prompt Gemini próprio pra recibo, roteamento por CNPJ tomador, CR distinto, data de emissão 'mais antiga das duas' pro TAP)"
+BUILD_MARKER = "build-131 (TAP/DL — picker 'Data de Vencimento' separado na UI, visível só pra recibo; conectado via vencimento_igual_a=vencimento_manual na aba_financeiro)"
 
 
 def main() -> int:

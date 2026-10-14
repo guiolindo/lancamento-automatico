@@ -218,9 +218,24 @@ class OrcamentoPage(QWidget):
         self._date_lancto.setCalendarPopup(True)
         self._date_lancto.setFixedWidth(145)
         self._date_lancto.setToolTip(
-            "Data de lançamento no TOTVS. Vencimento fica igual a essa data."
+            "Data de lançamento no TOTVS. Em OTIMO/PLUXEE/DAE, o vencimento "
+            "fica igual a essa data. Em TAP/DL, use o campo 'VENCIMENTO' ao lado."
         )
         r2.addWidget(self._date_lancto)
+
+        # Campo de vencimento SEPARADO — só aparece pra templates "recibo"
+        # (TAP/DL, build-131). Nos demais o vencimento vem da regra do
+        # template (data_lancto ou vencimento_dae).
+        self._lbl_venc = self._campo_inline("VENCIMENTO")
+        self._lbl_venc.setVisible(False)
+        r2.addWidget(self._lbl_venc)
+        self._date_venc = DateEditFast(QDate.currentDate())
+        self._date_venc.setDisplayFormat("dd/MM/yyyy")
+        self._date_venc.setCalendarPopup(True)
+        self._date_venc.setFixedWidth(145)
+        self._date_venc.setToolTip("Data de vencimento manual (TAP/DL).")
+        self._date_venc.setVisible(False)
+        r2.addWidget(self._date_venc)
 
         r2.addStretch(1)
         self._lbl_resumo = QLabel("0 notas · R$ 0,00")
@@ -586,11 +601,17 @@ class OrcamentoPage(QWidget):
           da lista (TAP tem 2, DL tem 1).
         - `validar_cnpj_tomador`: barra tomador fora do cadastro (3
           níveis — build-121).
+        - `vencimento_igual_a: "vencimento_manual"`: usa a data do
+          segundo picker da UI (`self._date_venc`, build-131).
         """
         template = self._templates.get(template_chave) or {}
         cnpj_esperado = "".join(c for c in str(template.get("cnpj_esperado", "")) if c.isdigit())
         validar_tomador = bool(template.get("validar_cnpj_tomador", False))
         regra_emissao = (template.get("regras") or {}).get("data_emissao_regra", "")
+        # Vencimento manual (build-131) — pego aqui pra copiar em cada
+        # NotaDespesa; a mesma data vai pra TODO recibo do lote. O
+        # operador pode editar linha a linha depois via menu contextual.
+        venc_manual = self._date_venc.date().toPython() if self._date_venc.isVisible() else None
 
         out = []
         for i, r in enumerate(recibos):
@@ -634,6 +655,7 @@ class OrcamentoPage(QWidget):
                 filial_emissao_nome=fil_emi_nome,
                 descricao=desc,
                 datas_candidatas=[d.isoformat() for d in datas_parse],
+                vencimento_manual=venc_manual,
             )
 
             # Mesmas validações do _converter_nfse: prestador fora,
@@ -700,10 +722,16 @@ class OrcamentoPage(QWidget):
         )
 
     def _on_template_mudou(self) -> None:
-        """Trocou de fornecedor no combo — reconfigura cabeçalho da grid."""
+        """Trocou de fornecedor no combo — reconfigura cabeçalho da grid
+        e mostra/esconde o picker de vencimento (só pra tipo recibo)."""
         cols = self._layout_atual()
         if cols is not self._cols_atual:
             self._aplicar_colunas(cols)
+        chave = self._combo_forn.currentData() or ""
+        tmpl = self._templates.get(chave) or {}
+        mostrar_venc = tmpl.get("tipo_extracao") == "recibo"
+        self._lbl_venc.setVisible(mostrar_venc)
+        self._date_venc.setVisible(mostrar_venc)
         # Limpa notas antigas ao mudar de fornecedor pra não misturar
         if self._notas:
             self._notas = []

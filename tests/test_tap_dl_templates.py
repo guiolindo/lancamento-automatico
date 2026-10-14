@@ -109,3 +109,23 @@ def test_conta_debito_ausente_na_l2(templates):
     `cfg.get('conta_debito')` é falsy."""
     for chave in ("TAP", "DL"):
         assert "conta_debito" not in templates[chave]["aba_contabilizacao"]["linha2"]
+
+
+def test_tap_dl_vencimento_manual(templates):
+    """Build-131: TAP e DL exigem vencimento_igual_a = vencimento_manual
+    na aba_financeiro (local que o rpa_orcamento lê). O picker separado
+    na UI preenche a data; sem esse flag o RPA cairia no default
+    data_lancto, perdendo a escolha do operador."""
+    for chave in ("TAP", "DL"):
+        assert templates[chave]["aba_financeiro"]["vencimento_igual_a"] == "vencimento_manual"
+
+
+def test_otimo_pluxee_nao_mexeram_no_vencimento(templates):
+    """Regressão: ao atualizar TAP/DL, mantive OTIMO/PLUXEE inalterados —
+    vencimento_manual é opt-in. OTIMO/PLUXEE declaram só em `regras`
+    (default `data_lancto`, que o RPA já aplica como fallback)."""
+    assert templates["OTIMO"]["regras"]["vencimento_igual_a"] == "data_lancto"
+    assert templates["PLUXEE"]["regras"]["vencimento_igual_a"] == "data_lancto"
+    # Nenhum dos dois ganhou override em aba_financeiro
+    assert "vencimento_igual_a" not in templates["OTIMO"]["aba_financeiro"]
+    assert "vencimento_igual_a" not in templates["PLUXEE"]["aba_financeiro"]

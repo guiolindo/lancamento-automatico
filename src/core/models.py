@@ -141,9 +141,12 @@ class NotaDespesa:
     # "CRED - CD300 08/2026"). Vai como observação em Nota + Financeiro
     # via placeholder {descricao} no template. TAP tem duas datas
     # candidatas — o conversor usa min() quando `data_emissao_regra:
-    # "mais_antiga_das_duas"`.
+    # "mais_antiga_das_duas"`. `vencimento_manual` é a data selecionada
+    # pelo operador no segundo picker da UI (build-131), aplicada quando
+    # o template declara `vencimento_igual_a: "vencimento_manual"`.
     descricao: Optional[str] = None
     datas_candidatas: Optional[list] = None
+    vencimento_manual: Optional[date] = None
     # Estado
     status: StatusLancamento = StatusLancamento.PENDENTE
     erro: Optional[str] = None
