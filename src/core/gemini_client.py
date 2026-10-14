@@ -439,6 +439,69 @@ class GeminiClient:
         log.info("extrair_notas_nfse: %d notas extraídas", len(resultado))
         return resultado
 
+    # ---------- Recibo de ressarcimento (TAP / DL, build-130) ----------
+
+    def extrair_recibos(self, arquivo_pdf: Path) -> list[dict]:
+        """Extrai recibos de ressarcimento (TAP/DL). Cada página = 1 recibo.
+        Devolve dicts com: pagina, numero, datas (list[str]), valor,
+        descricao, cnpj_prestador, cnpj_tomador.
+
+        `datas` é lista pq TAP tem 2 datas (DATA + Emissão) e DL tem 1
+        só (DATA). O conversor na UI aplica a regra do template
+        (`data_emissao_regra: "mais_antiga_das_duas"`).
+        """
+        arquivo_pdf = Path(arquivo_pdf)
+        if not arquivo_pdf.exists():
+            raise FileNotFoundError(arquivo_pdf)
+
+        log.info("extrair_recibos: lendo %s", arquivo_pdf.name)
+        with open(arquivo_pdf, "rb") as f:
+            dados = f.read()
+        b64 = base64.standard_b64encode(dados).decode("ascii")
+
+        payload = {
+            "contents": [{"parts": [
+                {"text": _PROMPT_RECIBO},
+                {"inline_data": {"mime_type": "application/pdf", "data": b64}},
+            ]}],
+            "generationConfig": {"response_mime_type": "application/json"},
+        }
+        url = f"{API_BASE}/models/{self._model_name}:generateContent"
+        r = _post_gemini(url, self._api_key, payload, timeout=180)
+        log.info("extrair_recibos: HTTP %s", r.status_code)
+        data = r.json()
+        try:
+            texto = data["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError, TypeError) as e:
+            raise RuntimeError(f"Resposta Gemini sem texto: {str(data)[:400]}") from e
+
+        parsed = self._parse_json(texto)
+        notas = parsed.get("notas") or []
+        resultado: list[dict] = []
+        for i, n in enumerate(notas):
+            try:
+                datas = n.get("datas") or []
+                if not isinstance(datas, list):
+                    datas = [datas]
+                datas_norm = [str(d).strip() for d in datas if str(d).strip()]
+                resultado.append({
+                    "pagina":         int(n.get("pagina") or (i + 1)),
+                    "numero":         str(n.get("numero", "")).strip(),
+                    "datas":          datas_norm,
+                    "valor":          float(n.get("valor") or 0.0),
+                    "descricao":      str(n.get("descricao", "")).strip(),
+                    "cnpj_prestador": "".join(c for c in str(n.get("cnpj_prestador", "")) if c.isdigit()),
+                    "cnpj_tomador":   "".join(c for c in str(n.get("cnpj_tomador", "")) if c.isdigit()),
+                })
+            except (TypeError, ValueError) as e:
+                log.warning("extrair_recibos: linha %d inválida (%s): %r", i, e, n)
+                resultado.append({
+                    "pagina": i + 1, "numero": "", "datas": [], "valor": 0.0,
+                    "descricao": "", "cnpj_prestador": "", "cnpj_tomador": "",
+                })
+        log.info("extrair_recibos: %d recibos extraídos", len(resultado))
+        return resultado
+
     # ---------- DAE Bahia (build-101) ----------
 
     def extrair_daes(self, arquivo_pdf: Path) -> list[dict]:
@@ -498,7 +561,6 @@ class GeminiClient:
 
 _PROMPT_NFSE = """Você é um extrator de Notas Fiscais de Serviço eletrônica
 (NFS-e / DANFSe) brasileiras.
-
 Cada página do PDF anexo é UMA NFS-e. Extraia por nota:
 
 1. `numero`: o "Número da NFS-e" (campo padrão do cabeçalho DANFSe, também
@@ -565,6 +627,57 @@ Retorne APENAS um JSON válido:
 
 NUNCA invente número, CNPJ ou anotação de caneta. Melhor vazio que
 chute. Se uma página não for NFS-e (capa, verso em branco), pule.
+"""
+
+
+_PROMPT_RECIBO = """Você é um extrator de RECIBOS DE RESSARCIMENTO
+de serviços de gestão (fornecedores tipo TAP, DL — não são NFS-e,
+são recibos simples).
+
+Cada página do PDF é UM recibo. Extraia por recibo:
+
+1. `numero`: o número do recibo (campo "RECIBO Nº"). Dígitos apenas.
+   Ex.: "1205", "405".
+
+2. `datas`: TODAS as datas que aparecem no cabeçalho do recibo (não
+   as da tabela interna de itens). Lista no formato "AAAA-MM-DD".
+   Pode ter 1 ou 2 datas:
+   - Se tiver só uma (ex.: campo "DATA 23/05/2026"), lista com 1
+     elemento.
+   - Se tiver duas (ex.: "DATA 20/09/2026" + "Emissão: 13/10/2026"),
+     lista com 2 elementos. O APP escolhe a mais antiga como data
+     de emissão.
+   NÃO inclua as datas repetidas da tabela de itens (ex.: "20/9/2026"
+   repetido em todas as linhas do item — essa é a data do item, não
+   do recibo).
+
+3. `valor`: o "VALOR" do cabeçalho (ou "TOTAL" do rodapé — devem ser
+   iguais). Float com ponto decimal. Ex.: 299.16.
+
+4. `descricao`: o texto da PRIMEIRA célula de descrição da tabela de
+   itens (a célula com valor > 0, ignorando as linhas em branco).
+   Transcreva LITERALMENTE, inclusive maiúsculas e separadores.
+   Ex.: "CRED - CD300 08/2026", "CRED - POCOS DE CALDAS 04/2026".
+
+5. `cnpj_prestador`: CNPJ do fornecedor (quem emitiu — assinatura
+   embaixo "TAP SERVIÇOS DE GESTÃO LTDA" / "DL SERVIÇOS DE GESTÃO
+   LTDA"). 14 dígitos, sem pontuação.
+
+6. `cnpj_tomador`: CNPJ do campo "Recebemos de" ou "CNPJ:" no
+   cabeçalho do bloco de identificação do destinatário. 14 dígitos.
+
+Retorne APENAS um JSON válido, sem markdown, sem comentários:
+
+{
+  "notas": [
+    {"pagina": 1, "numero": "1205", "datas": ["2026-09-20", "2026-10-13"],
+     "valor": 299.16, "descricao": "CRED - CD300 08/2026",
+     "cnpj_prestador": "31548807000197", "cnpj_tomador": "28548486001783"}
+  ]
+}
+
+Se algum campo estiver ilegível, deixe em branco ("" / 0.0 / []) —
+o app pede revisão manual. NUNCA invente valores.
 """
 
 

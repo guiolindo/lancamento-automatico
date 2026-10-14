@@ -6,6 +6,44 @@ Histórico de builds do **Auto Conferi**. Cada entrada corresponde a um
 Formato: `## build-N — título` seguido de bullets curtos. Do mais novo
 para o mais antigo.
 
+## build-130 — TAP + DL: recibos de ressarcimento no Orçamento
+
+Dois fornecedores novos no módulo Orçamento. **Documentos são recibos
+simples**, não NFS-e tradicionais — por isso o `tipo_extracao` virou
+`"recibo"` separado, com prompt próprio no Gemini.
+
+Características comuns:
+- Natureza despesa: **265**
+- Contab L1 + L2: filial resolvida pelo **CNPJ tomador** (igual
+  OTIMO/PLUXEE desde build-121); L2 preenche só o **CR** específico
+  do fornecedor (não troca `conta_debito`).
+- Validação do tomador em 3 níveis (build-121) ligada — bloqueia
+  nota endereçada pra fora do grupo.
+- **Observação dinâmica**: Gemini extrai o texto literal da célula
+  de descrição (ex: "CRED - CD300 08/2026", "CRED - POCOS DE CALDAS
+  04/2026") e o template usa `{descricao}` como placeholder nas
+  observações Nota + Financeiro.
+
+Diferenças entre TAP e DL:
+
+| | TAP | DL |
+|---|---|---|
+| CNPJ fornecedor | 31.548.807/0001-97 | 38.321.120/0001-63 |
+| Pessoa | 80088 | 108101 |
+| CR (Contab L2) | 150001 | 150004 |
+| Datas no doc | DUAS (DATA + Emissão) | UMA |
+| Regra de emissão | mais antiga das duas | única |
+
+Mudanças no código:
+- `models.py`: NotaDespesa ganha `descricao` + `datas_candidatas`.
+- `gemini_client.py`: `_PROMPT_RECIBO` + `extrair_recibos()`.
+- `orcamento_dialog.py`: dispatch pro novo tipo + `_converter_recibos()`.
+- `rpa_orcamento._formatar_template`: placeholder `{descricao}`.
+- `mapeamento_orcamento.json`: templates TAP e DL.
+
+Suite pytest: 59 → 74 (+15 cobrindo todos os campos dos templates,
+regra de data, CRs distintos, placeholder nas observações).
+
 ## build-129 — fix END deixava a próxima nota em EM_ANDAMENTO
 
 Bug reportado: ao apertar END no meio do lote, a próxima nota ficava

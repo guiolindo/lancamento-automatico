@@ -38,7 +38,7 @@ def _boot_trace(mensagem: str) -> None:
         pass
 
 
-BUILD_MARKER = "build-129 (fix END — próxima nota ficava EM_ANDAMENTO permanente; gap entre o status=EM_ANDAMENTO e o try/except do RPA, mais rede de segurança no caminho de erro grave)"
+BUILD_MARKER = "build-130 (TAP + DL — 2 fornecedores novos de recibo de ressarcimento no Orçamento; prompt Gemini próprio pra recibo, roteamento por CNPJ tomador, CR distinto, data de emissão 'mais antiga das duas' pro TAP)"
 
 
 def main() -> int:

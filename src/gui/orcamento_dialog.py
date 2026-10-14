@@ -89,6 +89,8 @@ class ExtratorNfseThread(QThread):
             client = GeminiClient(self._api_key, self._modelo)
             if self._tipo == "dae":
                 itens = client.extrair_daes(self._pdf)
+            elif self._tipo == "recibo":
+                itens = client.extrair_recibos(self._pdf)
             else:
                 itens = client.extrair_notas_nfse(self._pdf, extrair_anotacao_caneta=self._caneta)
             self.concluido.emit(itens)
@@ -428,6 +430,8 @@ class OrcamentoPage(QWidget):
         self._notas = []
         if tipo_extracao == "dae":
             self._notas = self._converter_daes(itens, template_chave, data_lancto)
+        elif tipo_extracao == "recibo":
+            self._notas = self._converter_recibos(itens, template_chave, data_lancto)
         else:
             self._notas = self._converter_nfse(itens, template_chave, data_lancto)
 
@@ -574,6 +578,84 @@ class OrcamentoPage(QWidget):
         (case-insensitive). 'CDX' não conta — precisa ser palavra."""
         t = texto.strip().lower()
         return t.startswith("cd ") or t == "cd" or t.startswith("cd-") or t.startswith("cd.")
+
+    def _converter_recibos(self, recibos: list, template_chave: str, data_lancto: date) -> list:
+        """Converte extração do Gemini (lista de dicts com `datas`
+        multi-valor + `descricao`) em NotaDespesa. Regras do template:
+        - `data_emissao_regra: "mais_antiga_das_duas"`: pega a MENOR data
+          da lista (TAP tem 2, DL tem 1).
+        - `validar_cnpj_tomador`: barra tomador fora do cadastro (3
+          níveis — build-121).
+        """
+        template = self._templates.get(template_chave) or {}
+        cnpj_esperado = "".join(c for c in str(template.get("cnpj_esperado", "")) if c.isdigit())
+        validar_tomador = bool(template.get("validar_cnpj_tomador", False))
+        regra_emissao = (template.get("regras") or {}).get("data_emissao_regra", "")
+
+        out = []
+        for i, r in enumerate(recibos):
+            # Resolve data_emissao a partir da lista de candidatas.
+            datas_raw = r.get("datas") or []
+            datas_parse: list = []
+            for s in datas_raw:
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+                    try:
+                        datas_parse.append(datetime.strptime(str(s).strip(), fmt).date())
+                        break
+                    except ValueError:
+                        pass
+            if regra_emissao == "mais_antiga_das_duas" and datas_parse:
+                data_emi = min(datas_parse)
+            elif datas_parse:
+                data_emi = datas_parse[0]
+            else:
+                data_emi = None
+
+            cnpj_prest = str(r.get("cnpj_prestador", "")).strip()
+            cnpj_tom   = str(r.get("cnpj_tomador", "")).strip()
+            desc       = str(r.get("descricao", "")).strip()
+
+            # Resolve filial de emissão pelo CNPJ tomador (mesma lógica
+            # OTIMO/PLUXEE desde build-121).
+            fil_emi_info = self._cnpjs_filiais.get(cnpj_tom) if cnpj_tom else None
+            fil_emi_cod  = int(fil_emi_info["codigo"]) if fil_emi_info else None
+            fil_emi_nome = fil_emi_info["nome"] if fil_emi_info else ""
+
+            nota = NotaDespesa(
+                pagina=int(r.get("pagina", i + 1)),
+                numero=str(r.get("numero", "")).strip(),
+                data_emissao=data_emi,
+                valor=float(r.get("valor") or 0.0),
+                data_lancto=data_lancto,
+                template_chave=template_chave,
+                cnpj_prestador=cnpj_prest,
+                cnpj_tomador=cnpj_tom,
+                filial_emissao_codigo=fil_emi_cod,
+                filial_emissao_nome=fil_emi_nome,
+                descricao=desc,
+                datas_candidatas=[d.isoformat() for d in datas_parse],
+            )
+
+            # Mesmas validações do _converter_nfse: prestador fora,
+            # depois tomador fora do grupo (build-121).
+            if cnpj_esperado and cnpj_prest and cnpj_prest != cnpj_esperado:
+                nota.status = StatusLancamento.IGNORADO
+                nota.motivo_ignorado = f"CNPJ do prestador ({cnpj_prest}) não bate com o fornecedor {template_chave}"
+            elif validar_tomador:
+                from ..core.cnpj_utils import TomadorMatch, classificar_tomador
+                cls = classificar_tomador(cnpj_tom, self._cnpjs_filiais)
+                if cls == TomadorMatch.AUSENTE:
+                    nota.status = StatusLancamento.IGNORADO
+                    nota.motivo_ignorado = "CNPJ do tomador não veio na extração — não é possível validar a filial de destino"
+                elif cls == TomadorMatch.RAIZ_GRUPO:
+                    nota.status = StatusLancamento.IGNORADO
+                    nota.motivo_ignorado = f"Filial não cadastrada (CNPJ {cnpj_tom} é do grupo, mas não está em cnpjs_filiais.json). Adicione a filial e reprocesse."
+                elif cls == TomadorMatch.OUTRA_EMPRESA:
+                    nota.status = StatusLancamento.IGNORADO
+                    nota.motivo_ignorado = f"CNPJ do tomador ({cnpj_tom}) é de outra empresa — nota chegou por engano"
+
+            out.append(nota)
+        return out
 
     def _converter_daes(self, daes: list, template_chave: str, data_lancto: date) -> list:
         out = []

@@ -136,6 +136,14 @@ class NotaDespesa:
     anotacao_caneta: Optional[str] = None
     filial_caneta_codigo: Optional[int] = None
     filial_caneta_nome: Optional[str] = None
+    # Recibo de ressarcimento (TAP / DL — build-130). `descricao` é o
+    # texto literal da célula de descrição no corpo do documento (ex.:
+    # "CRED - CD300 08/2026"). Vai como observação em Nota + Financeiro
+    # via placeholder {descricao} no template. TAP tem duas datas
+    # candidatas — o conversor usa min() quando `data_emissao_regra:
+    # "mais_antiga_das_duas"`.
+    descricao: Optional[str] = None
+    datas_candidatas: Optional[list] = None
     # Estado
     status: StatusLancamento = StatusLancamento.PENDENTE
     erro: Optional[str] = None

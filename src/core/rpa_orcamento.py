@@ -588,6 +588,7 @@ class RpaOrcamento:
             filial_emissao_nome=nota.filial_emissao_nome or "",
             filial_caneta_nome=nota.filial_caneta_nome or nota.anotacao_caneta or "?",
             numero=nota.numero or "",
+            descricao=nota.descricao or "",
         )
         try:
             return txt.format_map(campos)

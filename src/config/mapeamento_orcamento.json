@@ -133,6 +133,91 @@
         "duplicidade_regra": "pular_ja_lancada",
         "resolver_filial_por": "cnpj"
       }
+    },
+    "TAP": {
+      "descricao": "TAP Serviços de Gestão — recibo de ressarcimento (build-130)",
+      "cnpj_esperado": "31548807000197",
+      "validar_cnpj_tomador": true,
+      "tipo_extracao": "recibo",
+      "aba_nota": {
+        "empresa_codigo": "6",
+        "empresa_por_cnpj_tomador": true,
+        "nat_despesa_codigo": "265",
+        "pessoa_codigo": "80088",
+        "versao_pessoa": "1",
+        "st_doc": "Regular",
+        "modelo": "99",
+        "observacao_fiscal_template": "{descricao}",
+        "tipo_frete": "0",
+        "marcar_icms": true,
+        "serie": "",
+        "subserie": ""
+      },
+      "aba_financeiro": {
+        "observacao_financeira_template": "{descricao}",
+        "modo": "vencimento",
+        "quantidade_parcelas": 1,
+        "dias_entre_vencimentos": 1
+      },
+      "aba_contabilizacao": {
+        "linha1": {
+          "trocar_filial_para": "filial_emissao",
+          "preencher_valor": true
+        },
+        "linha2": {
+          "trocar_filial_para": "filial_emissao",
+          "cr": "150001",
+          "preencher_valor": true
+        }
+      },
+      "regras": {
+        "vencimento_igual_a": "data_lancto",
+        "data_lancto_default": "hoje",
+        "duplicidade_regra": "pular_ja_lancada",
+        "data_emissao_regra": "mais_antiga_das_duas"
+      }
+    },
+    "DL": {
+      "descricao": "DL Serviços de Gestão — recibo de ressarcimento (build-130)",
+      "cnpj_esperado": "38321120000163",
+      "validar_cnpj_tomador": true,
+      "tipo_extracao": "recibo",
+      "aba_nota": {
+        "empresa_codigo": "6",
+        "empresa_por_cnpj_tomador": true,
+        "nat_despesa_codigo": "265",
+        "pessoa_codigo": "108101",
+        "versao_pessoa": "1",
+        "st_doc": "Regular",
+        "modelo": "99",
+        "observacao_fiscal_template": "{descricao}",
+        "tipo_frete": "0",
+        "marcar_icms": true,
+        "serie": "",
+        "subserie": ""
+      },
+      "aba_financeiro": {
+        "observacao_financeira_template": "{descricao}",
+        "modo": "vencimento",
+        "quantidade_parcelas": 1,
+        "dias_entre_vencimentos": 1
+      },
+      "aba_contabilizacao": {
+        "linha1": {
+          "trocar_filial_para": "filial_emissao",
+          "preencher_valor": true
+        },
+        "linha2": {
+          "trocar_filial_para": "filial_emissao",
+          "cr": "150004",
+          "preencher_valor": true
+        }
+      },
+      "regras": {
+        "vencimento_igual_a": "data_lancto",
+        "data_lancto_default": "hoje",
+        "duplicidade_regra": "pular_ja_lancada"
+      }
     }
   }
 }
